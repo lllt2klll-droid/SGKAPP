@@ -1,0 +1,165 @@
+/* ============================================================
+   26 - UX POLISH — tinh tế, xịn, không phô
+   Micro-interactions, motion, depth, focus — giữ nguyên logic
+   ============================================================ */
+
+/* --- Global motion --- */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: smooth;
+  }
+}
+
+/* --- Buttons: press depth + hover lift (tinh tế) --- */
+.btn {
+  /* transition do 34-flat-pro.css quyết (shorthand thắng toàn bộ) — chỉ giữ will-change */
+  will-change: transform;
+}
+/* XÓA 2026: press/hover/focus 3D cũ của .btn/.btn-icon (.rtb/.wb-tool) — 34-flat-pro.css thắng
+   toàn bộ (cùng hoặc cao specificity hơn, đến sau). Giữ transition + will-change dưới đây. */
+.btn-icon, .rtb-icon-btn, .wb-tool {
+  transition: transform 140ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* --- Cards / panels: subtle lift --- */
+.panel-box, .whiteboard-header, .whiteboard-topbar, .book-card, .data-table {
+  transition: box-shadow 220ms ease, transform 220ms ease;
+}
+/* XÓA 2026: .panel-box:hover shadow — 34-flat-pro.css thắng bằng !important */
+
+/* --- DataTable rows: hover tinh tế --- */
+.data-table tr, .global-search-result {
+  transition: background-color 160ms ease, transform 140ms ease;
+}
+.data-table tbody tr:hover {
+  background-color: color-mix(in srgb, var(--color-action-soft, #eef2ff) 55%, transparent);
+}
+.global-search-result:hover {
+  transform: translateX(1px);
+}
+.global-search-result.selected {
+  background: linear-gradient(90deg, var(--color-action-soft, #eef2ff) 0%, transparent 100%);
+  border-left: 3px solid var(--color-action, #6366f1);
+}
+
+/* --- Whiteboard source bar: slide + blur (tinh tế) --- */
+@keyframes wbSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.whiteboard-source-bar {
+  animation: wbSlideDown 220ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  /* shadow do 34-flat-pro.css quyết */
+  border: 1px solid rgba(226,232,240,0.9);
+}
+/* XÓA 2026: dark variant — 34-flat-pro.css thắng toàn bộ 3 props (cùng specificity, đến sau) */
+
+/* --- Reader: page fade (không giật) --- */
+.reader-canvas-wrap, .wb-canvas-wrap, .whiteboard-canvas-area {
+  transition: opacity 180ms ease;
+}
+.wb-svg, .whiteboard-root {
+  transition: filter 180ms ease;
+}
+
+/* --- Overlays: blur veil tinh tế --- */
+.modal-overlay, .global-search-overlay, .settings-center-overlay {
+  backdrop-filter: blur(8px) saturate(1.05);
+  -webkit-backdrop-filter: blur(8px) saturate(1.05);
+  background: color-mix(in srgb, var(--overlay-veil, rgba(15,23,42,0.35)) 85%, transparent);
+  animation: fadeIn 180ms ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.modal-content, .global-search-modal, .settings-center {
+  animation: popIn 240ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  /* shadow do 34-flat-pro.css quyết */
+}
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* --- Toast: slide + progress --- */
+.whiteboard-toast, .toast, .reader-toast {
+  animation: toastIn 200ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  backdrop-filter: blur(10px);
+  /* shadow do 34-flat-pro.css quyết */
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* --- Search input: focus glow tinh tế --- */
+.global-search-input:focus, .search-input:focus, .form-control:focus, .sort-select:focus {
+  /* shadow/border do 34-flat-pro.css quyết — chỉ giữ transition */
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+/* --- TOC items: active indicator mượt --- */
+.toc-item {
+  position: relative;
+  transition: background-color 160ms ease, padding-left 160ms ease;
+}
+.toc-item::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 50%;
+  width: 3px; height: 0;
+  background: var(--color-action, #2563eb);
+  border-radius: 999px;
+  transform: translateY(-50%);
+  transition: height 180ms cubic-bezier(0.2, 0.8, 0.3, 1), opacity 160ms ease;
+  opacity: 0;
+}
+.toc-item.active::before {
+  height: 18px;
+  opacity: 1;
+}
+.toc-item.active {
+  background: color-mix(in srgb, var(--color-action-soft, #eef2ff) 70%, transparent);
+}
+
+/* --- Scrollbar tinh tế hơn --- */
+*::-webkit-scrollbar-thumb {
+  transition: background-color 160ms ease;
+}
+
+/* --- Empty states: icon pulse nhẹ --- */
+.dash-empty svg, .whiteboard-empty svg {
+  animation: gentlePulse 2.8s ease-in-out infinite;
+}
+@keyframes gentlePulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.015); }
+}
+
+/* --- Shimmer loading cho SearchView TOC --- */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-soft) 25%, var(--border-color) 37%, var(--surface-soft) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* --- Focus cho canvas handles --- */
+.wb-svg rect[stroke="#2563eb"] {
+  filter: drop-shadow(0 1px 3px rgba(37,99,235,0.25));
+}
+
+/* --- Giảm motion cho người cần --- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

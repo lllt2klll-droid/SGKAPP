@@ -1,0 +1,27 @@
+{
+ "1366x768": {
+  "selectors": 9,
+  "pageerrors": []
+ },
+ "1920x1080": {
+  "selectors": 9,
+  "pageerrors": []
+ },
+ "768x1024": {
+  "selectors": 9,
+  "pageerrors": []
+ },
+ "375x812": {
+  "selectors": 7,
+  "pageerrors": []
+ },
+ "view-library": {
+  "selectors": 12
+ },
+ "view-help": {
+  "selectors": 11
+ },
+ "settings": {
+  "selectors": 2
+ }
+}

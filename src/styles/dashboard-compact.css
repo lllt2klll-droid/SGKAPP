@@ -1,0 +1,125 @@
+/* Dashboard Redesign - Compact Multi-Column Layout */
+/* Aligned with standard breakpoint system */
+
+/* XÓA 2026: .dashboard-workspace + .missionWidget-container + toàn bộ hero cũ
+   (dashboard-hero/content/greeting/subtitle/actions/cta*) — markup DashboardView đã chuyển sang .db-*
+   (xác minh: 0 tham chiếu trong mã nguồn src. Ghi chú: không viết glob sao-gạch-sao trong comment CSS).
+   Dashboard mới không dùng file này cho khung. */
+
+/* XÓA 2026: workflow/pipeline cũ (section/pipeline/stage/icon/label/count/connector + khối min-768) —
+   markup đã chết (xác minh: 0 tham chiếu trong src). Quy trình dạy-học hiện tại dùng class khác. */
+
+/* Main Content Grid (.dashboard-workspace ladder): toàn bộ đã chết theo markup — xem tombstone ladder cuối file. */
+
+/* XÓA 2026: .continue-section + .continue-working-grid (base + ladder) — markup đã chết (0 tham chiếu src). */
+
+/* XÓA 2026: xem ghi chú .continue-section ở trên */
+
+/* XÓA 2026: toàn bộ họ .work-card cũ (card/hover/header/badge/content/item/icon/mini/info/title/meta/
+   progress/arrow/footer-link/task-*) — xác minh 0 tham chiếu trong mã nguồn src.
+   Dashboard hiện tại dùng .db-*. File giữ lại vì còn rule sống (.stat-compact-*, .activity-bar-*, .tools-modal). */
+
+/* XÓA 2026: .stats-section + .stats-compact-grid — markup đã chết (0 tham chiếu src).
+   .stat-compact-card/value/label còn sống (MissionsView) nên giữ nguyên ở dưới. */
+
+.stat-compact-card {
+  background: var(--card-bg, var(--surface));
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.875rem;
+  text-align: center;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.stat-compact-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* XÓA 2026: .stat-compact-icon — markup đã chết (value/label còn sống, giữ nguyên) */
+
+.stat-compact-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.stat-compact-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+  font-weight: 500;
+}
+
+/* XÓA 2026: .activity-section (base + ladder) + .activity-chart-compact — markup đã chết.
+   Họ .activity-bar-* còn sống (MissionsView) nên giữ nguyên dưới đây. */
+
+.activity-bar-compact {
+  display: grid;
+  grid-template-columns: 60px 1fr 40px;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.activity-bar-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.activity-bar-track {
+  height: 24px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.activity-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--primary);
+  transition: width 0.3s;
+}
+
+.activity-bar-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-color);
+  text-align: right;
+}
+
+/* XÓA 2026: toàn bộ Insights cũ (section/grid/card/header/title/value/label) — markup đã chết (0 tham chiếu). */
+
+/* XÓA 2026: toàn bộ Subject cũ (section/grid/card/header/bar/fill/label) — markup đã chết (0 tham chiếu). */
+
+/* XÓA 2026: .recommendations-section + .recommendations-grid (base + ladder) — markup đã chết (0 tham chiếu). */
+
+/* XÓA 2026: toàn bộ họ .recommendation-card cũ (base/hover/icon/content/title/desc/svg)
+   + .section-title-large + .workspace-section (+hover) — markup đã chết (0 tham chiếu).
+   Dưới đây chỉ còn rule SỐNG (.tools-modal). */
+
+/* Modal */
+.tools-modal {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* XÓA 2026: toàn bộ ladder MOBILE→2XL (7 khối) — mọi selector trong đó đã chết
+   (dashboard-workspace/workspace-section/hero-actions/stats-compact-grid/recommendations-grid/
+   workflow-pipeline/pipeline-connector: 0 tham chiếu src). File không còn @media nào. */
+
+/* Dark Mode: chỉ .stat-compact-card còn sống (MissionsView) — đã rút các selector chết */
+@media (prefers-color-scheme: dark) {
+  .stat-compact-card {
+    background: var(--card-bg, var(--surface));
+    border-color: var(--border-color);
+  }
+}
+
+/* XÓA 2026: @keyframes slideInUp + .workspace-section animation + .mission-section-bottom —
+   markup đã chết (0 tham chiếu src; keyframes không còn ai dùng). */

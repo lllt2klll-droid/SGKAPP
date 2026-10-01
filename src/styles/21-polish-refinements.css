@@ -1,0 +1,73 @@
+/* 21-polish-refinements.css — tinh tế micro-interactions */
+.library-command-center.drag-over {
+  position: relative;
+}
+.global-drag-overlay {
+  position: absolute;
+  inset: 12px;
+  border: 2px dashed var(--pen-blue);
+  background: rgba(31,117,254,0.08);
+  border-radius: var(--radius-lg, 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  pointer-events: none;
+  font-weight: 800;
+  color: var(--pen-blue);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.15s ease;
+}
+.search-input-wrapper.is-searching .search-icon { opacity: 0.35; }
+.search-busy { position:absolute; right:8px; top:50%; transform:translateY(-50%); display:flex; }
+.search-input-wrapper.is-searching .search-input { background: var(--pen-blue-soft); transition: background 0.2s; }
+
+.upload-notice { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.65rem 0.9rem; border-radius:10px; font-weight:700; font-size:0.88rem; animation: fadeIn 0.25s ease, slideIn 0.25s ease; border:1px solid transparent; }
+.upload-notice.ok { background: var(--success-soft, #e6f4ea); color: var(--success-deep, #137333); border-color: rgba(19,115,51,0.18); }
+.upload-notice.error { background: var(--red-soft, #fce8e6); color: var(--red-action-deep, #c5221f); border-color: rgba(197,34,31,0.18); }
+@keyframes slideIn { from { transform: translateY(-6px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+
+.skeleton-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap:1rem; width:100%; }
+.skeleton-card { background: var(--surface); border:1px solid var(--border-color); border-radius:12px; padding:0.9rem; }
+.skeleton-cover { height:120px; background: linear-gradient(90deg, var(--surface-soft, #eee) 25%, var(--border-color, #e5e7eb) 37%, var(--surface-soft, #eee) 63%); background-size:400% 100%; border-radius:8px; animation: shimmer 1.2s ease-in-out infinite; }
+.skeleton-line { height:12px; border-radius:6px; margin-top:10px; background: linear-gradient(90deg, var(--surface-soft, #eee) 25%, var(--border-color, #e5e7eb) 37%, var(--surface-soft, #eee) 63%); background-size:400% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+.loading-hint { margin-top:0.9rem; color:var(--text-muted); font-weight:700; font-size:0.85rem; text-align:center; }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+.books-grid { transition: opacity 0.2s ease; }
+.book-card { transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.2s ease; }
+/* XÓA 2026: .book-card:hover 3D — 34-flat-pro.css thắng (transform none + shadow-md, cùng giá trị bóng) */
+.layout-toggle button { transition: background 0.15s, color 0.15s; }
+
+.panel-resizer { width:10px; cursor:col-resize; position:absolute; top:0; bottom:0; z-index:5; }
+.panel-resizer:hover::after, .panel-resizer:active::after { content:""; position:absolute; left:4px; top:0; bottom:0; width:2px; background:var(--pen-blue); border-radius:2px; }
+.panel-resizer-right { right:-5px; }
+
+/* toolbar count transition */
+.toolbar-count { transition: opacity 0.15s; }
+
+/* sr-only */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+/* Modal polish: focus ring, scale in — tinh tế frosted */
+.modal-overlay { display:flex; align-items:center; justify-content:center; background: rgba(248,250,252,0.62); backdrop-filter: blur(14px) saturate(1.12); -webkit-backdrop-filter: blur(14px) saturate(1.12); animation: fadeIn 0.18s ease; }
+[data-theme="dark"] .modal-overlay { background: rgba(8,12,20,0.52); }
+.modal-content { animation: modalPop 0.22s cubic-bezier(0.16,1,0.3,1); /* viền/bóng/bo góc do 34-flat-pro.css quyết */ }
+@keyframes modalPop { from { transform: scale(0.96) translateY(6px); opacity:0; } to { transform: scale(1) translateY(0); opacity:1; } }
+.modal-header { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.1rem 0.8rem; border-bottom:1px solid var(--border-color); }
+.modal-header h2 { font-size:1rem; font-weight:800; }
+
+/* Reader zoom pill */
+.zoom-pill { position:absolute; left:50%; top:22px; transform:translateX(-50%); background: rgba(15,23,42,0.85); color:#fff; font-weight:800; font-size:0.85rem; padding:0.35rem 0.75rem; border-radius:999px; z-index:12; pointer-events:none; animation: pillIn 0.18s ease, pillOut 0.3s ease 0.65s forwards; box-shadow: var(--shadow-md); }
+@keyframes pillIn { from { opacity:0; transform: translateX(-50%) translateY(-6px) scale(0.96); } to { opacity:1; transform: translateX(-50%) translateY(0) scale(1); } }
+@keyframes pillOut { to { opacity:0; transform: translateX(-50%) translateY(-4px); } }
+.pdf-canvas-box { position:relative; }
+.overlay-veil { position:absolute; inset:0; background: rgba(255,255,255,0.55); display:flex; align-items:center; justify-content:center; border-radius:8px; backdrop-filter: blur(1px); }
+[data-theme="dark"] .overlay-veil { background: rgba(15,23,42,0.45); }
+
+/* Smooth view toggle */
+.books-grid, .data-table { animation: fadeIn 0.22s ease; }
+.search-input-wrapper { position:relative; }
+
+/* Better focus */
+.btn:focus-visible, .filter-btn:focus-visible, .search-input:focus-visible, .form-control:focus-visible { outline:2px solid var(--pen-blue); outline-offset:2px; }

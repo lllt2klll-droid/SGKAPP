@@ -1,0 +1,414 @@
+/* ============================================================
+   Design System - Typography
+   ============================================================ */
+.text-h1 {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-extrabold);
+  line-height: var(--leading-tight);
+  color: var(--text-dark);
+}
+
+.text-h2 {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-extrabold);
+  line-height: var(--leading-tight);
+  color: var(--text-dark);
+}
+
+.text-h3 {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  line-height: var(--leading-tight);
+  color: var(--text-dark);
+}
+
+.text-body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-normal);
+  line-height: var(--leading-normal);
+  color: var(--text-dark);
+}
+
+.text-body-lg {
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  font-weight: var(--font-normal);
+  line-height: var(--leading-normal);
+  color: var(--text-dark);
+}
+
+.text-body-sm {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--font-normal);
+  line-height: var(--leading-normal);
+  color: var(--text-dark);
+}
+
+.text-caption {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-tight);
+  color: var(--text-muted);
+}
+
+.text-display {
+  font-family: var(--font-heading);
+  font-size: var(--text-display, 2rem);
+  font-weight: var(--font-extrabold);
+  line-height: var(--leading-tight);
+  color: var(--text-dark);
+}
+
+.text-label {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  line-height: var(--leading-tight);
+  color: var(--text-mid);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.text-button {
+  font-family: var(--font-body);
+  font-size: var(--text-button, 0.88rem);
+  font-weight: var(--font-extrabold);
+  line-height: var(--leading-tight);
+}
+
+/* ============================================================
+   Design System - Color Utilities
+   ============================================================ */
+.text-primary {
+  color: var(--primary);
+}
+.text-success {
+  color: var(--success);
+}
+.text-warning {
+  color: var(--warning);
+}
+.text-danger {
+  color: var(--danger);
+}
+.text-info {
+  color: var(--pen-blue);
+}
+
+.bg-primary {
+  background: var(--primary);
+}
+.bg-success {
+  background: var(--success);
+}
+.bg-warning {
+  background: var(--warning);
+}
+.bg-danger {
+  background: var(--danger);
+}
+.bg-info {
+  background: var(--pen-blue);
+}
+
+.bg-primary-soft {
+  background: var(--primary-light);
+}
+.bg-success-soft {
+  background: var(--success-light);
+}
+.bg-warning-soft {
+  background: var(--warning-light);
+}
+.bg-danger-soft {
+  background: var(--danger-light);
+}
+.bg-info-soft {
+  background: var(--pen-blue-soft);
+}
+
+.border-primary {
+  border-color: var(--primary);
+}
+.border-success {
+  border-color: var(--success);
+}
+.border-warning {
+  border-color: var(--warning);
+}
+.border-danger {
+  border-color: var(--danger);
+}
+.border-info {
+  border-color: var(--pen-blue);
+}
+
+/* ============================================================
+   Accessibility - Focus Indicators
+   ============================================================ */
+[data-focus-indicators="true"] button:focus-visible,
+[data-focus-indicators="true"] a:focus-visible,
+[data-focus-indicators="true"] input:focus-visible,
+[data-focus-indicators="true"] select:focus-visible,
+[data-focus-indicators="true"] textarea:focus-visible,
+[data-focus-indicators="true"] [tabindex]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+[data-focus-indicators="true"] button:focus-visible,
+[data-focus-indicators="true"] a:focus-visible {
+  border-radius: 4px;
+}
+
+/* Always provide minimal focus for keyboard users even when indicators off */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* ============================================================
+   Accessibility - Larger Text
+   ============================================================ */
+[data-larger-text="true"] {
+  font-size: 1.1rem;
+}
+
+[data-larger-text="true"] .text-h1 {
+  font-size: 2.5rem;
+}
+[data-larger-text="true"] .text-h2 {
+  font-size: 2rem;
+}
+[data-larger-text="true"] .text-h3 {
+  font-size: 1.5rem;
+}
+[data-larger-text="true"] .text-body {
+  font-size: 1.1rem;
+}
+[data-larger-text="true"] .text-body-lg {
+  font-size: 1.2rem;
+}
+[data-larger-text="true"] .text-body-sm {
+  font-size: 1rem;
+}
+[data-larger-text="true"] .text-caption {
+  font-size: 0.9rem;
+}
+
+/* ============================================================
+   Accessibility - High Contrast
+   ============================================================ */
+[data-high-contrast="true"] {
+  --bg-main: #ffffff;
+  --surface: #ffffff;
+  --surface-soft: #f0f0f0;
+  --bg-alt: #ffffff;
+
+  --text-dark: #000000;
+  --text-mid: #000000;
+  --text-muted: #333333;
+  --text-light: #666666;
+
+  --border-color: #000000;
+  --border-strong: #000000;
+  --input-border: #000000;
+
+  --primary: #0000ff;
+  --primary-dark: #00008b;
+  --primary-light: #e6e6ff;
+
+  --success: #008000;
+  --warning: #ff8c00;
+  --danger: #ff0000;
+
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+}
+
+[data-high-contrast="true"] button,
+[data-high-contrast="true"] a,
+[data-high-contrast="true"] input,
+[data-high-contrast="true"] select,
+[data-high-contrast="true"] textarea {
+  border: 2px solid var(--border-color);
+}
+
+/* ============================================================
+   Accessibility - Reduce Motion
+   ============================================================ */
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   Universal utilities
+   ============================================================ */
+.muted {
+  color: var(--text-muted);
+}
+.error {
+  color: var(--red-action);
+}
+.w-100 {
+  width: 100%;
+}
+.primary {
+  color: var(--pen-blue);
+}
+.ok {
+  color: var(--success);
+}
+.no {
+  color: var(--red-action);
+}
+.in {
+  color: var(--cyan);
+}
+.on {
+  color: var(--success);
+}
+.user {
+  font-weight: 700;
+}
+.bot {
+  font-weight: 700;
+}
+.active {
+  display: block;
+}
+.pin {
+  color: var(--warning-deep);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.pin:hover {
+  transform: none;
+  box-shadow: none;
+  background: var(--warning-soft);
+  border-color: var(--warning-deep);
+}
+.img {
+  max-width: 100%;
+  display: block;
+}
+.confirm {
+  display: block;
+}
+.expanded {
+  display: block;
+}
+.compact {
+  display: block;
+}
+.picked {
+  display: block;
+}
+.delete {
+  color: var(--red-action);
+}
+.ocr {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Responsive Grid Utilities */
+.responsive-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.responsive-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.responsive-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.responsive-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 767px) {
+  .responsive-grid-2,
+  .responsive-grid-3,
+  .responsive-grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .responsive-grid-3,
+  .responsive-grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .responsive-grid-4 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Responsive Flex Utilities */
+.responsive-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.responsive-flex > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .responsive-flex {
+    flex-direction: column;
+  }
+
+  .responsive-flex > * {
+    flex: 1 1 100%;
+  }
+}
+

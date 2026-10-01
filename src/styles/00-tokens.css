@@ -1,0 +1,539 @@
+/* ============================================================
+   SGK-APP - "Vo o li & nhan dan" theme
+   Reference: huong-dan-dat-tinh-roi-tinh (tieu hoc)
+   ALL buttons share the RED 3D press mechanism:
+     2px deep border + hard bottom shadow + press down on :active
+   ============================================================ */
+/* ============================================================
+   CSS LAYERS (Phase 1.5 — Desktop Foundation Repair)
+   GLOBAL        → :root variables, reset, html/body, scrollbar
+   LAYOUT        → .app-shell, .sidebar, .main-content (workspace)
+                   Distinguish: WORKSPACE WIDTH (flexible) vs
+                                READABLE CONTENT WIDTH (max 72ch for prose)
+   COMPONENT     → .btn, .card, .form-input, .toolbar, .page-header,
+                   .data-table, .modal, .command-palette
+   MODULE        → .dashboard-workspace, .book-reader (.reader-root,
+                   .pdf-panel, .ai-panel), .lesson-input-table,
+                   .quick-stats-grid (module-specific overrides)
+   RESPONSIVE    → @media 1366/1440/1600/1920/2560 + zoom 80-150%
+                   Panels scale proportionally: TOC | BOOK | AI
+   UTILITY/EXCEPTION → .responsive-fix-pack, print, dark-mode tweaks
+   Audit 1.5: .main-content (5 definitions → 1 flexible), 
+             .dashboard-workspace (1920→none), .reader-* breakpoints fixed
+             .btn-icon duplicate removed, .quick-stats-grid kept as
+             responsive (not duplicate), .sidebar base+modern kept as
+             intentional override layers.
+   ============================================================ */
+
+/* NOTE: Google Fonts are loaded via <link> in index.html (display=swap).
+   Do NOT add @import here — render-blocking, duplicates request, breaks offline. */
+
+:root {
+  font-family: var(--font-body);
+  line-height: 1.55;
+  font-weight: 500;
+  color-scheme: dark;
+
+  /* === COLORS === */
+
+  /* Primary - Blue */
+  --primary: #60a5fa;
+  --primary-light: rgba(96, 165, 250, 0.14);
+  --primary-dark: #93c5fd;
+  --pen-blue: #60a5fa;
+  --pen-blue-soft: rgba(96, 165, 250, 0.14);
+  --pen-blue-deep: #93c5fd;
+
+  /* Secondary - Purple */
+  --secondary: #a78bfa;
+  --secondary-light: rgba(167, 139, 250, 0.14);
+  --secondary-dark: #c4b5fd;
+
+  /* Success - Green */
+  --success: #4ade80;
+  --success-light: rgba(74, 222, 128, 0.14);
+  --success-deep: #22c55e;
+  --success-soft: rgba(74, 222, 128, 0.14);
+
+  /* Warning - Amber */
+  --warning: #fbbf24;
+  --warning-light: rgba(251, 191, 36, 0.14);
+  --warning-deep: #f59e0b;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+
+  /* Danger - Red */
+  --danger: #f87171;
+  --danger-light: rgba(248, 113, 113, 0.14);
+  --danger-deep: #ef4444;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --red-action: #f87171;
+  --red-action-deep: #ef4444;
+  --red-soft: rgba(248, 113, 113, 0.14);
+  --red-hover: #ef4444;
+
+  /* Surface & Background */
+  --bg-main: #0b1220;
+  --surface: #111827;
+  --surface-soft: #172033;
+  --bg-alt: #0b1220;
+
+  /* Text */
+  --text-dark: #f8fafc;
+  --text-mid: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-light: #64748b;
+
+  /* Border */
+  --border-color: #273449;
+  --border-strong: #334155;
+  --line-blue: #273449;
+  --input-border: #334155;
+
+  /* Special Colors */
+  --star-color: #fbbf24;
+  --olive-board: #6b7e5c;
+  --olive-deep: #4a5c3e;
+  --paper-grid: rgba(96, 165, 250, 0.08);
+
+  /* === TYPOGRAPHY ===
+     Headings use Andika (designed for literacy / Vietnamese diacritics);
+     body uses Quicksand -> Mulish -> system. Both stacks end with
+     Vietnamese-capable system fonts so offline still renders dấu correctly. */
+  --font-heading: "Andika", "Quicksand", "Mulish", "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-body: "Quicksand", "Mulish", "Be Vietnam Pro", "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-mono: "Consolas", "Courier New", monospace;
+
+  /* Legacy Typography Scale (for compatibility) */
+  --font-h1: 1.5rem;
+  --font-h2: 1.15rem;
+  --font-h3: 1rem;
+  --font-caption: 0.76rem;
+  --font-table: 0.85rem;
+  --font-button: 0.86rem;
+
+  /* Standard Font Sizes */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  /* Font Weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+
+  /* Line Heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+
+  /* === SPACING === */
+  --space-4: 0.25rem;
+  --space-8: 0.5rem;
+  --space-12: 0.75rem;
+  --space-16: 1rem;
+  --space-24: 1.5rem;
+  --space-32: 2rem;
+  --space-48: 3rem;
+
+  /* Legacy spacing (for compatibility) */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* === BORDER RADIUS === */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* === SHADOWS === */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 32, 0.05);
+  --shadow-sm: 0 2px 4px rgba(15, 23, 32, 0.06);
+  --shadow-md: 0 4px 6px rgba(15, 23, 32, 0.07);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 32, 0.08);
+  --shadow-xl: 0 20px 25px rgba(15, 23, 32, 0.1);
+
+  /* === TRANSITIONS === */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --sidebar-transition:
+    width 0.32s cubic-bezier(0.25, 0.8, 0.25, 1),
+    padding 0.32s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+  /* === Z-INDEX — thang duy nhất toàn app (thấp → cao) ===
+     bottom-nav 70 < sidebar-overlay 80 < sidebar 95 < header 100
+     < dropdown 100 < sticky 200 < drawer 500 < popover 800
+     < modal 3000 < modal-above 3100 < modal-top 3200
+     < scan 5000 < scan-top 6000 < bubble 9999 < toast 99999
+     Quy tắc: component KHÔNG dùng số cứng, dùng var(--z-*) dưới đây.
+     Modal nhiều lớp: lớp sau dùng --z-modal-above/--z-modal-top, cấm số tự chế. */
+  --z-bottom-nav: 70;
+  --z-sidebar-overlay: 80;
+  --z-sidebar: 95;
+  --z-header: 100;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-drawer: 500;
+  --z-modal: 3000;
+  --z-modal-above: 3100;
+  --z-modal-top: 3200;
+  --z-popover: 800;
+  --z-scan: 5000;
+  --z-scan-top: 6000;
+  --z-tooltip: 600;
+  --z-toast: 99999;
+  --z-bubble: 9999;
+
+  /* === BREAKPOINTS — chuẩn duy nhất (CSS không dùng var trong @media,
+     nên mọi file @media đúng các mốc chữ này, không tự chế mốc mới) ===
+     phone: (max-width: 767.98px) | tablet dọc: 768–1023.98px
+     | laptop: 1024–1279px | desktop: 1280–1439px
+     | rộng: 1440–1919px | siêu rộng: >= 1920px
+     767.98 (kiểu Bootstrap) để không giao với tablet min-width:768px;
+     với viewport px nguyên thì ≡ 767px. KHBD/phone nhỏ: 640px / 560px. */
+
+  /* === LAYOUT === */
+  --sidebar-w: 280px;
+  --sidebar-collapsed-w: 68px;
+  --sidebar-transition:
+    width 0.32s cubic-bezier(0.25, 0.8, 0.25, 1),
+    padding 0.32s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --nav-item-h: 2.5rem;
+  --header-height: 64px;
+  --content-max-width: none;
+
+  /* === FOCUS STATES === */
+  --focus-ring: 0 0 0 3px rgba(31, 117, 254, 0.4);
+  --focus-ring-dark: 0 0 0 3px rgba(31, 117, 254, 0.6);
+
+  /* === BUTTON SYSTEM === */
+  --btn-primary-bg: var(--primary);
+  --btn-primary-hover: var(--primary-dark);
+  --btn-primary-text: #ffffff;
+  --btn-secondary-bg: var(--surface-soft);
+  --btn-secondary-hover: var(--border-color);
+  --btn-secondary-text: var(--text-dark);
+  --btn-ghost-bg: transparent;
+  --btn-ghost-hover: var(--surface-soft);
+  --btn-ghost-text: var(--text-mid);
+  --btn-danger-bg: var(--danger);
+  --btn-danger-hover: var(--danger-deep);
+  --btn-danger-text: #ffffff;
+  --btn-height: 2.4rem;
+  --btn-height-sm: 2rem;
+  --btn-padding-x: 1rem;
+  --btn-padding-x-sm: 0.75rem;
+  --btn-radius: var(--radius-md);
+
+  /* === CARD SYSTEM === */
+  --card-bg: var(--surface);
+  --card-border: var(--border-color);
+  --card-radius: var(--radius-lg);
+  --card-padding: 1.25rem;
+  --card-shadow: var(--shadow-sm);
+  --card-hover-shadow: var(--shadow-md);
+
+  /* === INPUT SYSTEM === */
+  --input-bg: var(--surface);
+  --input-border: var(--input-border);
+  --input-border-focus: var(--primary);
+  --input-radius: var(--radius-md);
+  --input-height: 2.4rem;
+  --input-padding-x: 0.875rem;
+  --input-placeholder: var(--text-muted);
+
+  /* === PHASE 4 — CANONICAL DESIGN TOKENS (Step 1) === */
+  /* Single source aliases so spec names work alongside legacy names.
+     Legacy (--primary, --surface, etc.) remain source; canonical names
+     alias to them to avoid breakage. */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+  --color-background: var(--bg-main);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-soft);
+  --color-surface-alt: var(--surface-alt, var(--surface-soft));
+  --color-border: var(--border-color);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text-dark);
+  --color-text-secondary: var(--text-mid);
+  --color-muted: var(--text-muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  /* Canonical spacing aliases (spec §4 & §5) — legacy --space-4..48 kept */
+  --space-1: 0.25rem; /* 4 — alias for --space-4 */
+  --space-2: 0.5rem; /* 8 — alias for --space-8 */
+  --space-3: 0.75rem; /* 12 — alias for --space-12 */
+  /* --space-4 already 1rem (16) = --space-16 */
+  --space-5: 1.25rem; /* 20 — NEW (px20) */
+  /* --space-6 already 1.5rem (24) = --space-24 */
+  --space-7: 1.75rem; /* 28 */
+  /* --space-8 already 2rem (32) = --space-32 */
+  --space-20: 1.25rem; /* px20 canonical */
+  --space-40: 2.5rem; /* px40 canonical */
+  --space-64: 4rem; /* px64 canonical */
+
+  /* Shadow aliases already exist as --shadow-sm/md/lg — no override needed */
+
+  /* Typography — Display + scale (Phase 4 §3.1) */
+  --font-display: var(--font-heading);
+  --text-display: 2rem; /* 32px */
+  --text-h1: var(--text-3xl);
+  --text-h2: var(--text-2xl);
+  --text-h3: var(--text-xl);
+  --text-body: var(--text-base);
+  --text-body-sm: var(--text-sm);
+  --text-caption: var(--text-xs);
+  --text-label: var(--text-sm);
+  --text-button: 0.88rem;
+}
+
+/* Light Mode — clean, airy, professional teacher workspace */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-main: #f8fafc;
+  --surface: #ffffff;
+  --surface-soft: #f1f5f9;
+  --surface-alt: #f8fafc;
+  --bg-alt: #f8fafc;
+  --paper: #f8fafc;
+  --paper-grid: rgba(148, 163, 184, 0.14);
+  --bg-card: #ffffff;
+  --text-dark: #0f172a;
+  --text-mid: #334155;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
+  --border-color: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --line-blue: #e2e8f0;
+  --input-border: #cbd5e1;
+  --input-border-focus: #2563eb;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #eff6ff;
+  --secondary: #7c3aed;
+  --secondary-hover: #6d28d9;
+  --secondary-light: #f5f3ff;
+  --success: #16a34a;
+  --success-deep: #15803d;
+  --success-light: #dcfce7;
+  --success-soft: #dcfce7;
+  --warning: #d97706;
+  --warning-deep: #b45309;
+  --warning-light: #fef3c7;
+  --warning-soft: #fef3c7;
+  --danger: #dc2626;
+  --danger-deep: #b91c1c;
+  --danger-light: #fee2e2;
+  --danger-soft: #fee2e2;
+  --info: #0891b2;
+  --info-light: #cffafe;
+  --pen-blue: #2563eb;
+  --pen-blue-soft: #eff6ff;
+  --pen-blue-deep: #1d4ed8;
+  --red-action: #dc2626;
+  --red-hover: #ef4444;
+  --red-action-deep: #b91c1c;
+  --red-soft: #fee2e2;
+  --accent: #dc2626;
+  --accent-hover: #b91c1c;
+  --star-color: #d97706;
+  --olive-board: #6b7e5c;
+  --olive-deep: #4a5c3e;
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.07), 0 4px 6px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.08), 0 8px 10px rgba(15, 23, 42, 0.04);
+  --focus-ring: rgba(37, 99, 235, 0.28);
+  --btn-secondary-bg: #f5f3ff;
+  --btn-secondary-hover: #6d28d9;
+  --btn-secondary-text: #6d28d9;
+  --btn-ghost-hover: var(--surface-soft);
+  --card-bg: var(--surface);
+  --card-border: var(--border-color);
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-border: #e2e8f0;
+  --glass-shadow: 0 4px 16px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --pill-tint: rgba(248, 250, 251, 0.9);
+  --overlay-veil: rgba(15, 23, 42, 0.32);
+  --danger-tint: rgba(254, 226, 226, 0.85);
+  --warning-tint: rgba(254, 243, 199, 0.85);
+  --success-tint: rgba(220, 252, 231, 0.85);
+  --overlay-bg: rgba(255, 255, 255, 0.42);
+  --search-overlay-bg: rgba(255, 255, 255, 0.32);
+}
+
+/* ============================================================
+   DARK THEME (Navy/Slate - Modern, elevated contrast)
+   ============================================================ */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-main: #0b1220;
+  --surface: #111827;
+  --surface-soft: #162032;
+  --surface-alt: #1e293b;
+  --bg-alt: #0b1220;
+  --paper: #0b1220;
+  --paper-grid: rgba(96, 165, 250, 0.06);
+  --text-dark: #f1f5f9;
+  --text-mid: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-light: #64748b;
+  --border-color: #1e344d;
+  --border-strong: #2a415c;
+  --line-blue: #1e344d;
+  --input-border: #334155;
+  --input-border-focus: #60a5fa;
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+  --primary-light: rgba(96, 165, 250, 0.14);
+  --secondary: #a78bfa;
+  --secondary-hover: #c4b5fd;
+  --secondary-light: rgba(167, 139, 250, 0.14);
+  --success: #4ade80;
+  --success-deep: #22c55e;
+  --success-light: rgba(74, 222, 128, 0.14);
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --warning: #fbbf24;
+  --warning-deep: #f59e0b;
+  --warning-light: rgba(251, 191, 36, 0.14);
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-deep: #ef4444;
+  --danger-light: rgba(248, 113, 113, 0.14);
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --info: #22d3ee;
+  --info-light: rgba(34, 211, 238, 0.14);
+  --olive-board: #6b7e5c;
+  --olive-deep: #4a5c3e;
+  --red-action: #f87171;
+  --red-hover: #ef4444;
+  --red-action-deep: #ef4444;
+  --red-soft: rgba(248, 113, 113, 0.14);
+  --pen-blue: #60a5fa;
+  --pen-blue-deep: #93c5fd;
+  --pen-blue-soft: rgba(96, 165, 250, 0.14);
+  --cyan: #22d3ee;
+  --cyan-deep: #0891b2;
+  --star-color: #fbbf24;
+  --bg-card: #111827;
+  --danger-soft: rgba(248, 113, 113, 0.14);
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --glass-bg: rgba(17, 24, 39, 0.92);
+  --glass-border: #1e344d;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.38);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.45);
+  --focus-ring: rgba(96, 165, 250, 0.36);
+  --overlay-bg: rgba(2, 6, 23, 0.62);
+  --search-overlay-bg: rgba(2, 6, 23, 0.55);
+  --accent: #f87171;
+  --accent-hover: #ef4444;
+  --pill-tint: rgba(30, 41, 59, 0.9);
+  --overlay-veil: rgba(2, 6, 23, 0.62);
+  --danger-tint: rgba(248, 113, 113, 0.14);
+  --warning-tint: rgba(251, 191, 36, 0.14);
+  --success-tint: rgba(74, 222, 128, 0.14);
+  --btn-secondary-bg: rgba(167, 139, 250, 0.12);
+  --btn-secondary-hover: rgba(167, 139, 250, 0.22);
+  --btn-secondary-text: #c4b5fd;
+  --btn-ghost-hover: rgba(255, 255, 255, 0.06);
+  --card-bg: var(--surface);
+  --card-border: var(--border-color);
+  --input-bg: #0f172a;
+  --input-border: #334155;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  transition:
+    background-color var(--transition-base),
+    border-color var(--transition-base),
+    box-shadow var(--transition-base),
+    color var(--transition-base),
+    opacity var(--transition-base),
+    transform var(--transition-fast);
+}
+
+html {
+  touch-action: manipulation;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--text-dark);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--paper-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Vietnamese diacritics: keep dấu stacked legibly, never synthesize
+     fake bold that muddies ơ/ư/ệ/ỗ */
+  text-rendering: optimizeLegibility;
+  font-synthesis-weight: none;
+  font-kerning: normal;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+  /* Prevent clipping of high Vietnamese tone marks (ắ ấ ẩ ễ ệ ố ồ) */
+  line-height: 1.3;
+  padding-top: 0.08em;
+  overflow-wrap: break-word;
+}
+
+:focus-visible {
+  outline: 4px solid rgba(31, 117, 254, 0.28);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--pen-blue-soft);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+

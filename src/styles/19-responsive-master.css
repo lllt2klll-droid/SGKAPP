@@ -1,0 +1,1668 @@
+/* ============================================================
+   STANDARDIZED RESPONSIVE FIXES (MASTER OVERRIDE)
+   Consolidates and overrides all non-standard breakpoints
+   ============================================================ */
+
+/* FORCE STANDARD BREAKPOINTS - Override legacy breakpoints */
+@media (max-width: 767px) {
+  /* Global - Force single column layouts */
+  .app-shell,
+  .app-layout {
+    flex-direction: column;
+  }
+
+  /* Sidebar - Force drawer mode */
+  .sidebar,
+  .app-sidebar {
+    display: none;
+  }
+
+  .sidebar.mobile-open,
+  .app-mobile-drawer.open {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(86vw, 320px);
+    max-width: 320px;
+    height: 100vh;
+    background: var(--surface);
+    border-right: 1px solid var(--border-color);
+    box-shadow: var(--shadow-xl);
+    z-index: 1000;
+    transform: translateX(0);
+  }
+
+  /* Main content - Force full width */
+  .main-content,
+  .app-content {
+    width: 100%;
+    max-width: 100%;
+    padding: 1rem;
+    min-width: 0;
+  }
+
+  /* Dashboard - Force single column */
+  .dashboard-workspace {
+    padding: 1rem;
+    gap: 1rem;
+    max-width: 100%;
+  }
+
+  .stats-compact-grid,
+  .continue-working-grid,
+  .quick-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .workflow-pipeline {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .pipeline-connector {
+    display: none;
+  }
+
+  /* Reader - Force vertical layout */
+  .reader-toc-panel {
+    display: none;
+  }
+
+  .reader-ai-panel {
+    width: 100%;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: auto;
+    max-height: 50vh;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+  }
+
+  /* Modals - Force full viewport */
+  .modal-content {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px;
+    padding: 1.25rem;
+  }
+
+  /* Tables - Force horizontal scroll only */
+  .table-wrapper,
+  .responsive-table-wrapper,
+  .data-table-scroller {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Forms - Force single column */
+  .filter-row,
+  .toolbar-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Buttons - Force touch targets */
+  .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .btn {
+    min-height: 44px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet - Force collapsed sidebar */
+  .sidebar,
+  .app-sidebar {
+    width: var(--sidebar-collapsed-w);
+  }
+
+  .sidebar.collapsed,
+  .app-sidebar.collapsed {
+    width: var(--sidebar-collapsed-w);
+  }
+
+  /* Dashboard - Force 2-column */
+  .stats-compact-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .continue-working-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Reader - Optimized panels */
+  .reader-toc-panel {
+    width: 220px;
+  }
+
+  .reader-ai-panel {
+    width: 280px;
+  }
+
+  /* Modals - Optimized width */
+  .modal-content {
+    width: 92vw;
+    max-height: 85vh;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  /* Laptop - Full sidebar, optimized content */
+  .sidebar,
+  .app-sidebar {
+    width: var(--sidebar-w);
+  }
+
+  /* Dashboard - Optimized columns */
+  .stats-compact-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .continue-working-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Reader - Optimized panels */
+  .reader-toc-panel {
+    width: 240px;
+  }
+
+  .reader-ai-panel {
+    width: 300px;
+  }
+}
+
+@media (min-width: 1280px) and (max-width: 1439px) {
+  /* Desktop - Standard layout */
+  .main-content,
+  .app-content {
+    padding: 2rem 2.5rem;
+  }
+
+  /* Dashboard - Standard columns */
+  .stats-compact-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .continue-working-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Reader - Standard panels */
+  .reader-toc-panel {
+    width: 260px;
+  }
+
+  .reader-ai-panel {
+    width: 320px;
+  }
+}
+
+@media (min-width: 1440px) and (max-width: 1919px) {
+  /* Large - Expanded layout */
+  .main-content,
+  .app-content {
+    padding: 2.5rem 3rem;
+  }
+
+  /* Dashboard - Expanded */
+  .dashboard-workspace {
+    padding: 3rem;
+    gap: 2rem;
+  }
+
+  .hero-greeting {
+    font-size: 1.75rem;
+  }
+
+  /* Reader - Expanded panels */
+  .reader-toc-panel {
+    width: 280px;
+  }
+
+  .reader-ai-panel {
+    width: 360px;
+  }
+}
+
+@media (min-width: 1920px) {
+  /* XL/2XL - Ultra-wide layout */
+  .main-content,
+  .app-content {
+    padding: 3rem 4rem;
+  }
+
+  /* Dashboard - Ultra-wide */
+  .dashboard-workspace {
+    padding: 3rem 4rem;
+    gap: 2rem;
+  }
+
+  .hero-greeting {
+    font-size: 2rem;
+  }
+
+  /* Reader - Ultra-wide panels */
+  .reader-toc-panel {
+    width: 300px;
+  }
+
+  .reader-ai-panel {
+    width: 380px;
+  }
+}
+
+/* EMERGENCY OVERFLOW FIXES */
+* {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  overflow-x: hidden;
+  width: 100%;
+  min-width: 0;
+  max-width: 100vw;
+}
+
+.app-shell,
+.app-layout,
+.main-content,
+.app-content,
+.dashboard-workspace,
+.reader-main {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Override any conflicting rules */
+.sidebar {
+  min-width: 0;
+}
+
+.reader-book-panel {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pdf-canvas {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* ============================================================
+   BOOK READER SPECIFIC RESPONSIVE FIXES
+   ============================================================ */
+
+/* Mobile BookReader - Force vertical stack */
+@media (max-width: 767px) {
+  .reader-root {
+    min-height: 100vh;
+    height: 100vh;
+  }
+
+  .reader-main {
+    flex-direction: column;
+  }
+
+  .reader-toc-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    z-index: 2000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .reader-toc-panel.mobile-open {
+    transform: translateX(0);
+  }
+
+  .reader-book-panel {
+    width: 100%;
+    margin: 0;
+  }
+
+  .reader-ai-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+  }
+
+  .reader-ai-panel.mobile-open {
+    transform: translateY(0);
+  }
+
+  .viewer-toolbar--compact {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem;
+  }
+
+  .rtb-title {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rtb-back-text {
+    display: none;
+  }
+}
+
+/* Tablet BookReader - Optimized 2-panel */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .reader-toc-panel {
+    width: 220px;
+  }
+
+  .reader-ai-panel {
+    width: 280px;
+  }
+
+  .reader-book-panel {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .rtb-title {
+    max-width: 200px;
+  }
+}
+
+/* Laptop BookReader - Standard 3-panel */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .reader-toc-panel {
+    width: 240px;
+  }
+
+  .reader-ai-panel {
+    width: 300px;
+  }
+
+  .reader-book-panel {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Desktop BookReader - Full 3-panel */
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .reader-toc-panel {
+    width: 260px;
+  }
+
+  .reader-ai-panel {
+    width: 320px;
+  }
+
+  .reader-book-panel {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Large Desktop BookReader - Expanded panels */
+@media (min-width: 1440px) and (max-width: 1919px) {
+  .reader-toc-panel {
+    width: 280px;
+  }
+
+  .reader-ai-panel {
+    width: 360px;
+  }
+
+  .reader-book-panel {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* XL Desktop BookReader - Ultra-wide panels */
+@media (min-width: 1920px) {
+  .reader-toc-panel {
+    width: 300px;
+  }
+
+  .reader-ai-panel {
+    width: 380px;
+  }
+
+  .reader-book-panel {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* ============================================================
+   LESSON PLANS SPECIFIC RESPONSIVE FIXES
+   ============================================================ */
+
+/* Mobile LessonPlans - Force single column */
+@media (max-width: 767px) {
+  .lp-workspace {
+    flex-direction: column;
+  }
+
+  .lp-sidebar {
+    width: 100%;
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .lp-content {
+    width: 100%;
+  }
+
+  .lesson-table-wrapper,
+  .cachtienhanh-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .lesson-input-table,
+  .cachtienhanh-table {
+    min-width: 600px;
+  }
+
+  .lp-grid-2,
+  .lp-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .lp-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Tablet LessonPlans - Optimized 2-column */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .lp-workspace {
+    flex-direction: row;
+  }
+
+  .lp-sidebar {
+    width: 250px;
+  }
+
+  .lp-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .lp-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lp-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Laptop LessonPlans - Standard layout */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .lp-sidebar {
+    width: 280px;
+  }
+
+  .lp-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Desktop LessonPlans - Full layout */
+@media (min-width: 1280px) {
+  .lp-sidebar {
+    width: 300px;
+  }
+
+  .lp-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ============================================================
+   QUESTION BANK / ACTIVITIES / WORKSHEETS RESPONSIVE FIXES
+   ============================================================ */
+
+/* Mobile - Force single column */
+@media (max-width: 767px) {
+  .activities-grid,
+  .ideas-grid,
+  .questionbank-grid,
+  .worksheets-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activities-toolbar,
+  .ideas-toolbar,
+  .questionbank-toolbar,
+  .worksheets-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .qb-table-wrapper,
+  .activities-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .qb-table,
+  .activities-table {
+    min-width: 600px;
+  }
+}
+
+/* Tablet - 2 columns */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .activities-grid,
+  .ideas-grid,
+  .questionbank-grid,
+  .worksheets-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Laptop - 3 columns */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .activities-grid,
+  .ideas-grid,
+  .questionbank-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Desktop - 4 columns */
+@media (min-width: 1280px) {
+  .activities-grid,
+  .ideas-grid,
+  .questionbank-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ============================================================
+   SEARCH / COMPARE / MATRIX RESPONSIVE FIXES
+   ============================================================ */
+
+/* Mobile - Force single column */
+@media (max-width: 767px) {
+  .compare-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .matrix-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .matrix-table {
+    min-width: 800px;
+  }
+
+  .search-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-index-status {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Tablet - Optimized layout */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .compare-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .search-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+/* Desktop - Side-by-side */
+@media (min-width: 1024px) {
+  .compare-panels {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ============================================================
+   COLLECTIONS / REFERENCES / CONCEPTS / INVENTORY / LANGSTATS RESPONSIVE FIXES
+   ============================================================ */
+
+/* Mobile - Force single column */
+@media (max-width: 767px) {
+  .collections-grid,
+  .references-grid,
+  .concepts-grid,
+  .inventory-grid,
+  .langstats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .data-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .data-table {
+    min-width: 600px;
+  }
+}
+
+/* Tablet - 2 columns */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .collections-grid,
+  .references-grid,
+  .concepts-grid,
+  .inventory-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Desktop - 3-4 columns */
+@media (min-width: 1024px) {
+  .collections-grid,
+  .references-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .concepts-grid,
+  .inventory-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ============================================================
+   MISSIONS / TASKS / IDEAS / INTERNSHIP / DATA TOOLS RESPONSIVE FIXES
+   ============================================================ */
+
+/* Mobile - Force single column */
+@media (max-width: 767px) {
+  .missions-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mission-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .achievements-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tasks-table,
+  .ideas-table,
+  .internship-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .data-tools-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Tablet - 2 columns */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .mission-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .achievements-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .data-tools-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Desktop - 3-4 columns */
+@media (min-width: 1024px) {
+  .mission-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .achievements-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .data-tools-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ============================================================
+   MODAL / TABLE / FORM / BUTTON / AI BUBBLE STANDARDIZED FIXES
+   ============================================================ */
+
+/* MODAL STANDARDIZATION */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  padding: 12px;
+  z-index: var(--z-modal);
+  background: var(--overlay-bg, rgba(0, 0, 0, 0.5));
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  width: min(960px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  max-width: 100%;
+}
+
+.modal-body {
+  overflow-y: auto;
+  max-height: calc(100dvh - 100px);
+}
+
+@media (max-width: 767px) {
+  .modal-content {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 16px;
+    padding: 1.25rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .modal-content {
+    width: 92vw;
+    max-height: 85vh;
+  }
+}
+
+@media (min-width: 1024px) {
+  .modal-content {
+    width: min(900px, 90vw);
+  }
+}
+
+/* Dashboard tools modal must remain wide after global modal overrides. */
+.modal-content.dashboard-tools-modal {
+  display: flex;
+  width: min(960px, calc(100vw - 2rem));
+  min-width: 0;
+  max-width: 960px;
+  flex-direction: column;
+  padding: 0;
+}
+
+.dashboard-tools-modal .dashboard-tools-header,
+.dashboard-tools-modal .dashboard-tools-toolbar,
+.dashboard-tools-modal .dashboard-tools-grid,
+.dashboard-tools-modal .dashboard-tools-empty {
+  min-width: 0;
+}
+
+.dashboard-tools-modal .dashboard-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  width: auto;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .modal-content.dashboard-tools-modal {
+    width: 100%;
+    max-width: none;
+    border-radius: 18px 18px 0 0;
+  }
+}
+
+/* TABLE STANDARDIZATION */
+.responsive-table-wrapper,
+.table-wrapper,
+.data-table-scroller,
+.lesson-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.responsive-table-wrapper table,
+.table-wrapper table,
+.data-table-scroller table {
+  min-width: 720px;
+}
+
+/* FORM STANDARDIZATION */
+.form-control,
+.form-input,
+input,
+select,
+textarea {
+  box-sizing: border-box;
+  max-width: 100%;
+  width: 100%;
+}
+
+/* BUTTON STANDARDIZATION */
+.btn-icon {
+  min-width: 36px;
+  min-height: 36px;
+}
+
+/* AI BUBBLE STANDARDIZATION */
+.assistant-bubble,
+.utility-bubble {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: var(--z-bubble);
+  min-width: 48px;
+  min-height: 48px;
+}
+
+/* MOBILE 767px GỘP — 5 khối TABLES+FORMS+BUTTONS+BUBBLES+BUBBLE-NAV cũ gộp thành 1.
+   Thứ tự rule giữ nguyên như trước khi gộp nên cascade/kết quả không đổi.
+   Quy tắc: thêm rule mobile mới vào đúng nhóm dưới đây, không mở khối @media 767px mới. */
+@media (max-width: 767px) {
+  /* TABLES */
+  .responsive-table-wrapper,
+  .table-wrapper,
+  .data-table-scroller,
+  .lesson-table-wrapper {
+    border-radius: 0;
+    margin: 0 -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  /* FORMS */
+  .form-control,
+  .form-input,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .filter-row,
+  .toolbar-filters,
+  .lp-form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* BUTTONS */
+  .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .btn {
+    min-height: 44px;
+  }
+
+  /* BUBBLES */
+  .assistant-bubble,
+  .utility-bubble {
+    bottom: 1rem;
+    right: 1rem;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* BUBBLES-NAV: nhấc khỏi thanh nav dưới nếu có */
+  .assistant-bubble,
+  .utility-bubble {
+    bottom: calc(1rem + 60px); /* Above mobile nav if present */
+  }
+}
+.ui-s-ad416e {
+  width: 100%;
+}
+.ui-s-a8a79d {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.ui-s-5881e4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0px;
+}
+.ui-s-4ebffd {
+  display: flex;
+  gap: 0.4rem;
+}
+.ui-s-12fecf {
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  white-space: normal;
+}
+.ui-s-b14270 {
+  font-size: 0.78rem;
+  max-width: 160px;
+  display: inline-block;
+}
+.ui-s-38c683 {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.ui-s-d00c81 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 220px;
+}
+.ui-s-d97675 {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ui-s-6b0b0a {
+  margin-left: auto;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+}
+.ui-s-c5cf47 {
+  min-width: 0px;
+  max-width: 420px;
+}
+.ui-s-3cc46e {
+  font-size: 0.74rem;
+  margin-left: 0.35rem;
+}
+.ui-s-c7de57 {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-s-7b48d3 {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.ui-s-5e63e6 {
+  width: 100%;
+  margin-bottom: 0.7rem;
+}
+.ui-s-d18978 {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.ui-s-1b24d7 {
+  margin: 0.15rem 0 0;
+}
+.ui-s-706249 {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ui-s-ce0242 {
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+.ui-s-446672 {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+.ui-s-e52491 {
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+}
+.ui-s-da4293 {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.ui-s-488469 {
+  min-width: 220px;
+  max-width: 340px;
+}
+.ui-s-91d8ba {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+.ui-s-c53cad {
+  margin-top: 2px;
+  font-size: 0.68rem;
+}
+.ui-s-f522e4 {
+  max-width: 360px;
+  display: inline-block;
+}
+.ui-s-66af6a {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.ui-s-03aa9a {
+  color: #666;
+  font-size: 0.85rem;
+}
+.ui-s-9bd493 {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+.ui-s-412805 {
+  display: inline-flex;
+}
+.ui-s-add0e4 {
+  display: none;
+}
+.ui-s-bac25b {
+  margin-top: 0.3rem;
+}
+.ui-s-71a828 {
+  margin-top: 0.6rem;
+}
+.ui-s-f388bd {
+  margin-top: 0.4rem;
+}
+.ui-s-7a9fbb {
+  flex: 1;
+}
+.ui-s-502d27 {
+  padding: 0.45rem 0.9rem;
+  white-space: nowrap;
+}
+.ui-s-7530e3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.ui-s-18078f {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0px;
+}
+.ui-s-5423f7 {
+  margin-top: 0.6rem;
+  min-width: 260px;
+}
+.ui-s-73ac6d {
+  width: 64px;
+}
+.ui-s-1c9d9b {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+.ui-s-4a2796 {
+  border-color: var(--accent);
+}
+.ui-s-bfc56a {
+  font-weight: 700;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.ui-s-65957f {
+  color: var(--primary);
+}
+.ui-s-a79a39 {
+  color: var(--secondary);
+}
+.ui-s-c882c3 {
+  vertical-align: -2px;
+}
+.ui-s-989cfd {
+  border-color: var(--border-color);
+}
+.ui-s-e67191 {
+  border-color: var(--border-color);
+  margin-top: 0.6rem;
+}
+.ui-s-cf843c {
+  margin: 0px;
+  font-size: 0.85rem;
+}
+.ui-s-61e4f0 {
+  margin: 0 0 0.8rem;
+}
+.ui-s-f362a0 {
+  width: 76px;
+}
+.ui-s-e7954c {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+}
+.ui-s-fb8cbd {
+  margin-bottom: 0.6rem;
+}
+.ui-s-db1c74 {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.ui-s-641752 {
+  font-family: var(--font-body);
+}
+.ui-s-3e3a0f {
+  font-family: inherit;
+}
+.ui-s-82621d {
+  min-width: 0px;
+  flex: 1;
+}
+.ui-s-734e5f {
+  font-weight: 800;
+  font-size: 14pt;
+  font-family: inherit;
+}
+.ui-s-49781f {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.ui-s-2255e3 {
+  margin-bottom: 0.8rem;
+  text-align: center;
+}
+.ui-s-a2bb60 {
+  text-align: left;
+  font-family: inherit;
+}
+.ui-s-e190ce {
+  margin: 0 0 0.35rem;
+  font-size: 14pt;
+  font-weight: 700;
+  font-family: inherit;
+}
+.ui-s-c4f4e7 {
+  margin: 0 0 0.5rem;
+  font-size: 14pt;
+  font-weight: 700;
+  font-family: inherit;
+}
+.ui-s-3be16e {
+  margin: 0 0 0.5rem;
+  font-size: 26pt;
+  font-weight: 700;
+  font-family: inherit;
+}
+.ui-s-15d199 {
+  margin-bottom: 0.8rem;
+}
+.ui-s-df1c82 {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.ui-s-226ee5 {
+  font-family: var(--font-body);
+  font-size: 13pt;
+  margin-top: 0.35rem;
+}
+.ui-s-ae3486 {
+  font-family: inherit;
+  font-size: 13pt;
+  font-style: normal;
+}
+.ui-s-4b00ba {
+  margin: 0px;
+  font-family: inherit;
+}
+.ui-s-3cb61c {
+  width: 52%;
+}
+.ui-s-02aeb6 {
+  width: 48%;
+}
+.ui-s-94ac95 {
+  margin-left: auto;
+}
+.ui-s-75ddf6 {
+  width: auto;
+}
+.ui-s-5b5086 {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.ui-s-a1d7cd {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 0.2rem 0.4rem;
+}
+.ui-s-5c2b3b {
+  font-family: inherit;
+  font-size: 14pt;
+}
+.ui-s-ad76ab {
+  white-space: nowrap;
+}
+.ui-s-f7ff01 {
+  margin-bottom: 0.35rem;
+}
+.ui-s-d85a19 {
+  font-family: var(--font-body);
+  font-size: 13pt;
+  color: var(--text-dark);
+  font-weight: 700;
+}
+.ui-s-17d49f {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 30pt;
+}
+.ui-s-507e61 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.ui-s-159f67 {
+  font-family: var(--font-body);
+  font-size: 13pt;
+}
+.ui-s-b51482 {
+  align-self: flex-start;
+}
+.ui-s-64031b {
+  font-size: 0.875rem;
+}
+.ui-s-159132 {
+  margin-top: 0.6rem;
+  min-width: 260px;
+}
+.ui-s-2d06b5 {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.ui-s-9795bb {
+  margin-top: 0.8rem;
+  border-color: var(--primary);
+}
+.ui-s-10d071 {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.ui-s-643166 {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.ui-s-518be0 {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+.ui-s-00901c {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+.ui-s-61767f {
+  color: var(--text-muted);
+  font-weight: 800;
+  font-size: 0.72rem;
+}
+.ui-s-7d8df3 {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.ui-s-f54371 {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.ui-s-8959b2 {
+  max-width: 380px;
+  display: inline-block;
+}
+.ui-s-284552 {
+  max-width: 140px;
+  display: inline-block;
+}
+.ui-s-435d66 {
+  color: var(--success);
+  font-weight: 800;
+}
+.ui-s-4b9ef5 {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+.ui-s-b70b12 {
+  min-width: 200px;
+  max-width: 300px;
+}
+.ui-s-fe2046 {
+  color: var(--success);
+}
+.ui-s-e0c90e {
+  max-width: 640px;
+}
+.ui-s-957911 {
+  margin-bottom: 0.7rem;
+}
+.ui-s-6f2de0 {
+  margin-right: 0.7rem;
+}
+.ui-s-dc6fff {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.ui-s-3ccb94 {
+  padding: 0.45rem 0.6rem;
+}
+.ui-s-e95bc4 {
+  font-weight: 800;
+  color: var(--primary);
+  min-width: 1.6rem;
+}
+.ui-s-5920df {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+.ui-s-3ac0f7 {
+  margin-top: 0.7rem;
+}
+.ui-s-017520 {
+  margin: 0px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ui-s-e0a789 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+.ui-s-2c8333 {
+  display: inline;
+  vertical-align: -1px;
+}
+.ui-s-47a01e {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem;
+  background: var(--bg-muted);
+  border-radius: 6px;
+}
+.ui-s-10961b {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.ui-s-1f74ec {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+.ui-s-bf8998 {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.ui-s-26ca48 {
+  border-color: var(--border-color);
+  margin-bottom: 0.9rem;
+}
+.ui-s-0390ad {
+  vertical-align: -2px;
+}
+.ui-s-c36f84 {
+  max-width: 440px;
+}
+.ui-s-c40787 {
+  margin: 0px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ui-s-590e1a {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+.ui-s-e3d451 {
+  margin-bottom: 0.75rem;
+}
+.ui-s-16228e {
+  padding: 2.5rem 1rem;
+}
+.ui-s-dd0f90 {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+.ui-s-b77dd9 {
+  margin-top: 0.4rem;
+}
+.ui-s-c22b0d {
+  padding: 3rem 1rem;
+}
+.ui-s-20cc80 {
+  flex: 1;
+  min-width: 160px;
+}
+.ui-s-7a9ad0 {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.ui-s-8581bc {
+  margin: 0px;
+  font-weight: 700;
+}
+.ui-s-74b1e9 {
+  margin: 0.1rem 0 0;
+}
+.ui-s-b06bb9 {
+  flex-shrink: 0px;
+}
+.ui-s-c8e55a {
+  width: 110px;
+}
+.ui-s-71032c {
+  grid-column: 1 / -1;
+}
+.ui-s-287679 {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+}
+.ui-s-16fa09 {
+  margin-bottom: 0px;
+}
+.ui-s-245e80 {
+  white-space: pre-wrap;
+}
+.ui-s-9b8fcf {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.ui-s-a3463c {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.ui-s-a8f7e8 {
+  margin-left: auto;
+  display: flex;
+  gap: 0.35rem;
+}
+.ui-s-7092c3 {
+  display: inline-flex;
+}
+.ui-s-ac1caf {
+  margin: 0 4px 0 0;
+  accent-color: var(--primary);
+}
+.ui-s-669ec8 {
+  margin: 0.6rem 0;
+}
+.ui-s-f99674 {
+  grid-column: span 2;
+}
+.ui-s-004e2c {
+  height: 70px;
+}
+.ui-s-5a1f19 {
+  display: flex;
+  gap: 0.2rem;
+}
+.ui-s-22befd {
+  background: var(--success);
+  color: #fff;
+}
+
+/* KHBD Compact Input - gon gang, giu nguyen file xuat */
+.khbd-root.khbd-compact {
+  --khbd-gap: 0.55rem;
+  --khbd-pad: 0.6rem;
+}
+.khbd-compact .panel-box {
+  padding: var(--khbd-pad);
+  margin-bottom: var(--khbd-gap);
+}
+.khbd-compact .khbd-sec {
+  padding: var(--khbd-pad);
+}
+.khbd-compact .khbd-cover {
+  padding: 0.7rem;
+}
+.khbd-compact .khbd-cover-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.khbd-compact .khbd-infotable {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.8rem;
+}
+.khbd-compact .khbd-info-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+.khbd-compact .khbd-goal {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+.khbd-compact .khbd-h-sec {
+  font-size: 0.95rem;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.khbd-compact .khbd-h-sub {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-mid);
+  margin-bottom: 0.25rem;
+}
+.khbd-compact .form-input,
+.khbd-compact .form-control {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+  min-height: 28px;
+}
+.khbd-compact .lp-toolbar {
+  padding: 0.5rem 0.6rem;
+  gap: 0.4rem;
+}
+.khbd-compact .lp-toolbar .form-input {
+  max-width: 240px;
+}
+.khbd-compact .lesson-table-wrapper {
+  margin: 0.4rem 0;
+  border-radius: 8px;
+}
+.khbd-compact .lesson-input-table {
+  font-size: 0.8rem;
+}
+.khbd-compact .lesson-input-table th {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+}
+.khbd-compact .lesson-input-table td {
+  padding: 0.35rem 0.45rem;
+}
+.khbd-compact .cachtienhanh-table th,
+.khbd-compact .cachtienhanh-table td {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.78rem;
+}
+.khbd-compact .cachtienhanh-steps {
+  margin: 0.3rem 0;
+}
+.khbd-compact .act-title-row {
+  gap: 0.35rem;
+}
+.khbd-compact .lp-field-label {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 0.7rem;
+}
+@media (max-width: 767.98px) {
+  /* Chuẩn phone toàn app (xem 00-tokens.css). iPad dọc 768px dùng layout tablet:
+     khbd.css đã xếp dọc ở <=900px nên không cần ép 1fr tại đúng 768px. */
+  .khbd-compact .khbd-cover-grid,
+  .khbd-compact .khbd-infotable,
+  .khbd-compact .khbd-info-3 {
+    grid-template-columns: 1fr;
+  }
+}
+

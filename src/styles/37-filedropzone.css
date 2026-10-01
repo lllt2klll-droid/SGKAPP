@@ -1,0 +1,55 @@
+/* ── FileDropzone dùng chung: kéo-thả file mọi nơi, chống lỗi ── */
+.file-dropzone {
+  border: 2px dashed var(--border-color, #cbd5e1);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  padding: 1.1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  outline: none;
+}
+.file-dropzone:hover { border-color: var(--primary, #2563eb); background: var(--surface-soft, #f8fafc); }
+.file-dropzone:focus-visible { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25); border-color: var(--primary, #2563eb); }
+.file-dropzone.is-active {
+  border-color: var(--primary, #2563eb);
+  border-style: solid;
+  background: var(--primary-light, #eff6ff);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+  transform: scale(1.005);
+}
+.file-dropzone.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.file-dropzone.is-compact { padding: 0.6rem 0.75rem; border-radius: 10px; flex-direction: row; gap: 0.6rem; }
+.file-dropzone-icon { font-size: 1.5rem; line-height: 1; }
+.file-dropzone.is-compact .file-dropzone-icon { font-size: 1.15rem; }
+.file-dropzone-title { font-weight: 700; font-size: 0.9rem; color: var(--text-dark, #0f172a); }
+.file-dropzone-hint { font-size: 0.78rem; color: var(--text-muted, #64748b); }
+.file-dropzone-error { font-size: 0.78rem; color: var(--color-danger, #dc2626); font-weight: 600; }
+
+/* Overlay phủ toàn vùng khi kéo file (dùng cho Library / modal lớn) */
+.global-drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.12);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+.global-drag-overlay > span {
+  background: var(--surface, #fff);
+  border: 2px dashed var(--primary, #2563eb);
+  border-radius: 16px;
+  padding: 1.2rem 1.8rem;
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--primary, #2563eb);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}

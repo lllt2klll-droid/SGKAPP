@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "oxc"],
+  "ignorePatterns": ["docs/_attic"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "eslint/no-unused-vars": "off",
+    "eslint/no-useless-escape": "off",
+    "react-hooks/exhaustive-deps": "off"
+  }
+}

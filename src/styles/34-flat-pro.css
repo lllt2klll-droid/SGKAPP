@@ -1,0 +1,702 @@
+/* ============================================================
+   34 - FLAT PRO — Professional flat override (loaded LAST)
+   Mục tiêu: xóa toàn bộ nút 3D (hard bottom shadow + nhấn thụt sâu),
+   thay bằng ngôn ngữ phẳng, hiện đại: viền 1px, radius gọn,
+   shadow mềm chỉ khi hover, font-weight 600.
+   File này thắng mọi file 00-33 nhờ thứ tự import.
+   ============================================================ */
+
+/* --- Nền app: phẳng, sạch, bỏ lưới ô vuông --- */
+body {
+  background-color: var(--bg-main) !important;
+  background-image: none !important;
+}
+
+/* ============================================================
+   NÚT — FLAT TOÀN APP
+   ============================================================ */
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-accent,
+.btn-danger,
+.btn-tool,
+.btn-icon,
+.btn-sm,
+.btn-xs,
+.btn-sidebar-toggle,
+.filter-btn,
+.seg-tab,
+.sort-select,
+.aia-fab,
+.toast,
+button.layout-toggle,
+.layout-toggle button {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transform: none !important;
+  border-width: 1px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+/* Base button */
+.btn {
+  border: 1px solid var(--color-action, var(--primary)) !important;
+  background: var(--color-action, var(--primary)) !important;
+  color: var(--color-text-on-accent, #fff) !important;
+  border-radius: 10px !important;
+  padding: 0.55rem 1rem !important;
+  font-size: 0.875rem !important;
+  line-height: 1.4 !important;
+  transition: background-color 160ms ease, border-color 160ms ease,
+    color 160ms ease, box-shadow 160ms ease, opacity 160ms ease !important;
+}
+.btn:hover:not(:disabled) {
+  background: var(--color-action-hover, var(--primary-dark, #1d4ed8)) !important;
+  border-color: var(--color-action-hover, var(--primary-dark, #1d4ed8)) !important;
+  color: var(--color-text-on-accent, #fff) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+  transform: none !important;
+}
+.btn:active:not(:disabled) {
+  background: var(--color-action-active, var(--primary-dark, #1e40af)) !important;
+  box-shadow: none !important;
+  transform: scale(0.98) !important;
+}
+.btn:disabled {
+  opacity: 0.5 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--primary)) !important;
+  outline-offset: 2px !important;
+}
+
+/* Primary — CTA chính, phẳng */
+.btn-primary {
+  min-height: 42px !important;
+  padding: 0.6rem 1.2rem !important;
+  border-radius: 10px !important;
+  font-size: 0.9rem !important;
+}
+
+/* Secondary — phẳng, viền trung tính */
+.btn-secondary {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text-dark) !important;
+  min-height: 42px !important;
+  border-radius: 10px !important;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-soft) !important;
+  border-color: var(--color-action, var(--primary)) !important;
+  color: var(--color-action, var(--primary)) !important;
+  box-shadow: none !important;
+}
+.btn-secondary:active:not(:disabled) {
+  background: var(--surface-soft) !important;
+  transform: scale(0.98) !important;
+  box-shadow: none !important;
+}
+
+/* Accent / Danger — phẳng, không viền dày */
+.btn-accent {
+  background: var(--warning) !important;
+  border: 1px solid var(--warning) !important;
+  color: #1f2937 !important;
+  border-radius: 10px !important;
+}
+.btn-accent:hover:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+}
+.btn-accent:active:not(:disabled) {
+  transform: scale(0.98) !important;
+  box-shadow: none !important;
+}
+.btn-danger {
+  background: var(--danger) !important;
+  border: 1px solid var(--danger) !important;
+  color: #fff !important;
+  border-radius: 10px !important;
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.94);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12) !important;
+  background: var(--danger) !important;
+}
+.btn-danger:active:not(:disabled) {
+  transform: scale(0.98) !important;
+  box-shadow: none !important;
+}
+
+/* Ghost — text button phẳng */
+.btn-ghost {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--text-mid) !important;
+  box-shadow: none !important;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-soft) !important;
+  color: var(--text-dark) !important;
+  box-shadow: none !important;
+}
+.btn-ghost:active:not(:disabled) {
+  transform: scale(0.98) !important;
+}
+
+/* Tool + icon button — phẳng */
+.btn-tool,
+.btn-icon,
+.btn-sidebar-toggle,
+.rtb-icon-btn,
+.wb-tool {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-mid) !important;
+  box-shadow: none !important;
+  border-radius: 9px !important;
+  font-weight: 600 !important;
+  transform: none !important;
+}
+.btn-tool:hover:not(:disabled),
+.btn-icon:hover:not(:disabled),
+.btn-sidebar-toggle:hover,
+.rtb-icon-btn:hover,
+.wb-tool:hover {
+  background: var(--surface-soft) !important;
+  border-color: var(--color-action, var(--primary)) !important;
+  color: var(--color-action, var(--primary)) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+.btn-tool:active:not(:disabled),
+.btn-icon:active:not(:disabled),
+.btn-sidebar-toggle:active,
+.rtb-icon-btn:active,
+.wb-tool:active {
+  transform: scale(0.96) !important;
+  box-shadow: none !important;
+}
+.btn-tool.active,
+.btn-icon.active,
+.rtb-icon-btn.on,
+.rtb-icon-btn.tts-on,
+.wb-tool.active {
+  background: var(--color-action-soft, var(--primary-light)) !important;
+  border-color: var(--color-action, var(--primary)) !important;
+  color: var(--color-action, var(--primary)) !important;
+  box-shadow: none !important;
+}
+
+/* Sizes */
+.btn-sm,
+.btn-xs {
+  border-radius: 8px !important;
+  min-height: 32px !important;
+  font-weight: 600 !important;
+}
+.btn + .btn,
+.btn + .btn-icon {
+  margin-left: 0.5rem;
+}
+
+/* ============================================================
+   FILTER / SEGMENTED / SELECT — phẳng
+   ============================================================ */
+.filter-btn {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-mid) !important;
+  border-radius: 9px !important;
+  font-weight: 600 !important;
+  font-size: 0.83rem !important;
+  min-height: 34px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+.filter-btn:hover:not(:disabled) {
+  background: var(--surface-soft) !important;
+  border-color: var(--color-action, var(--primary)) !important;
+  color: var(--color-action, var(--primary)) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+.filter-btn:active:not(:disabled) {
+  transform: scale(0.97) !important;
+  box-shadow: none !important;
+}
+.filter-btn.active {
+  background: var(--color-action, var(--primary)) !important;
+  border-color: var(--color-action, var(--primary)) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.seg-tabs {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 10px !important;
+  padding: 3px !important;
+  gap: 2px !important;
+}
+.seg-tab {
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+.seg-tab:hover {
+  background: rgba(127, 140, 160, 0.14) !important;
+  color: var(--text-dark) !important;
+}
+.seg-tab.active,
+.seg-tab.on,
+.layout-toggle button.active {
+  background: var(--color-action, var(--primary)) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.sort-select {
+  border: 1px solid var(--border-color) !important;
+  border-radius: 9px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  background: var(--surface) !important;
+}
+.sort-select:hover {
+  border-color: var(--color-action, var(--primary)) !important;
+}
+.sort-select:active,
+.sort-select:focus {
+  transform: none !important;
+  box-shadow: 0 0 0 3px var(--color-focus-ring, rgba(37, 99, 235, 0.18)) !important;
+}
+
+/* ============================================================
+   CARD / PANEL — viền 1px + shadow mềm, bỏ sticker 2px + đáy cứng
+   ============================================================ */
+.book-card,
+.stat-card,
+.help-card,
+.conc-card,
+.clip-card,
+.sn-note,
+.note-list-card,
+.continue-card,
+.doc-card,
+.pk-item,
+.quiz-question-card,
+.tag-modal,
+.ai-panel,
+.util-bubble-panel,
+.aia-panel,
+.panel-box,
+.filters-bar,
+.fsearch input {
+  border: 1px solid var(--border-color) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.book-card:hover,
+.stat-card:hover,
+.doc-card:hover,
+.continue-card:hover,
+.clip-card:hover {
+  box-shadow: var(--shadow-md) !important;
+  border-color: var(--border-strong) !important;
+  transform: none !important;
+}
+
+/* Cụm dashboard/workspace cũ dùng đáy cứng */
+.whiteboard-source-bar {
+  box-shadow: var(--shadow-sm) !important;
+  border: 1px solid var(--border-color) !important;
+}
+[data-theme="dark"] .whiteboard-source-bar {
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* ============================================================
+   CHIP / BADGE — phẳng
+   ============================================================ */
+.tag-chip,
+.gl-chip,
+.status-pill,
+.book-grade-badge,
+.util-key,
+.tag-chip.on,
+.gl-chip.on {
+  border: 1px solid var(--border-color) !important;
+  background: var(--surface-soft) !important;
+  color: var(--text-mid) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  border-radius: 999px !important;
+}
+.tag-chip.on,
+.gl-chip.on {
+  background: var(--color-action-soft, var(--primary-light)) !important;
+  border-color: var(--color-action, var(--primary)) !important;
+  color: var(--color-action, var(--primary)) !important;
+}
+.color-dot,
+.color-dot.picked,
+.color-dot.active {
+  box-shadow: 0 0 0 2px var(--border-strong) !important;
+  border: 2px solid var(--surface) !important;
+  transform: none !important;
+}
+.color-dot.picked {
+  box-shadow: 0 0 0 2px var(--color-action, var(--primary)) !important;
+}
+
+/* ============================================================
+   INPUT / SEARCH — phẳng, focus ring mềm
+   ============================================================ */
+.search-input,
+.fsearch input,
+.form-control,
+.global-search-input {
+  border: 1px solid var(--input-border, var(--border-color)) !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  font-weight: 500 !important;
+}
+.search-input:focus,
+.fsearch input:focus,
+.form-control:focus,
+.global-search-input:focus,
+.sort-select:focus {
+  border-color: var(--color-action, var(--primary)) !important;
+  box-shadow: 0 0 0 3px var(--color-focus-ring, rgba(37, 99, 235, 0.18)) !important;
+}
+
+/* ============================================================
+   HEADER / LOGO / FAB / TOAST — phẳng
+   ============================================================ */
+.logo-icon {
+  border: 1px solid var(--border-color) !important;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+}
+.aia-fab {
+  border: 1px solid var(--color-action, var(--primary)) !important;
+  background: var(--color-action, var(--primary)) !important;
+  box-shadow: var(--shadow-md) !important;
+  border-radius: 50% !important;
+}
+.aia-fab:hover {
+  filter: brightness(1.05);
+  box-shadow: var(--shadow-lg) !important;
+  transform: none !important;
+  background: var(--color-action, var(--primary)) !important;
+}
+.aia-fab:active {
+  transform: scale(0.95) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.toast,
+.toast.error,
+.toast.success,
+.whiteboard-toast,
+.reader-toast {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+}
+
+/* Learning hub action — phẳng */
+.learning-hub-action {
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+.learning-hub-action:hover {
+  border-color: var(--color-action, var(--primary)) !important;
+  background: var(--surface-soft) !important;
+  transform: none !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+.learning-hub-action:active {
+  transform: scale(0.98) !important;
+}
+
+/* Modal / overlay giữ shadow mềm sang (không phải 3D cứng) */
+.modal-content,
+.global-search-modal,
+.settings-center {
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px !important;
+}
+
+/* Kill mọi translateY press còn sót trong 26-ux-polish cho nút */
+.btn:hover,
+.btn-icon:hover,
+.rtb-icon-btn:hover,
+.wb-tool:hover {
+  transform: none !important;
+}
+.btn:active {
+  transform: scale(0.98) !important;
+}
+
+/* Giảm font-weight 800 quá thô ở label/filter còn sót */
+.filter-label,
+.page-header-description,
+.search-count,
+.form-label {
+  font-weight: 600 !important;
+}
+
+/* ============================================================
+   35 - UNIFY — Mỗi phần 1 màu nền, toàn app giống nhau
+   Quy ước duy nhất:
+   - Nền trang/view:  var(--bg-main)
+   - Header/sidebar:  var(--surface)
+   - Card/panel/section/hero: var(--surface)
+   - Vùng chìm/muted (cover, track, inset): var(--surface-soft)
+   - Accent duy nhất: var(--color-action, var(--primary))
+   Kill mọi gradient trang trí + mã hex cứng + hover 3D còn sót.
+   ============================================================ */
+
+/* --- Nền trang统一: mọi view dùng chung bg-main --- */
+.app-shell,
+.main-content,
+.dashboard-workspace,
+.dash-body,
+.reader-root,
+.khbd-root,
+.whiteboard-root,
+.page,
+.view,
+[class*="view-"],
+.help-view,
+.settings-center {
+  background-color: var(--bg-main) !important;
+  background-image: none !important;
+}
+
+/* --- HERO: 1 kiểu duy nhất, phẳng như card --- */
+.dashboard-hero,
+.welcome-hero,
+.help-hero {
+  background: var(--surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--shadow-sm) !important;
+  color: var(--text-dark) !important;
+}
+.dashboard-hero::before,
+.dashboard-hero::after,
+.welcome-hero::before,
+.welcome-hero::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
+.hero-greeting,
+.hero-content h1,
+.hero-content h2,
+.welcome-hero h2 {
+  color: var(--text-dark) !important;
+  text-shadow: none !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+.hero-subtitle,
+.hero-content p,
+.welcome-hero p {
+  color: var(--text-mid) !important;
+  font-weight: 500 !important;
+}
+.hero-cta-btn {
+  background: var(--color-action, var(--primary)) !important;
+  border: 1px solid var(--color-action, var(--primary)) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-shadow: none !important;
+}
+.hero-cta-btn:hover {
+  filter: brightness(0.94);
+  box-shadow: var(--shadow-sm) !important;
+  background: var(--color-action, var(--primary)) !important;
+  color: #fff !important;
+}
+.hero-cta-secondary {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-dark) !important;
+}
+.hero-cta-secondary:hover {
+  border-color: var(--color-action, var(--primary)) !important;
+  color: var(--color-action, var(--primary)) !important;
+  background: var(--surface-soft) !important;
+}
+/* Dark mode hero: cùng 1 kiểu, không navy riêng */
+[data-theme="dark"] .dashboard-hero,
+[data-theme="dark"] .welcome-hero,
+[data-theme="dark"] .help-hero {
+  background: var(--surface) !important;
+  border-color: var(--border-color) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+[data-theme="dark"] .hero-greeting,
+[data-theme="dark"] .hero-subtitle,
+[data-theme="dark"] .hero-cta-btn {
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+
+/* --- CARD/SECTION/PANEL: 1 màu surface duy nhất --- */
+.book-card,
+.stat-card,
+.work-card,
+.help-card,
+.conc-card,
+.clip-card,
+.sn-note,
+.note-list-card,
+.continue-card,
+.doc-card,
+.pk-item,
+.quiz-question-card,
+.webtool-card,
+.khbd-card,
+.khbd-toolbar,
+.khbd-timebar,
+.workspace-section,
+.stat-filters,
+.filters-bar,
+.panel-box,
+.missionWidget-container,
+.data-table-wrap {
+  background: var(--surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+/* Hover card: cùng 1 kiểu, không bay -4px + đáy cứng */
+.book-card:hover,
+.stat-card:hover,
+.work-card:hover,
+.doc-card:hover,
+.continue-card:hover,
+.clip-card:hover {
+  transform: none !important;
+  border-color: var(--border-strong) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.book-card:active,
+.stat-card:active {
+  transform: scale(0.99) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* --- Vùng chìm/muted: 1 màu surface-soft duy nhất --- */
+.book-cover,
+.book-row-cover,
+.stats-book-bar,
+.continue-progress,
+.bar-track,
+.progress-track,
+.khbd-chip,
+.khbd-bank-item,
+.khbd-act-head,
+.seg-tabs,
+.stat-icon,
+.work-card-content,
+.filter-row {
+  background: var(--surface-soft) !important;
+  background-image: none !important;
+}
+.book-cover {
+  border-bottom: 1px solid var(--border-color) !important;
+}
+.book-cover-subject,
+.stat-icon,
+.stat-icon svg {
+  color: var(--color-action, var(--primary)) !important;
+}
+
+/* --- Stat pastel mỗi card 1 màu → cùng 1 kiểu --- */
+[class*="stat-"][class*="pink"],
+[class*="stat-"][class*="blue"],
+[class*="stat-"][class*="green"],
+[class*="stat-"][class*="orange"],
+[class*="stat-"][class*="cyan"],
+[class*="stat-"][class*="rose"],
+.stat-card[class*="--"] {
+  background: var(--surface) !important;
+  background-image: none !important;
+}
+
+/* --- Progress/bar-fill: 1 màu accent duy nhất --- */
+.bar-fill,
+.stats-book-bar .bar-fill,
+.continue-progress-fill,
+.progress-fill,
+[class*="progress"] > [class*="fill"] {
+  background: var(--color-action, var(--primary)) !important;
+  background-image: none !important;
+}
+
+/* --- Highlight/hl vàng gradient → flat soft --- */
+mark,
+.hl,
+.search-hl,
+[class*="highlight"] {
+  background: var(--color-action-soft, var(--primary-light)) !important;
+  background-image: none !important;
+  color: inherit !important;
+  border-radius: 4px !important;
+}
+
+/* --- Table head/toolbar/modal footer: cùng hệ --- */
+.data-table thead th,
+.word-toolbar,
+.word-ruler,
+.word-stats,
+.word-modal-footer,
+.modal-footer,
+.toolbar {
+  background: var(--surface-soft) !important;
+  background-image: none !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-mid) !important;
+}
+[data-theme="dark"] .data-table thead th {
+  background: var(--surface-soft) !important;
+  color: var(--text-mid) !important;
+}
+
+/* --- Badge cứng màu đỏ/cam → cùng 1 kiểu muted --- */
+.book-grade-badge,
+.work-badge {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-mid) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+/* --- Chữ số liệu: 1 màu text-dark, không mỗi nơi 1 màu ---
+   .stat-value/.stat-num do 35-advanced-tools.css quyết (cùng giá trị, load sau) nên rút khỏi nhóm này.
+   .stats-book-num giữ ở đây: chốt đè 08-dashboard (đổi màu pen-blue → text-dark có chủ ý). */
+.stats-book-num {
+  color: var(--text-dark) !important;
+  font-weight: 700 !important;
+}

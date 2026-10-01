@@ -1,0 +1,67 @@
+/* 28-theme-fix.css — quét fix còn sót hardcodes light/dark sau audit
+   Load cuối cùng để override các gradient/background cứng màu sáng khi ở dark
+*/
+
+/* — Light fine-tune: đảm bảo card/paper không bị ám xám — */
+[data-theme="light"] body{
+  background-color: var(--bg-main);
+  background-image:
+    linear-gradient(var(--paper-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-grid) 1px, transparent 1px);
+}
+[data-theme="dark"] body{
+  background-color: var(--bg-main);
+  background-image:
+    linear-gradient(var(--paper-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-grid) 1px, transparent 1px);
+}
+
+/* Generic surfaces that were hardcoded #fff/#f8fafc — force to token in dark */
+[data-theme="dark"] .card,
+[data-theme="dark"] .panel,
+[data-theme="dark"] .toolbar,
+[data-theme="dark"] .page-header,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .data-table-wrap,
+[data-theme="dark"] .book-card-new,
+[data-theme="dark"] .book-row-new,
+[data-theme="dark"] .library-toolbar,
+[data-theme="dark"] .empty-state,
+[data-theme="dark"] .dashboard-card,
+[data-theme="dark"] .quick-stat-card,
+[data-theme="dark"] .quick-action-card{
+  background: var(--surface) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Inputs hard-coded white */
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select{
+  background: var(--input-bg) !important;
+  border-color: var(--input-border) !important;
+  color: var(--text-dark) !important;
+}
+[data-theme="dark"] .form-control::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder{ color: var(--text-muted) !important; }
+
+/* Tables — dark header */
+[data-theme="dark"] .data-table thead th{ background: #0f172a !important; color: #94a3b8 !important; border-color: var(--border-color) !important; }
+[data-theme="dark"] .data-table tbody td{ border-color: var(--border-color) !important; color: var(--text-mid) !important; }
+[data-theme="dark"] .data-table tbody tr:hover{ background: rgba(255,255,255,0.04) !important; }
+
+/* Help / webtoolbox cards */
+[data-theme="dark"] .help-card,
+[data-theme="dark"] .webtool-card{ background: var(--surface) !important; border-color: var(--border-color) !important; }
+[data-theme="dark"] .help-hero{ background: var(--surface) !important; border-color: var(--border-color) !important; }
+
+/* Ensure scrollbar thumb visible in both */
+[data-theme="light"] ::-webkit-scrollbar-thumb{ background: #cbd5e1; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb{ background: #334155; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover{ background: #475569; }
+
+/* Focus ring uses token */
+:focus-visible{ outline-color: var(--primary) !important; }

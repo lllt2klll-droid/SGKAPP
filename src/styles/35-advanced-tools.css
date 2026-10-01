@@ -1,0 +1,141 @@
+/* ============================================================
+   35 - ADVANCED TOOLS — Ngôn ngữ chung cho Công cụ nâng cao
+   Áp cho: Ma trận, Kiểm kê, Thống kê ngôn ngữ, Khái niệm,
+   Tài liệu tham khảo, Bộ sưu tập, Sao lưu, Kho công cụ Web.
+   Quy ước: card surface phẳng + header medit + số liệu text-dark.
+   File load sau 34 nên thắng mọi quy tắc cũ cùng độ đặc hiệu.
+   ============================================================ */
+
+/* --- Khung view: cùng nhịp (rộng, thoáng) --- */
+.datatools-view,
+.webtoolbox-view {
+  max-width: 1100px;
+  gap: 0.85rem;
+}
+
+/* --- panel-box: định nghĩa 1 lần (đang dùng trần ở 6 view) --- */
+.panel-box {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-sm) !important;
+  padding: 0.9rem 0.95rem !important;
+}
+.panel-title {
+  font-family: var(--font-heading) !important;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+  color: var(--text-dark) !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+}
+.panel-hint {
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  color: var(--text-muted) !important;
+  line-height: 1.45 !important;
+  margin: 0.35rem 0 0 !important;
+}
+
+/* --- Collection header/create: cùng kiểu toolbar card --- */
+/* coll-head/coll-create: selector duy nhất trong CSS, không inline style đè —
+   bỏ dấu ưu tiên, thứ tự file vẫn đảm bảo thắng (không đối thủ). */
+.coll-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  padding: 0.8rem 0.95rem;
+}
+.coll-create {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  background: var(--surface-soft);
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+}
+
+/* --- Stat: số liệu 1 màu text-dark, nhãn muted (khớp 34) --- */
+/* stat-section: gap trùng giá trị 08-dashboard; h3 thắng theo thứ tự (cùng specificity, không inline) */
+.stat-section {
+  gap: 0.6rem;
+}
+.stat-section h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.stat-value {
+  color: var(--text-dark) !important;
+  font-weight: 700 !important;
+}
+.stat-label {
+  font-weight: 600 !important;
+  color: var(--text-muted) !important;
+}
+.stat-num {
+  font-weight: 700 !important;
+  color: var(--text-dark) !important;
+}
+
+/* --- Header 2 view kho: icon phẳng cùng hệ --- */
+/* iconBox: 30-datatools (không !important) chỉ đặt khung; màu/bóng ở đây    thắng theo thứ tự, không inline (đã rà soát) */
+.dt-iconBox,
+.wt-iconBox {
+  background: var(--surface-soft);
+  color: var(--color-action, var(--primary));
+  box-shadow: none;
+}
+
+/* --- Tile công cụ web: hover phẳng --- */
+/* wt-tile:hover: trùng giá trị 22-webtoolbox, file này sau nên thắng — đã gỡ dấu ưu tiên */
+.wt-tile:hover {
+  border-color: var(--color-action, var(--primary));
+  box-shadow: var(--shadow-md);
+  transform: none;
+}
+
+/* --- Empty state: cùng 1 kiểu toàn cụm --- */
+.dash-empty {
+  border-radius: 14px !important;
+  font-weight: 600 !important;
+  background: var(--surface) !important;
+  border: 1px dashed var(--border-strong) !important;
+}
+
+/* --- Bảng trong cụm nâng cao: bọc card gọn --- */
+/* dt-table-wrap: trùng giá trị 30-datatools, file này sau nên thắng — đã gỡ dấu ưu tiên */
+.dt-table-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* --- Cảnh báo trong datatools: viền đều 1px --- */
+.dt-warning {
+  border: 1px solid var(--border-color) !important;
+  border-left: 3px solid var(--warning) !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+}
+
+/* --- Responsive: header xếp dọc gọn trên mobile --- */
+@media (max-width: 560px) {
+  .dt-header,
+  .wt-header,
+  .coll-head {
+    padding: 0.75rem 0.85rem !important;
+  }
+  .dt-header-actions,
+  .wt-header-actions {
+    width: 100% !important;
+  }
+}

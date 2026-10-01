@@ -1,0 +1,278 @@
+
+
+/* ============================================================
+   04-dashboard-workspace.css — PRUNED 2026
+   Đã xóa 131 rule chết (xác minh 0 tham chiếu trong src): toàn bộ hero/workflow/
+   stats/continue/activity/insights/subject/recommendations/mission cũ + ladder
+   dashboard-workspace + dead selectors. Giữ: stat-compact-*, activity-bar-*,
+   tools-modal, dashboard-tools-*, completed states.
+   Verify: build PASS + visual diff IDENTICAL (tests/visual).
+   ============================================================ */
+.work-item-title.completed-text {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+
+.task-checkbox-mini.completed {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+
+.stat-compact-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+
+.stat-compact-value {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  line-height: 1;
+}
+
+
+.stat-compact-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+
+.activity-bar-compact {
+  display: grid;
+  grid-template-columns: 120px 1fr 60px;
+  align-items: center;
+  gap: 1rem;
+}
+
+
+.activity-bar-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-mid);
+}
+
+
+.activity-bar-track {
+  height: 24px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+
+
+.activity-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 0.3s ease;
+}
+
+
+.activity-bar-value {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  text-align: right;
+}
+
+
+/* All Tools Modal */
+.tools-modal {
+  max-width: 900px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+
+.dashboard-tools-overlay {
+  padding: clamp(1rem, 4vw, 3rem);
+  background: rgba(7, 15, 28, 0.68);
+  backdrop-filter: blur(8px);
+}
+
+
+.dashboard-tools-modal {
+  width: min(960px, 100%);
+  max-width: 960px;
+  max-height: min(82vh, 760px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border-color));
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+
+.dashboard-tools-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.4rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface);
+}
+
+
+.dashboard-tools-eyebrow {
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+
+.dashboard-tools-header h2 {
+  margin: 0.2rem 0 0;
+  color: var(--text-dark);
+  font-size: 1.35rem;
+}
+
+
+.dashboard-tools-header p {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+
+.dashboard-tools-close {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-mid);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+
+.dashboard-tools-close:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+
+.dashboard-tools-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 1rem 1.4rem 0;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+}
+
+
+.dashboard-tools-toolbar input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: var(--text-dark);
+  background: transparent;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+
+.dashboard-tools-toolbar span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+
+.dashboard-tools-empty {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+
+.dashboard-tools-empty strong {
+  color: var(--text-dark);
+}
+
+
+.modal-content.tools-modal-desktop {
+  max-width: 100%;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  animation: none;
+}
+@media (min-width: 1024px) {
+  .tools-modal.tools-modal-desktop {
+    max-width: 2400px;
+    margin: 0 auto;
+  }
+}
+@media (max-width: 640px) {
+  .dashboard-tools-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+
+  .dashboard-tools-modal {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: 18px 18px 0 0;
+  }
+
+
+  .dashboard-tools-header {
+    padding: 1rem;
+  }
+
+
+  .dashboard-tools-toolbar {
+    margin: 0.8rem 1rem 0;
+  }
+}
+
+
+/* Responsive */
+
+@media (max-width: 767px) {
+
+  .activity-bar-compact {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+
+  .activity-bar-label {
+    font-size: 0.8rem;
+  }
+}

@@ -1,0 +1,277 @@
+/* ============================================================
+   30 - DataTools — Sao lưu & Khôi phục (khớp toàn app)
+   Dùng tokens + card + 3D buttons như WebToolbox/ Dashboard
+   ============================================================ */
+.datatools-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0.2rem 0 1.2rem;
+}
+/* Header — giống wt-header */
+.dt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--card-bg, var(--surface));
+  border: 1px solid var(--card-border, var(--border-color));
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  box-shadow: var(--card-shadow, 0 1px 2px rgba(0,0,0,0.06));
+}
+.dt-header-left {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  min-width: 260px;
+  flex: 1;
+}
+.dt-iconBox {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-color);
+  display: grid;
+  place-items: center;
+  color: var(--color-action, var(--pen-blue-deep));
+  flex-shrink: 0;
+}
+.dt-title {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+.dt-subtitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0.15rem 0 0;
+  line-height: 1.4;
+  max-width: 620px;
+}
+.dt-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.dt-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.73rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 0 0.2rem;
+}
+.dt-info span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.dt-info-badge {
+  background: var(--surface-soft);
+  border: 1px solid var(--border-color);
+  padding: 0.15rem 0.45rem;
+  border-radius: 99px;
+  font-weight: 600;
+}
+
+/* Cards */
+.dt-card {
+  background: var(--card-bg, var(--surface));
+  border: 1px solid var(--card-border, var(--border-color));
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+.dt-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.8rem 0.95rem 0.7rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-soft);
+  font-family: var(--font-heading);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  letter-spacing: 0;
+}
+.dt-card-header-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  color: var(--color-action, var(--pen-blue));
+  flex-shrink: 0;
+}
+.dt-card-body {
+  padding: 0.9rem 0.95rem 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.dt-hint {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin: 0;
+}
+.dt-hint.muted {
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+.dt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.2rem;
+}
+.dt-msg {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  border: 1px solid;
+  line-height: 1.35;
+}
+.dt-msg.ok {
+  background: var(--success-soft);
+  border-color: rgba(22,163,74,0.18);
+  color: var(--success-deep);
+}
+.dt-msg.err {
+  background: var(--danger-soft);
+  border-color: rgba(220,38,38,0.18);
+  color: var(--danger-deep);
+}
+.dt-bar-track {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+.dt-bar-fill {
+  height: 100%;
+  background: var(--color-action, var(--primary));
+  border-radius: 99px;
+  transition: width 0.35s ease;
+}
+
+/* Stats grid — reuse quick-stat-card look */
+.dt-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+.dt-stat {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.75rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  box-shadow: var(--shadow-xs);
+}
+.dt-stat-num {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  line-height: 1;
+  letter-spacing: 0;
+}
+.dt-stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.dt-stat-hint {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+
+/* Table wrapper */
+.dt-table-wrap {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Preview modal — khớp app */
+.dt-preview-backdrop {
+  z-index: 320;
+}
+.dt-preview-panel {
+  max-width: 560px;
+  width: 95vw;
+  max-height: 90vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.dt-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem 1rem;
+}
+.dt-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.dt-warning {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  background: var(--warning-soft);
+  border-left: 3px solid var(--warning);
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-dark);
+  line-height: 1.4;
+}
+
+@media (max-width: 560px) {
+  .dt-header { padding: 0.75rem 0.85rem; }
+  .dt-card-header { padding: 0.7rem 0.8rem; }
+  .dt-card-body { padding: 0.75rem 0.8rem; }
+  .dt-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+/* Dark: dùng chung token, không mã cứng */
+[data-theme="dark"] .dt-header,
+[data-theme="dark"] .dt-card {
+  background: var(--surface);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .dt-card-header {
+  background: var(--surface-soft);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .dt-stat {
+  background: var(--surface);
+  border-color: var(--border-color);
+}

@@ -1,0 +1,352 @@
+/* ============================================================
+   Toast
+   ============================================================ */
+/* CANONICAL toast-container — bản duy nhất (đã hợp nhất bản trùng ở 16-foundation.css:
+   giữ safe-area + giới hạn rộng). Mọi toast dùng .toast-container này. */
+.toast-container {
+  position: fixed;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 24px));
+  box-sizing: border-box;
+}
+.toast-container .toast {
+  pointer-events: auto;
+}
+.toast {
+  background: var(--text-dark);
+  color: #fff;
+  padding: 0.6rem 1.1rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: var(--shadow-lg);
+  animation: toastIn 0.25s ease;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: 90vw;
+  line-height: 1.35;
+}
+.toast.error {
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: var(--shadow-lg);
+}
+.toast.success {
+  background: var(--success);
+  border-color: var(--success);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ============================================================
+   Assistant bubble (aia-*)
+   ============================================================ */
+.aia-wrap {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 1.2rem;
+  z-index: var(--z-bubble);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.7rem;
+  touch-action: none;
+}
+.aia-fab {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--color-action, var(--red-action));
+  border: 1px solid var(--color-action, var(--red-action));
+  color: #fff;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background-color 0.2s ease;
+}
+.aia-fab:hover {
+  filter: brightness(1.05);
+  box-shadow: var(--shadow-lg);
+  transform: none;
+}
+.aia-fab:active {
+  transform: scale(0.95);
+  box-shadow: var(--shadow-sm);
+}
+.aia-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  background: var(--warning);
+  color: #fff;
+  border: 1px solid var(--warning-deep);
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 900;
+  min-width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.35rem;
+}
+.aia-online {
+  background: var(--success);
+  border: 1px solid var(--success-deep);
+  color: #fff;
+  border-radius: var(--radius-full);
+  padding: 0.12rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+.aia-panel {
+  width: min(420px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.25s ease;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.aia-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-soft);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--text-dark);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.aia-header:active {
+  cursor: grabbing;
+}
+.aia-header-title {
+  flex: 1;
+  font-size: 0.92rem;
+}
+.aia-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.aia-hbtn {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-mid);
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background-color 0.2s ease;
+}
+.aia-hbtn:hover {
+  background: var(--surface-soft);
+  border-color: var(--color-action, var(--pen-blue));
+  color: var(--color-action, var(--pen-blue));
+}
+.aia-hbtn:active {
+  transform: scale(0.95);
+  box-shadow: none;
+}
+.aia-hbtn.confirm {
+  background: var(--surface);
+  color: var(--red-action);
+  border-color: var(--red-action);
+  width: auto;
+  padding: 0 0.55rem;
+}
+.aia-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--surface);
+  background-image: none;
+}
+.aia-msg {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px 14px 14px 4px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: var(--text-dark);
+  box-shadow: var(--shadow-xs);
+  align-self: flex-start;
+  max-width: 90%;
+}
+.aia-msg.user {
+  align-self: flex-end;
+  background: var(--pen-blue-soft);
+  border-color: var(--pen-blue);
+  border-radius: 14px 14px 4px 14px;
+}
+.aia-msg.bot {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px 14px 14px 4px;
+}
+.aia-msg.error {
+  align-self: flex-start;
+  background: var(--red-soft);
+  border: 1px solid var(--red-action);
+  color: var(--red-action-deep);
+  border-radius: 14px 14px 14px 4px;
+  font-weight: 700;
+}
+.aia-msg-time {
+  display: block;
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  font-weight: 800;
+}
+.aia-typing {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 0.6rem 0.9rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  animation: blink 1s ease infinite;
+}
+.aia-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.aia-chip {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 0.28rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-mid);
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+.aia-chip:hover {
+  background: var(--surface-soft);
+  border-color: var(--color-action, var(--pen-blue));
+  color: var(--color-action, var(--pen-blue));
+}
+.aia-chip:active {
+  transform: scale(0.97);
+  box-shadow: none;
+}
+.aia-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  padding: 0.7rem 0.9rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--surface-soft);
+}
+.aia-input {
+  flex: 1;
+  border: 1px solid var(--input-border);
+  border-radius: 12px;
+  padding: 0.55rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  background: var(--surface);
+  outline: none;
+  min-height: 42px;
+  max-height: 132px;
+  resize: vertical;
+  line-height: 1.35;
+}
+.aia-input:focus {
+  border-color: var(--pen-blue);
+  box-shadow: 0 0 0 4px rgba(31, 117, 254, 0.12);
+}
+.aia-send {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--color-action, var(--red-action));
+  border: 1px solid var(--color-action, var(--red-action));
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+.aia-send:hover {
+  filter: brightness(0.94);
+}
+.aia-send:active {
+  transform: scale(0.95);
+  box-shadow: none;
+}
+.aia-copy {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--pen-blue);
+  font-weight: 800;
+  padding: 0.1rem 0.2rem;
+}
+.aia-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 1.4rem;
+}
+.aia-empty-icon {
+  font-size: 2.2rem;
+  display: block;
+  margin-bottom: 0.4rem;
+}
+.aia-spin-svg {
+  animation: spin 1.2s linear infinite;
+}
+

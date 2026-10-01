@@ -1,0 +1,372 @@
+/* ============================================================
+   33-bookreader-mobile.css — BOOKREADER KIỂU APP TRÊN ĐIỆN THOẠI
+   - Desktop/tablet (>=768px): .reader-mobile-bar + scrims luôn ẩn
+     → không đổi gì so với hiện tại.
+   - Mọi restyle phone nằm trong @media (max-width: 767.98px).
+   - Lưu ý: file 31-mobile-tablet.css đặt .reader-toc-panel ở trạng thái
+     ẩn chờ .mobile-open (class không tồn tại trong JSX) → file này reset
+     transform để ngăn mục lục luôn hiển thị đúng dạng drawer khi mở.
+   ============================================================ */
+
+/* Desktop / tablet: ẩn hoàn toàn UI chỉ-dành-cho-mobile */
+.reader-mobile-bar,
+.reader-sheet-scrim {
+  display: none;
+}
+
+/* ============ PHONE READER APP: <= 767.98px ============ */
+@media (max-width: 767.98px) {
+  /* --- Khung đọc tràn viền như app, chừa chỗ cho thanh dưới --- */
+  .main-content:has(.reader-root) {
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  .reader-root {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    height: 100dvh;
+    min-height: 100dvh;
+    max-height: 100dvh;
+  }
+  .reader-main {
+    flex-direction: column;
+  }
+
+  /* --- Toolbar trên: dính + mờ, cụm giữa cuộn ngang giữ đủ tính năng --- */
+  .viewer-toolbar.viewer-toolbar--compact {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+    border-radius: 0;
+    padding: 0.45rem 0.6rem;
+    gap: 0.4rem;
+  }
+  .rtb-left {
+    min-width: 0;
+    gap: 0.35rem;
+  }
+  .rtb-title {
+    max-width: 30vw;
+    font-size: 0.8rem;
+  }
+  .rtb-center {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 0.3rem;
+    padding-bottom: 0.15rem;
+    margin: 0 -0.6rem;
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+  }
+  .rtb-center::-webkit-scrollbar {
+    display: none;
+  }
+  .rtb-center > * {
+    flex-shrink: 0;
+  }
+  .rtb-zoom-pct {
+    display: none;
+  }
+  .rtb-nav .btn-icon,
+  .rtb-zoom .btn-icon,
+  .rtb-icon-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* --- Vùng sách: chừa chỗ cho thanh điều khiển dưới --- */
+  .pdf-panel {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  .pdf-viewport-container {
+    padding: 0.6rem 0.6rem 0.2rem;
+  }
+  .pdf-canvas-box {
+    border-radius: 10px;
+  }
+
+  /* --- Mục lục: drawer trượt từ trái + scrim --- */
+  .reader-sheet-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: rgba(15, 23, 20, 0.38);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .reader-toc-scrim {
+    z-index: 118;
+  }
+  .reader-ai-scrim {
+    z-index: 113;
+  }
+  .reader-main .reader-toc-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100dvh;
+    width: min(88vw, 340px) !important;
+    max-width: min(88vw, 340px);
+    flex: 0 0 auto !important;
+    z-index: 119;
+    transform: none;
+    border-right: 1px solid var(--border-color);
+    border-radius: 0 20px 20px 0;
+    box-shadow: 16px 0 48px rgba(15, 23, 42, 0.22);
+    animation: rmb-sheet-in-left 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @keyframes rmb-sheet-in-left {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+  .reader-toc-header {
+    padding: 0.85rem 0.9rem;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .reader-toc-search input {
+    min-height: 44px;
+    font-size: 16px;
+    border-radius: 12px;
+  }
+  .toc-item {
+    padding: 0.7rem 0.6rem;
+    border-radius: 12px;
+    align-items: center;
+  }
+  .toc-item:active {
+    background: var(--surface-soft);
+  }
+
+  /* --- Bảng AI: bottom-sheet + tay cầm --- */
+  .reader-main .ai-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100% !important;
+    max-width: 100%;
+    flex: 0 0 auto !important;
+    height: auto;
+    max-height: 64dvh;
+    z-index: 114;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -16px 48px rgba(15, 23, 42, 0.22);
+    animation: rmb-sheet-in-up 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+    padding-top: 0.4rem;
+  }
+  @keyframes rmb-sheet-in-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .reader-main .ai-panel::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 99px;
+    background: var(--border-strong);
+    margin: 0.15rem auto 0.35rem;
+    flex-shrink: 0;
+  }
+  .ai-panel .panel-resizer {
+    display: none;
+  }
+  .ai-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-wrap: nowrap;
+  }
+  .ai-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .ai-tab {
+    flex-shrink: 0;
+    min-height: 44px;
+  }
+  /* Ẩn nút AI nổi dọc cạnh (thanh dưới đã có nút AI) */
+  .ai-panel-collapsed {
+    display: none;
+  }
+  .ai-tab-content .form-control,
+  .chat-input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .chat-input-container {
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  }
+
+  /* --- Drawer công cụ nâng cao: bottom-sheet full-width --- */
+  .reader-advanced-drawer {
+    top: auto !important;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100% !important;
+    height: 78dvh;
+    max-height: 78dvh;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+    border-radius: 20px 20px 0 0;
+  }
+  .reader-advanced-filter-tabs {
+    overflow-x: auto;
+  }
+  .reader-advanced-tool {
+    padding: 0.8rem 0.7rem;
+    border-radius: 12px;
+  }
+
+  /* --- Modal trong reader: bottom-sheet --- */
+  .reader-root .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .reader-root .modal-content {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 88dvh;
+  }
+  .reader-root .modal-foot {
+    padding-bottom: calc(0.8rem + env(safe-area-inset-bottom));
+  }
+
+  /* --- Popups (zoom/TTS): gọn trong màn hình nhỏ --- */
+  .rtb-pop {
+    max-width: min(92vw, 340px);
+  }
+
+  /* ================= THANH ĐIỀU KHIỂN DƯỚI ================= */
+  .reader-mobile-bar {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 0.35rem;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 90;
+    padding: 0.45rem 0.55rem calc(0.45rem + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--surface) 93%, transparent);
+    backdrop-filter: blur(16px) saturate(1.25);
+    -webkit-backdrop-filter: blur(16px) saturate(1.25);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -8px 28px rgba(15, 23, 42, 0.1);
+  }
+  .rmb-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.12rem;
+    min-width: 56px;
+    min-height: 54px;
+    padding: 0.3rem 0.5rem;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+  .rmb-item:active {
+    transform: scale(0.94);
+  }
+  .rmb-item.active {
+    color: var(--primary);
+    background: var(--primary-light);
+  }
+  .rmb-label {
+    font-size: 0.6rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }
+  .rmb-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    min-width: 0;
+    background: var(--surface-soft);
+    border: 1px solid var(--border-color);
+    border-radius: 99px;
+    padding: 0.2rem;
+  }
+  .rmb-step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text-dark);
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1);
+  }
+  .rmb-step:disabled {
+    opacity: 0.35;
+    box-shadow: none;
+  }
+  .rmb-step:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+  .rmb-page {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    padding: 0.4rem 0.55rem;
+    min-width: 76px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .rmb-page-static {
+    font-size: 0.76rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    padding: 0.6rem 0.9rem;
+    white-space: nowrap;
+  }
+
+  [data-theme="dark"] .reader-mobile-bar {
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reader-main .reader-toc-panel,
+    .reader-main .ai-panel {
+      animation: none;
+    }
+    .rmb-item:active,
+    .rmb-step:active:not(:disabled) {
+      transform: none;
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "sgk-app",
+  "private": true,
+  "version": "0.0.0",
+  "author": "Nguyễn Tuấn",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "oxlint",
+    "test": "node --no-warnings --loader ./test-loader.mjs --test src/**/*.test.js src/**/*.test.jsx src/**/*.spec.js src/**/*.spec.jsx tests/*.test.js tests/*.spec.js server/**/*.test.js server/**/*.spec.js",
+    "test:e2e": "node --test tests/e2e/**/*.spec.js",
+    "preview": "vite preview",
+    "start": "node --no-warnings server.js",
+    "start:bg": "powershell -NoProfile -Command \"Start-Process -FilePath 'node' -ArgumentList '--no-warnings','server.js' -WorkingDirectory $PWD -WindowStyle Hidden\"",
+    "dev:frontend": "vite",
+    "dev:backend": "node --no-warnings server.js",
+    "dev:all": "npx --yes concurrently -k -n API,WEB --raw \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:all:legacy": "start \"SGK API\" cmd /c \"node --no-warnings server.js\" && start \"SGK Vite\" cmd /c \"vite\""
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "docx": "^9.7.1",
+    "express": "^4.19.2",
+    "jszip": "^3.10.2",
+    "lucide-react": "^0.428.0",
+    "mammoth": "^1.12.3",
+    "multer": "^2.2.0",
+    "pdfjs-dist": "^3.4.120",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "concurrently": "^8.2.2",
+    "oxlint": "^1.75.0",
+    "playwright-core": "^1.62.1",
+    "vite": "^8.2.0",
+    "vite-plugin-pwa": "^1.3.0"
+  }
+}
