@@ -786,6 +786,3 @@ export function ssrfLog(entry) {
   }
   console.warn("[SSRF]", JSON.stringify({ ts: new Date().toISOString(), ...safe }));
 }
-
-// Backwards compat helper: validateRemoteUrl alias for tests
-export const validateUrl = validateRemoteUrl;

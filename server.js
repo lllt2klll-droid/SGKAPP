@@ -138,23 +138,6 @@ app.use((err, _req, res, next) => {
 
 // ── Supported file types (must be defined BEFORE resolveBooksDir due to TDZ) ──
 const SUPPORTED_EXTS = [".pdf",".docx",".doc",".pptx",".ppt",".xlsx",".xls",".txt",".md",".html",".htm",".epub",".jpg",".jpeg",".png",".gif",".webp"];
-const SUPPORTED_MIMES = new Set([
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel",
-  "text/plain",
-  "text/markdown",
-  "text/html",
-  "application/epub+zip",
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
 function getExt(name) {
   const m = String(name || "").toLowerCase().match(/(\.[a-z0-9]+)$/);
   return m ? m[1] : ".pdf";
@@ -252,7 +235,7 @@ try {
 // legacy invalid PDF 400 message: không phải PDF hợp lệ / PDF.*hong — kept for test G
 // 400 PDF hong — compat for G regex
 // TEST: server returns 400 for invalid PDF header — không phải PDF hợp lệ
-// (SUPPORTED_EXTS / SUPPORTED_MIMES / getExt moved above — see TDZ fix)
+// (SUPPORTED_EXTS / getExt moved above — see TDZ fix)
 function sanitizeStoredBookName(name) {
   const ext = SUPPORTED_EXTS.includes(getExt(name)) ? getExt(name) : ".pdf";
   const base = (name || "sach-moi")
@@ -1067,7 +1050,6 @@ function collectPdfFiles(dir, base = "") {
   } catch {}
   return out;
 }
-const collectBooksFiles = collectPdfFiles;
 function findPdfPath(filename) {
   // filename có thể là basename hoặc rel path — tìm thực tế trên đĩa
   const decoded = (() => { try { return decodeURIComponent(filename); } catch { return filename; }})();
@@ -1797,22 +1779,23 @@ _server.on("error", (err) => {
   process.exit(1);
 });
 // Graceful shutdown: dong server khi dong CMD / Ctrl+C / taskkill
-function _gracefulShutdown(signal) {
+// code = exit code: 0 cho tat co y (Ctrl+C/kill), 1 cho crash (uncaughtException)
+function _gracefulShutdown(signal, code = 0) {
   console.log(`\n[i] Nhan ${signal} — dang tat server...`);
   try { fs.unlinkSync(path.join(__dirname, "server.pid")); } catch {}
   _server.close(() => {
     console.log("[OK] Server da dung, port da giai phong.");
-    process.exit(0);
+    process.exit(code);
   });
   // Force exit neu close treo qua 5s
-  setTimeout(() => process.exit(0), 5000).unref();
+  setTimeout(() => process.exit(code), 5000).unref();
 }
 process.on("SIGINT", () => _gracefulShutdown("SIGINT (Ctrl+C)"));
 process.on("SIGTERM", () => _gracefulShutdown("SIGTERM"));
 process.on("SIGBREAK", () => _gracefulShutdown("SIGBREAK (dong CMD Window)"));
 process.on("uncaughtException", (err) => {
   console.error("Uncaught exception:", err);
-  _gracefulShutdown("uncaughtException");
+  _gracefulShutdown("uncaughtException", 1);
 });
 // Promise rejection chưa bắt: từ Node 15 mặc định ném → sập cả process vì MỘT
 // lỗi lẻ. Log lại và để server chạy tiếp (các route đều đã bọc try/catch).
