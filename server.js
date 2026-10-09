@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
@@ -44,6 +45,35 @@ app.disable("x-powered-by");
 // vẫn có thể chạy trên origin app (XSS). App luôn khai báo đúng Content-Type.
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+});
+
+// ── Chống DNS rebinding ───────────────────────────────────────────────
+// Trang độc hại có thể trỏ domain của nó về 127.0.0.1 (DNS rebinding) để
+// trình duyệt coi là same-origin với app → gọi thẳng API (xóa sách, dùng hộ
+// proxy AI) mà CORS không chặn được. Quy tắc: Host phải là "localhost" hoặc
+// IP literal thuộc về máy này; tên miền tùy ý → 403.
+// Dùng tên miền riêng (ví dụ trong LAN có DNS): env ALLOWED_HOSTS=a.local,b.local
+const ALLOWED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
+for (const addrs of Object.values(os.networkInterfaces())) {
+  for (const addr of addrs || []) ALLOWED_HOSTNAMES.add(String(addr.address).toLowerCase());
+}
+for (const h of String(process.env.ALLOWED_HOSTS || "").split(",")) {
+  const name = h.trim().toLowerCase();
+  if (name) ALLOWED_HOSTNAMES.add(name);
+}
+app.use((req, res, next) => {
+  const rawHost = req.headers.host || "";
+  // Host IPv6 dạng "[::1]:5000" → cắt ngoặc; tên miền/IP v4 → cắt phần cổng
+  const hostname = (rawHost.startsWith("[")
+    ? rawHost.slice(1, rawHost.indexOf("]"))
+    : rawHost.split(":")[0]
+  ).toLowerCase();
+  if (!hostname || !ALLOWED_HOSTNAMES.has(hostname)) {
+    return res.status(403).json({
+      error: "Host không được phép (chặn DNS rebinding). Hãy truy cập qua localhost, hoặc thêm tên miền vào env ALLOWED_HOSTS.",
+    });
+  }
   next();
 });
 
