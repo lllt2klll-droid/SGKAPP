@@ -2,7 +2,7 @@
   "name": "sgk-app",
   "private": true,
   "version": "0.0.0",
-  "author": "Nguyễn Tuấn",
+  "author": "Nguyá»…n Tuáº¥n",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -31,7 +31,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sanitize-html": "^2.18.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
