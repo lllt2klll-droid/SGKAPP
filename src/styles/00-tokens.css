@@ -47,7 +47,6 @@
   /* Secondary - Purple */
   --secondary: #a78bfa;
   --secondary-light: rgba(167, 139, 250, 0.14);
-  --secondary-dark: #c4b5fd;
 
   /* Success - Green */
   --success: #4ade80;
@@ -69,31 +68,51 @@
   --red-action: #f87171;
   --red-action-deep: #ef4444;
   --red-soft: rgba(248, 113, 113, 0.14);
-  --red-hover: #ef4444;
+  --red-hover: #f87171;
 
   /* Surface & Background */
   --bg-main: #0b1220;
   --surface: #111827;
-  --surface-soft: #172033;
+  --surface-soft: #162032;
+  --surface-alt: #1e293b;
   --bg-alt: #0b1220;
+  --paper: #0b1220;
+  --bg-card: #111827;
 
   /* Text */
-  --text-dark: #f8fafc;
+  --text-dark: #f1f5f9;
   --text-mid: #cbd5e1;
   --text-muted: #94a3b8;
-  --text-light: #64748b;
+  --text-light: #94a3b8;
 
   /* Border */
-  --border-color: #273449;
-  --border-strong: #334155;
-  --line-blue: #273449;
-  --input-border: #334155;
+  --border-color: #1e344d;
+  --border-strong: #2a415c;
+  --line-blue: #1e344d;
 
   /* Special Colors */
   --star-color: #fbbf24;
   --olive-board: #6b7e5c;
   --olive-deep: #4a5c3e;
-  --paper-grid: rgba(96, 165, 250, 0.08);
+  --paper-grid: rgba(96, 165, 250, 0.06);
+  --accent: #f87171;
+  --accent-hover: #ef4444;
+  --cyan: #22d3ee;
+  --cyan-deep: #0891b2;
+  --info: #22d3ee;
+  --info-light: rgba(34, 211, 238, 0.14);
+
+  /* Glass / overlay / tint (trước đây chỉ có trong block theme) */
+  --glass-bg: rgba(17, 24, 39, 0.92);
+  --glass-border: #1e344d;
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --pill-tint: rgba(30, 41, 59, 0.9);
+  --overlay-veil: rgba(2, 6, 23, 0.62);
+  --overlay-bg: rgba(2, 6, 23, 0.62);
+  --search-overlay-bg: rgba(2, 6, 23, 0.55);
+  --danger-tint: rgba(248, 113, 113, 0.14);
+  --warning-tint: rgba(251, 191, 36, 0.14);
+  --success-tint: rgba(74, 222, 128, 0.14);
 
   /* === TYPOGRAPHY ===
      Headings use Andika (designed for literacy / Vietnamese diacritics);
@@ -157,11 +176,11 @@
   --radius-full: 9999px;
 
   /* === SHADOWS === */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 32, 0.05);
-  --shadow-sm: 0 2px 4px rgba(15, 23, 32, 0.06);
-  --shadow-md: 0 4px 6px rgba(15, 23, 32, 0.07);
-  --shadow-lg: 0 10px 15px rgba(15, 23, 32, 0.08);
-  --shadow-xl: 0 20px 25px rgba(15, 23, 32, 0.1);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.38);
+  --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.45);
 
   /* === TRANSITIONS === */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -175,7 +194,8 @@
      bottom-nav 70 < sidebar-overlay 80 < sidebar 95 < header 100
      < dropdown 100 < sticky 200 < drawer 500 < popover 800
      < modal 3000 < modal-above 3100 < modal-top 3200
-     < scan 5000 < scan-top 6000 < bubble 9999 < toast 99999
+     < scan 5000 < scan-top 6000 < bubble 9999 < search-overlay 10000
+     < toast 99999
      Quy tắc: component KHÔNG dùng số cứng, dùng var(--z-*) dưới đây.
      Modal nhiều lớp: lớp sau dùng --z-modal-above/--z-modal-top, cấm số tự chế. */
   --z-bottom-nav: 70;
@@ -195,6 +215,8 @@
   --z-tooltip: 600;
   --z-toast: 99999;
   --z-bubble: 9999;
+  /* Overlay Ctrl+K — phải nổi trên modal/bảng lệnh/scan, dưới toast */
+  --z-search-overlay: 10000;
 
   /* === BREAKPOINTS — chuẩn duy nhất (CSS không dùng var trong @media,
      nên mọi file @media đúng các mốc chữ này, không tự chế mốc mới) ===
@@ -207,29 +229,14 @@
   /* === LAYOUT === */
   --sidebar-w: 280px;
   --sidebar-collapsed-w: 68px;
-  --sidebar-transition:
-    width 0.32s cubic-bezier(0.25, 0.8, 0.25, 1),
-    padding 0.32s cubic-bezier(0.25, 0.8, 0.25, 1);
   --nav-item-h: 2.5rem;
   --header-height: 64px;
   --content-max-width: none;
 
-  /* === FOCUS STATES === */
-  --focus-ring: 0 0 0 3px rgba(31, 117, 254, 0.4);
-  --focus-ring-dark: 0 0 0 3px rgba(31, 117, 254, 0.6);
-
-  /* === BUTTON SYSTEM === */
-  --btn-primary-bg: var(--primary);
-  --btn-primary-hover: var(--primary-dark);
+  /* === BUTTON SYSTEM ===
+     --btn-primary-text/--btn-danger-text: chữ trên nền tô đặc.
+     light = #ffffff; dark = #0b1220 (nền accent ở dark là màu pastel sáng). */
   --btn-primary-text: #ffffff;
-  --btn-secondary-bg: var(--surface-soft);
-  --btn-secondary-hover: var(--border-color);
-  --btn-secondary-text: var(--text-dark);
-  --btn-ghost-bg: transparent;
-  --btn-ghost-hover: var(--surface-soft);
-  --btn-ghost-text: var(--text-mid);
-  --btn-danger-bg: var(--danger);
-  --btn-danger-hover: var(--danger-deep);
   --btn-danger-text: #ffffff;
   --btn-height: 2.4rem;
   --btn-height-sm: 2rem;
@@ -247,7 +254,7 @@
 
   /* === INPUT SYSTEM === */
   --input-bg: var(--surface);
-  --input-border: var(--input-border);
+  --input-border: var(--border-strong);
   --input-border-focus: var(--primary);
   --input-radius: var(--radius-md);
   --input-height: 2.4rem;
@@ -259,7 +266,6 @@
      Legacy (--primary, --surface, etc.) remain source; canonical names
      alias to them to avoid breakage. */
   --color-primary: var(--primary);
-  --color-primary-hover: var(--primary-dark);
   --color-primary-light: var(--primary-light);
   --color-background: var(--bg-main);
   --color-surface: var(--surface);
@@ -300,6 +306,42 @@
   --text-caption: var(--text-xs);
   --text-label: var(--text-sm);
   --text-button: 0.88rem;
+
+  /* === AUDIT 2026 — fallback cho token đang được dùng ở file khác
+     nhưng trước đây chưa bao giờ được định nghĩa (var() invalid → mất màu).
+     JS (settingsStore.applySettings) set --color-action* inline trên
+     documentElement nên inline vẫn thắng rule này khi JS chạy. === */
+  --background: var(--surface);
+  --bg: var(--surface-soft);
+  --text: var(--text-dark);
+  --text-color: var(--text-dark);
+  --bg-muted: var(--surface-soft);
+  --primary-soft: var(--primary-light);
+  --surface-hover: var(--surface-soft);
+  --surface-dark: #0f172a;
+  --surface-soft-dark: var(--surface-soft);
+  --line-mid: var(--border-color);
+
+  --color-action: var(--primary);
+  --color-action-hover: var(--primary-dark);
+  --color-action-active: var(--primary-dark);
+  --color-action-soft: var(--primary-light);
+  --color-action-strong: #154fcd;
+  --color-focus-ring: rgba(37, 99, 235, 0.32);
+
+  --color-success-soft: var(--success-soft);
+  --color-success-text: #86efac;
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-text: #fde68a;
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: #fca5a5;
+
+  --info-soft: rgba(34, 211, 238, 0.14);
+  --info-text: #22d3ee;
+  --warning-text: var(--warning-deep);
+
+  --color-surface-soft: var(--surface-soft);
+  --color-text-primary: var(--text-dark);
 }
 
 /* Light Mode — clean, airy, professional teacher workspace */
@@ -315,18 +357,17 @@
   --bg-card: #ffffff;
   --text-dark: #0f172a;
   --text-mid: #334155;
-  --text-muted: #64748b;
-  --text-light: #94a3b8;
+  --text-muted: #616c80;
+  --text-light: #616c80;
   --border-color: #e2e8f0;
   --border-strong: #cbd5e1;
   --line-blue: #e2e8f0;
   --input-border: #cbd5e1;
   --input-border-focus: #2563eb;
   --primary: #2563eb;
-  --primary-hover: #1d4ed8;
+  --primary-dark: #1d4ed8;
   --primary-light: #eff6ff;
   --secondary: #7c3aed;
-  --secondary-hover: #6d28d9;
   --secondary-light: #f5f3ff;
   --success: #16a34a;
   --success-deep: #15803d;
@@ -340,13 +381,20 @@
   --danger-deep: #b91c1c;
   --danger-light: #fee2e2;
   --danger-soft: #fee2e2;
+  --color-success-text: #166534;
+  --color-warning-text: #92400e;
+  --color-danger-text: #991b1b;
   --info: #0891b2;
   --info-light: #cffafe;
+  --info-soft: #cffafe;
+  --info-text: #155e75;
+  --cyan: #0e7490;
+  --cyan-deep: #155e75;
   --pen-blue: #2563eb;
   --pen-blue-soft: #eff6ff;
   --pen-blue-deep: #1d4ed8;
   --red-action: #dc2626;
-  --red-hover: #ef4444;
+  --red-hover: #b91c1c;
   --red-action-deep: #b91c1c;
   --red-soft: #fee2e2;
   --accent: #dc2626;
@@ -359,15 +407,9 @@
   --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.05);
   --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.07), 0 4px 6px rgba(15, 23, 42, 0.05);
   --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.08), 0 8px 10px rgba(15, 23, 42, 0.04);
-  --focus-ring: rgba(37, 99, 235, 0.28);
-  --btn-secondary-bg: #f5f3ff;
-  --btn-secondary-hover: #6d28d9;
-  --btn-secondary-text: #6d28d9;
-  --btn-ghost-hover: var(--surface-soft);
   --card-bg: var(--surface);
   --card-border: var(--border-color);
   --input-bg: #ffffff;
-  --input-border: #cbd5e1;
   --glass-bg: rgba(255, 255, 255, 0.92);
   --glass-border: #e2e8f0;
   --glass-shadow: 0 4px 16px rgba(15, 23, 42, 0.07), 0 1px 3px rgba(15, 23, 42, 0.05);
@@ -395,17 +437,16 @@
   --text-dark: #f1f5f9;
   --text-mid: #cbd5e1;
   --text-muted: #94a3b8;
-  --text-light: #64748b;
+  --text-light: #94a3b8;
   --border-color: #1e344d;
   --border-strong: #2a415c;
   --line-blue: #1e344d;
   --input-border: #334155;
   --input-border-focus: #60a5fa;
   --primary: #60a5fa;
-  --primary-hover: #93c5fd;
+  --primary-dark: #93c5fd;
   --primary-light: rgba(96, 165, 250, 0.14);
   --secondary: #a78bfa;
-  --secondary-hover: #c4b5fd;
   --secondary-light: rgba(167, 139, 250, 0.14);
   --success: #4ade80;
   --success-deep: #22c55e;
@@ -424,7 +465,7 @@
   --olive-board: #6b7e5c;
   --olive-deep: #4a5c3e;
   --red-action: #f87171;
-  --red-hover: #ef4444;
+  --red-hover: #f87171;
   --red-action-deep: #ef4444;
   --red-soft: rgba(248, 113, 113, 0.14);
   --pen-blue: #60a5fa;
@@ -434,9 +475,6 @@
   --cyan-deep: #0891b2;
   --star-color: #fbbf24;
   --bg-card: #111827;
-  --danger-soft: rgba(248, 113, 113, 0.14);
-  --success-soft: rgba(74, 222, 128, 0.14);
-  --warning-soft: rgba(251, 191, 36, 0.14);
   --glass-bg: rgba(17, 24, 39, 0.92);
   --glass-border: #1e344d;
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -445,7 +483,6 @@
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.32);
   --shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.38);
   --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.45);
-  --focus-ring: rgba(96, 165, 250, 0.36);
   --overlay-bg: rgba(2, 6, 23, 0.62);
   --search-overlay-bg: rgba(2, 6, 23, 0.55);
   --accent: #f87171;
@@ -455,14 +492,14 @@
   --danger-tint: rgba(248, 113, 113, 0.14);
   --warning-tint: rgba(251, 191, 36, 0.14);
   --success-tint: rgba(74, 222, 128, 0.14);
-  --btn-secondary-bg: rgba(167, 139, 250, 0.12);
-  --btn-secondary-hover: rgba(167, 139, 250, 0.22);
-  --btn-secondary-text: #c4b5fd;
-  --btn-ghost-hover: rgba(255, 255, 255, 0.06);
   --card-bg: var(--surface);
   --card-border: var(--border-color);
   --input-bg: #0f172a;
-  --input-border: #334155;
+  /* Nền accent ở dark là pastel sáng → chữ navy để đạt WCAG AA */
+  --btn-primary-text: #0b1220;
+  --btn-danger-text: #0b1220;
+  --color-action-strong: #93c5fd;
+  --color-focus-ring: rgba(96, 165, 250, 0.4);
 }
 
 * {

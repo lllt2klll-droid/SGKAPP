@@ -3,7 +3,7 @@
 // - Trích ảnh về 1 folder ngoài cùng (lesson-images/), plan chỉ giữ đường dẫn local
 // - Lưu 2 bản: bản thô y hệt + bản AI chuẩn hóa KHBD (giữ bản gốc trong metadata.sourceText)
 // - Fallback dán thủ công khi bị chặn/paywall/đăng nhập
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link2, Download, Sparkles, Save, ClipboardPaste, Image as ImageIcon } from "lucide-react";
 import { getApiBase } from "../apiConfig";
 import aiService, { getFriendlyErrorMessage } from "../aiService";
@@ -47,6 +47,11 @@ export default function LessonUrlImport({ onImported, defaultDuration = "35", co
   const [imgMsg, setImgMsg] = useState("");
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState("");
+
+  // Đóng ô nhập khi AI đang chạy → hủy request "lessonurl-" (không chạy nền tốn token)
+  useEffect(() => {
+    return () => { try { aiService.cancelRequestsByPrefix("lessonurl-"); } catch {} };
+  }, []);
 
   const doFetch = async () => {
     const u = url.trim();
@@ -145,6 +150,7 @@ export default function LessonUrlImport({ onImported, defaultDuration = "35", co
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         systemInstruction: AI_SYSTEM,
         generationConfig: { temperature: 0.5, maxOutputTokens: 12000, responseMimeType: "application/json" },
+        requestId: `lessonurl-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
       });
       const obj = extractPlanJson(raw);
       const plan = aiJsonToPlan(obj, { title: parsed.title, duration: defaultDuration });

@@ -2,6 +2,7 @@
 // Khớp toàn app: header wt-like + card 14px + tokens + 3D buttons
 import React, { useEffect, useState } from "react";
 import { appEvents, AppEvents } from "./core/appEvents.js";
+import { STORAGE_KEYS } from "./core/storageKeys.js";
 import {
   DatabaseBackup,
   Upload,
@@ -32,6 +33,7 @@ import {
 import { getMergedTocBooks, getCustomTocBooks, upsertTocBook, deleteCustomTocBook } from "./tocData";
 import { getPlans as getKhbdPlans, savePlan as saveKhbdPlan, clearLegacyData, hasLegacyData } from "./khbd/planModel";
 import { restoreQuestion } from "./teachingDB";
+import { restoreVocabEntries } from "./userdata";
 import {
   listTrash,
   takeFromTrash,
@@ -114,6 +116,17 @@ export default function DataToolsView() {
     try {
       if (taken.type === TRASH_TYPE.PLAN) saveKhbdPlan(taken.payload);
       else if (taken.type === TRASH_TYPE.QUESTION) restoreQuestion(taken.payload);
+      else if (taken.type === TRASH_TYPE.VOCAB) {
+        // payload: { entries: [...] } hoặc 1 entry đơn lẻ
+        const entries = Array.isArray(taken.payload?.entries)
+          ? taken.payload.entries
+          : Array.isArray(taken.payload)
+            ? taken.payload
+            : taken.payload && taken.payload.id
+              ? [taken.payload]
+              : [];
+        restoreVocabEntries(entries);
+      }
       // Sách: file PDF chưa bị xóa — đưa ra khỏi thùng rác là App tự nạp lại thư viện
     } catch (e) {
       setMsg({ kind: "err", text: `Khôi phục lỗi: ${e.message}` });
@@ -722,18 +735,21 @@ export default function DataToolsView() {
           <div className="dt-actions" style={{ gap: '0.4rem' }}>
             <button className="btn btn-secondary btn-sm" onClick={()=>{
               try{
-                const hist = aiDataStorage.getAnalysisHistory?.() || safeGetJSON('ai_analysis_history', [], Array.isArray);
-                const cache = safeGetJSON('ai_image_cache', [], Array.isArray);
+                const hist = aiDataStorage.getAnalysisHistory?.() || safeGetJSON(STORAGE_KEYS.AI_HISTORY, [], Array.isArray);
+                // ai_image_cache lưu dạng object {imageId: ...} (xem aiDataStorage.getImageCache)
+                const cacheRaw = safeGetJSON(STORAGE_KEYS.AI_IMAGE_CACHE, null, (v) => typeof v === "object" && v !== null);
+                const cacheCount = Array.isArray(cacheRaw) ? cacheRaw.length : (cacheRaw ? Object.keys(cacheRaw).length : 0);
                 const usage = (()=>{ try{ return aiDataStorage.getStorageUsage(); }catch (e) { console.warn("[DataToolsView] getStorageUsage failed", e); return null; }})();
                 const orphanScans = safeGetJSON('sgk_scans_v1', [], Array.isArray).length;
                 const orphanAutosaves = Object.keys(localStorage).filter(k=>k.startsWith('sgk_autosave_')).length;
                 const orphanMarks = Object.keys(localStorage).filter(k=>k.startsWith('sgk_marks_')).length;
-                const text = `AI history: ${hist.length} | AI cache: ${cache.length||usage?.imageCache||0} | Scans: ${orphanScans} | Autosaves: ${orphanAutosaves} | Marks: ${orphanMarks}\nDung lượng AI: ${usage? JSON.stringify(usage): '—'}`;
+                const text = `AI history: ${hist.length} | AI cache: ${cacheCount||usage?.imageCache||0} | Scans: ${orphanScans} | Autosaves: ${orphanAutosaves} | Marks: ${orphanMarks}\nDung lượng AI: ${usage? JSON.stringify(usage): '—'}`;
                 setMsg({kind:"ok", text});
               }catch(e){ console.warn("[DataToolsView] Quét AI failed", e); setMsg({kind:"err", text:uiMessage(e)}); }
             }}><Eye size={15} /> Quét & Thống kê AI</button>
             <button className="btn btn-ghost btn-sm" onClick={()=>{
-              const aiKeys = ['ai_analysis_history','ai_image_cache','ai_analysis_results','ai_prompt_templates','ai_model_prefs','ai_usage_stats'];
+              // Khóa thật từ storageKeys (khớp aiDataStorage) — bản cũ ghi sai 'ai_model_prefs'
+              const aiKeys = Object.values(STORAGE_KEYS).filter((k) => typeof k === "string" && k.startsWith("ai_"));
               const found = aiKeys.filter(k=> { try { return safeGetString(k, null) !== null; } catch (e) { console.warn("[DataToolsView] safeGetString failed for "+k, e); return false; } });
               if(!found.length) { setMsg({kind:"ok", text:"Không có dữ liệu AI mồ côi."}); return; }
               if(!confirm(`Xóa ${found.length} mục AI: ${found.join(', ')}?`)) return;

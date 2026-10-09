@@ -5,6 +5,7 @@ import { addQuestion, saveWorksheet } from "../teachingDB.js";
 import { addClip, getCollections, addCollection } from "../researchDB.js";
 import { createIdea } from "../personalDB.js";
 import { makeId } from "../storage.js";
+import { normalizeMucdo } from "../questionSchema.js";
 
 function sourceMeta(scan, extra) {
   return {
@@ -56,7 +57,7 @@ export async function saveScanToWorksheets({ scan, analysis, generated }) {
       grade: scan.book.grade || analysis?.grade || 1,
       chapter: analysis?.topic || q.chapter || "",
       yccd: q.yccd || "",
-      mucdo: q.mucdo || q.level || "Hiểu",
+      mucdo: normalizeMucdo(q.mucdo) || normalizeMucdo(q.level) || "Hiểu",
       origin: q.origin || null,
       keepOriginal: q.origin === "sgk_original",
       source: sourceMeta(scan, generated?.config),
@@ -106,7 +107,7 @@ export async function saveScanToQuestions({ scan, analysis, generated }) {
       grade: scan.book.grade || analysis?.grade || 1,
       chapter: analysis?.topic || q.chapter || "",
       yccd: q.yccd || "",
-      mucdo: q.mucdo || q.level || "Hiểu",
+      mucdo: normalizeMucdo(q.mucdo) || normalizeMucdo(q.level) || "Hiểu",
       origin: q.origin || null,
       keepOriginal: q.origin === "sgk_original",
       source: sourceMeta(scan, generated?.config),

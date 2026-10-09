@@ -63,6 +63,7 @@ import {
   Download,
   Upload,
   Palette,
+  Loader2,
 } from "lucide-react";
 import CanvasWhiteboard from "./CanvasWhiteboard";
 import StructuredNotes from "./StructuredNotes";
@@ -78,6 +79,13 @@ import {
 } from "./researchDB";
 import { findTocBook, upsertTocBook, makeTocKey, makeFileTocKey } from "./tocData";
 import { exportTocToExcel, exportTocSimple, parseTocExcel } from "./tocExcel";
+import {
+  TOC_AI_MAX_IMAGES,
+  validateTocAiFiles,
+  buildTocAiImageParts,
+  buildTocAiPrompt,
+  cleanTocAiItems,
+} from "./tocAiService";
 import ReaderMobileBar from "./components/ReaderMobileBar.jsx";
 import ScanOverlay from "./scan/ScanOverlay";
 import ScanModal from "./scan/ScanModal";
@@ -336,7 +344,9 @@ export default function BookReader({
   const [showAnalyzeOptions, setShowAnalyzeOptions] = useState(false);
 
   // ── View modes ──────────────────────────────────────────────────
-  const settings = useMemo(() => loadSettings(), []);
+  // State thay vì useMemo tĩnh: đang mở sách mà đổi Cài đặt (Sáng tạo/Độ dài/Model)
+  // phải áp dụng ngay, không cần đóng/mở lại sách.
+  const [settings, setSettings] = useState(() => loadSettings());
   const [twoPageMode, setTwoPageMode] = useState(() => {
     const s = loadSettings();
     return s.reading?.layout === "single" ? false : true;
@@ -347,6 +357,8 @@ export default function BookReader({
     return s.reading?.showTOC === false ? true : false;
   });
   const tocFileRef = useRef(null);
+  const tocAiFileRef = useRef(null);
+  const [tocAiBusy, setTocAiBusy] = useState(false);
   // ── Resizable panels (kéo như navbar) ──────────────────────────
   const [tocWidth, setTocWidth] = useState(() => {
     const raw = safeGetString("sgk_toc_w", null);
@@ -533,7 +545,6 @@ export default function BookReader({
   const [noteText, setNoteText] = useState("");
   const [noteImages, setNoteImages] = useState([]);
   const [activeNoteId, setActiveNoteId] = useState(null);
-  const [showNoteList, setShowNoteList] = useState(false);
   // Cache ref ảnh "idb:xxx" → dataURL hiển thị được (ảnh ghi chú giờ nằm ở IndexedDB).
   // note.images[] có thể chứa hỗn hợp base64 cũ (inline) và ref mới — helper này
   // giúp render đồng nhất mà không phải đọc IDB đồng bộ.
@@ -549,6 +560,8 @@ export default function BookReader({
   const [chatInput, setChatInput] = useState("");
   const [preStudyPrompt, setPreStudyPrompt] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  // Bật khi BẤT KỲ luồng AI nào trong cuốn sách đang chạy (chat, phân tích, hỏi trang, quiz…)
+  const [aiBusy, setAiBusy] = useState(false);
   const [chatEffort, setChatEffort] = useState(
     () => loadSettings().ai?.effort || "balanced",
   );
@@ -559,6 +572,19 @@ export default function BookReader({
   const [lengthMenuOpen, setLengthMenuOpen] = useState(false);
   const effortMenuRef = useRef(null);
   const lengthMenuRef = useRef(null);
+  // Đồng bộ cài đặt AI từ Cài đặt → bảng Hỏi AI + chip "AI LIÊN KẾT" cập nhật tức thì
+  useEffect(() => {
+    const onAiSettings = (e) => {
+      const s = e?.detail && typeof e.detail === "object" && Object.keys(e.detail).length
+        ? e.detail
+        : loadSettings();
+      setSettings(s);
+      if (s.ai?.effort) setChatEffort(s.ai.effort);
+      if (s.ai?.responseLength) setChatResponseLength(s.ai.responseLength);
+    };
+    window.addEventListener("sgk:settings-updated", onAiSettings);
+    return () => window.removeEventListener("sgk:settings-updated", onAiSettings);
+  }, []);
   // đóng menu khi click ngoài — gọn gàng, không kẹt
   useEffect(() => {
     if (!effortMenuOpen && !lengthMenuOpen) return;
@@ -623,7 +649,7 @@ export default function BookReader({
   const [selWord, setSelWord] = useState("");
   const [wordExpl, setWordExpl] = useState("");
   const [wordLoading, setWordLoading] = useState(false);
-  const [bubblePos, setBubblePos] = useState({ x: 0, y: 0 });
+  const [savingWord, setSavingWord] = useState(false);
 
   // ── Study tools (TOC cột, structured notes, glossary) ─────
   const [tocItems, setTocItems] = useState([]);
@@ -676,6 +702,7 @@ export default function BookReader({
   const pageWidthRef = useRef(0);
   const pageHeightRef = useRef(0);
   const aiAbortRef = useRef(null);
+  const aiRequestRef = useRef(null);
   const noteEditableRef = useRef(null);
   const noteComposingRef = useRef(false);
   // Refs to keep fitToWidth stable — tránh tự động zoom khi đổi trang (pageNum thay đổi làm fitToWidth đổi identity → các effect fit lại vô tình chạy)
@@ -762,7 +789,6 @@ export default function BookReader({
       setDrawFeedback("");
       setSelWord("");
       setWordExpl("");
-      setShowNoteList(false);
       setTocItems([]);
       setShowNotes(false);
       setShowGlossary(false);
@@ -1300,8 +1326,9 @@ export default function BookReader({
         }
         canvasEl.width = vp.width;
         canvasEl.height = vp.height;
-        canvasEl.style.width = `${vp.width / dpr}px`;
-        canvasEl.style.height = `${vp.height / dpr}px`;
+        const cssVp = page.getViewport({ scale: clampZoomHelper(zoom) });
+        canvasEl.style.width = `${cssVp.width}px`;
+        canvasEl.style.height = `${cssVp.height}px`;
         canvasEl.style.imageRendering = "auto";
         const task = page.render({ canvasContext: ctx, viewport: vp });
         taskRef.current = task;
@@ -1429,7 +1456,6 @@ export default function BookReader({
       const found = merged.find((n) => n.id === pending);
       if (found) {
         setActiveNoteId(found.id);
-        setShowNoteList(false);
         return;
       }
     }
@@ -1438,7 +1464,6 @@ export default function BookReader({
     setNoteText("");
     setNoteImages([]);
     if (noteEditableRef.current) noteEditableRef.current.innerHTML = "";
-    setShowNoteList(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- readPageNotes is intentionally re-created each render
   }, [book, pageNum]);
 
@@ -1545,7 +1570,6 @@ export default function BookReader({
       // Target page already visible: consume the pin immediately
       if (note.pdfPage === pageNum) {
         setActiveNoteId(note.id);
-        setShowNoteList(false);
         return;
       }
       pendingPinIdRef.current = note.id;
@@ -1598,20 +1622,6 @@ export default function BookReader({
     return () => window.removeEventListener("mousedown", close);
   }, [selWord]);
 
-  // Bubble position is clamped to the current viewport (computed once per
-  // selection, not during render — keeps layout stable and resize-safe)
-  const bubbleStyle = useMemo(() => {
-    const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
-    const vh = typeof window !== "undefined" ? window.innerHeight : 768;
-    return {
-      position: "fixed",
-      left: Math.min(Math.max(8, bubblePos.x - 135), Math.max(8, vw - 285)),
-      top: Math.min(Math.max(8, bubblePos.y - 10), Math.max(8, vh - 240)),
-      width: 270,
-      zIndex: "var(--z-bubble)",
-    };
-  }, [bubblePos]);
-
   // ── Keyboard shortcuts ─────────────────────────────────────────
   // Stable listener + latest-state closure — cực chi tiết, đọc từ settings.keyboard.shortcuts (mặc định đã có, user tự đổi trong Cài đặt > Phím tắt)
   const keyHandlerRef = useRef(() => {});
@@ -1626,7 +1636,6 @@ export default function BookReader({
         if (noteEditableRef.current) noteEditableRef.current.innerHTML = "";
       }
       setSelWord("");
-      setShowNoteList(false);
       setShowCommandPalette(false);
       setShowAdvancedDrawer(false);
       return;
@@ -1638,8 +1647,9 @@ export default function BookReader({
         t.tagName === "TEXTAREA" ||
         t.tagName === "SELECT" ||
         t.isContentEditable);
-    // Global palette luôn cho phép ngay cả khi typing (Ctrl+K)
-    if (matchesShortcut(e, getShortcut("global.commandPalette"))) {
+    // Bảng lệnh của Reader dùng phím riêng (reader.commandPalette — Alt+K).
+    // Ctrl+K thuộc GlobalSearch: nếu vẫn bắt chung, Ctrl+K mở 2 overlay chồng nhau.
+    if (matchesShortcut(e, getShortcut("reader.commandPalette"))) {
       e.preventDefault();
       setShowCommandPalette((v) => !v);
       setCommandPaletteSearch("");
@@ -1728,6 +1738,10 @@ export default function BookReader({
     }
 
     try {
+      // Phải nằm TRONG try: nếu throw phía trên thì finally không chạy →
+      // ref/busy bị kẹt làm nút Dừng "đóng vai" đang chạy.
+      aiRequestRef.current = requestId;
+      setAiBusy(true);
       const text = await aiService.callAI({
         apiKey: geminiKey,
         model: aiModel,
@@ -1739,6 +1753,13 @@ export default function BookReader({
       return text;
     } catch (err) {
       if (err.name === "BookChanged") throw err;
+      // Đổi sách/unmount → abort → ném CANCELLED; 9 chỗ catch phía ngoài chỉ hiểu
+      // "BookChanged" nên phải đổi tên để không hiện lỗi đỏ/ghi đè lên sách mới.
+      if (err instanceof AIError && err.code === "CANCELLED" && bookSignal?.aborted) {
+        const drop = new Error("Đã đổi sách");
+        drop.name = "BookChanged";
+        throw drop;
+      }
       if (err instanceof AIError) throw err;
       throw new AIError(
         getFriendlyErrorMessage(err.status, err.message),
@@ -1746,10 +1767,21 @@ export default function BookReader({
         err.code || "AI_ERROR",
       );
     } finally {
+      if (aiRequestRef.current === requestId) {
+        aiRequestRef.current = null;
+        setAiBusy(false);
+      }
       if (bookSignal && onBookAbort) {
         bookSignal.removeEventListener("abort", onBookAbort);
       }
     }
+  };
+
+  // Nút Dừng: hủy request AI đang chạy trong cuốn sách này (không tự xóa ref —
+  // phần finally của callAI lo việc đó để trạng thái busy luôn đúng)
+  const stopAi = () => {
+    const id = aiRequestRef.current;
+    if (id) aiService.cancelRequest(id);
   };
 
   // Render any PDF page into a compressed JPEG (for AI to see pictures/diagrams)
@@ -2064,42 +2096,102 @@ export default function BookReader({
       alert("Không tải được mục lục: " + (e?.message || "lỗi"));
     }
   };
+  // Nạp buffer Excel mục lục vào panel + store — dùng chung cho upload Excel
+  // và luồng AI tạo mục lục từ ảnh (thay thế toàn bộ mục cũ).
+  const applyTocBuffer = async (buf) => {
+    const fileKey = makeFileTocKey(book);
+    const selected = findTocBook(book) || {
+      key: fileKey || `${String(book.subject || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")}${book.grade}t${book.term}`,
+      title: book.title || book.filename || "muc-luc",
+      grade: book.grade,
+      subject: book.subject,
+      term: book.term,
+    };
+    const parsed = await parseTocExcel(buf, selected);
+    const forCurrent =
+      parsed.find((b) => b.key === selected.key) || parsed[0];
+    if (!forCurrent) throw new Error("Không đọc được mục lục");
+    // Lưu per-file để không chia sẻ sang sách khác cùng subject/grade/term
+    const toStore = fileKey ? { ...forCurrent, key: fileKey, title: book.title || forCurrent.title } : forCurrent;
+    upsertTocBook(toStore);
+    const newItems = toStore.items.map((it) => ({
+      ...it,
+      pdfPage: it.page,
+      page: it.page,
+    }));
+    setTocItems(newItems);
+    {
+      const r = safeSetJSON(`toc_${book.filename}`, { items: newItems });
+      if (!r.ok) console.warn(`[BookReader] Failed to persist toc_${book.filename}:`, r.error, r.message, "giữ dữ liệu cũ");
+    }
+    return { count: newItems.length, title: toStore.title };
+  };
+
   const handleUploadToc = async (file) => {
     if (!file) return;
     try {
       const buf = await file.arrayBuffer();
-      const fileKey = makeFileTocKey(book);
-      const selected = findTocBook(book) || {
-        key: fileKey || `${String(book.subject || "")
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "")}${book.grade}t${book.term}`,
-        title: book.title || book.filename || "muc-luc",
-        grade: book.grade,
-        subject: book.subject,
-        term: book.term,
-      };
-      const parsed = await parseTocExcel(buf, selected);
-      const forCurrent =
-        parsed.find((b) => b.key === selected.key) || parsed[0];
-      if (!forCurrent) throw new Error("Không đọc được mục lục");
-      // Lưu per-file để không chia sẻ sang sách khác cùng subject/grade/term
-      const toStore = fileKey ? { ...forCurrent, key: fileKey, title: book.title || forCurrent.title } : forCurrent;
-      upsertTocBook(toStore);
-      const newItems = toStore.items.map((it) => ({
-        ...it,
-        pdfPage: it.page,
-        page: it.page,
-      }));
-      setTocItems(newItems);
-      {
-        const r = safeSetJSON(`toc_${book.filename}`, { items: newItems });
-        if (!r.ok) console.warn(`[BookReader] Failed to persist toc_${book.filename}:`, r.error, r.message, "giữ dữ liệu cũ");
-      }
-      alert(`Đã tải lên ${newItems.length} mục cho "${toStore.title}"`);
+      const { count, title } = await applyTocBuffer(buf);
+      alert(`Đã tải lên ${count} mục cho "${title}"`);
     } catch (e) {
       alert("Không tải được mục lục: " + (e?.message || "lỗi"));
     } finally {
       if (tocFileRef.current) tocFileRef.current.value = "";
+    }
+  };
+
+  // ── TOC: AI đọc ẢNH trang mục lục → Excel 2 cột Tên/Trang → nạp thẳng vào panel
+  const handleTocAiFiles = async (fileList) => {
+    const files = Array.from(fileList || []).filter(Boolean);
+    if (!files.length || tocAiBusy) return;
+    if (!geminiKey) {
+      notify("Chưa có API Key! Hãy mở Cài đặt AI để nhập khóa nhé.", "error");
+      return;
+    }
+    const errs = validateTocAiFiles(files);
+    if (errs.length) {
+      notify(errs[0], "warning");
+      if (tocAiFileRef.current) tocAiFileRef.current.value = "";
+      return;
+    }
+    setTocAiBusy(true);
+    try {
+      const imageParts = await buildTocAiImageParts(files);
+      if (!imageParts.length) {
+        throw new Error("Không đọc được ảnh nào — hãy chọn ảnh JPG/PNG rõ nét trang mục lục.");
+      }
+      const totalPages = isWordFile ? (htmlBookPages.length || 0) : (numPages || 0);
+      const { userText, systemInstruction, generationConfig } = buildTocAiPrompt({
+        bookTitle: book.title,
+        subject: book.subject,
+        grade: book.grade,
+        imageCount: imageParts.length / 2, // mỗi ảnh = 1 nhãn text + 1 inlineData
+        totalPages,
+      });
+      const text = await callAI(
+        [{ role: "user", parts: [...imageParts, { text: userText }] }],
+        systemInstruction,
+        generationConfig,
+      );
+      const { items, warnings } = cleanTocAiItems(parseJSONSafe(text), { totalPages });
+      if (!items.length) {
+        throw new Error("AI không nhận diện được mục nào từ ảnh — hãy chụp lại trang mục lục rõ nét hơn.");
+      }
+      // Dựng file Excel 2 cột Tên/Trang ngay trong bộ nhớ, nạp qua pipeline cũ
+      const buf = await exportTocSimple([{ items }]);
+      const { count } = await applyTocBuffer(buf);
+      notify(`AI tạo ${count} mục lục từ ${imageParts.length / 2} ảnh mục lục.`, "success");
+      if (warnings.length) notify(warnings.join(" · "), "warning");
+    } catch (e) {
+      if (e?.name === "BookChanged") return;
+      if (e?.code === "CANCELLED") { notify("⏹ Đã dừng.", "info"); return; }
+      console.warn("[BookReader] TOC AI failed:", e);
+      notify(uiMessage(e, "Tạo mục lục bằng AI thất bại. Thử lại sau."), "error");
+    } finally {
+      setTocAiBusy(false);
+      if (tocAiFileRef.current) tocAiFileRef.current.value = "";
     }
   };
 
@@ -2432,6 +2524,7 @@ export default function BookReader({
       }
     } catch (err) {
       if (err.name === "BookChanged") return;
+      if (err?.code === "CANCELLED") { notify("⏹ Đã dừng.", "info"); return; }
       notify("OCR thất bại: " + err.message, "error");
     } finally {
       setOcrLoading(false);
@@ -2644,7 +2737,6 @@ export default function BookReader({
     }
     setNotes(rest);
     setActiveNoteId(null);
-    if (rest.length === 0) setShowNoteList(false);
   };
 
   const deleteAllNotes = () => {
@@ -2664,7 +2756,6 @@ export default function BookReader({
     for (const n of removed) for (const img of n?.images || []) if (isNoteImageRef(img)) refs.push(img);
     if (refs.length) void deleteNoteImages(refs);
     setActiveNoteId(null);
-    setShowNoteList(false);
     notify("Đã xóa tất cả ghi chú của trang này.");
   };
 
@@ -2940,7 +3031,7 @@ export default function BookReader({
       // Build multi-turn history (skip greeting at index 0, drop error notices, keep last 12 messages)
       const history = chatMessages
         .slice(1)
-        .filter((m) => !m.text.startsWith("⚠️"))
+        .filter((m) => !m.text.startsWith("⚠️") && !m.text.startsWith("⏹"))
         .slice(-12)
         .map((m) => ({
           role: m.role === "ai" ? "model" : "user",
@@ -3004,6 +3095,11 @@ export default function BookReader({
       setChatMessages((prev) => [...prev, { role: "ai", text: reply }]);
     } catch (err) {
       if (err.name === "BookChanged") return;
+      // Người bấm Dừng → hiện phản hồi nhẹ nhàng, không phải lỗi
+      if (err?.code === "CANCELLED") {
+        setChatMessages((prev) => [...prev, { role: "ai", text: "⏹ Đã dừng." }]);
+        return;
+      }
       const friendly = getFriendlyErrorMessage(err.status, err.message);
       const help =
         err.status === 401
@@ -3097,6 +3193,7 @@ export default function BookReader({
       setQuizQuestions(questions);
     } catch (err) {
       if (err.name === "BookChanged") return;
+      if (err?.code === "CANCELLED") { notify("⏹ Đã dừng.", "info"); return; }
       console.error(err);
       setQuizError("Không thể tạo đề trắc nghiệm: " + err.message);
     } finally {
@@ -3226,6 +3323,7 @@ export default function BookReader({
       setDrawFeedback(feedback);
     } catch (err) {
       if (err.name === "BookChanged") return;
+      if (err?.code === "CANCELLED") { notify("⏹ Đã dừng.", "info"); return; }
       setDrawFeedback(`⚠️ Không chấm được bài: ${err.message}`);
     } finally {
       setDrawLoading(false);
@@ -3403,6 +3501,7 @@ export default function BookReader({
       onOpenLessonPlan?.(saved.id);
     } catch (err) {
       if (err.name === "BookChanged") return;
+      if (err?.code === "CANCELLED") { notify("⏹ Đã dừng.", "info"); return; }
       const hint = String(err?.message || "").includes("JSON")
         ? " Nếu vẫn lỗi, hãy thu hẹp khoảng trang (2–3 trang) rồi bấm lại."
         : "";
@@ -3522,6 +3621,7 @@ export default function BookReader({
       );
     } catch (err) {
       if (err.name === "BookChanged") return;
+      if (err?.code === "CANCELLED") { notify("⏹ Đã dừng.", "info"); return; }
       setAnalysisError("Không phân tích được: " + err.message);
     } finally {
       setAnalysisLoading(false);
@@ -3599,11 +3699,10 @@ export default function BookReader({
   };
 
   // ─── Word selection ───────────────────────────────────────────
-  const handleTextSelect = (e) => {
+  const handleTextSelect = () => {
     const sel = window.getSelection()?.toString().trim();
     if (sel && sel.length < 150) {
       setSelWord(sel);
-      setBubblePos({ x: e.clientX, y: e.clientY });
       setWordExpl("");
     } else {
       setSelWord("");
@@ -3630,6 +3729,7 @@ export default function BookReader({
       setWordExpl(resp);
     } catch (err) {
       if (err.name === "BookChanged") return;
+      if (err?.code === "CANCELLED") { notify("⏹ Đã dừng.", "info"); return; }
       setWordExpl("😢 " + err.message);
     } finally {
       setWordLoading(false);
@@ -3637,24 +3737,52 @@ export default function BookReader({
   };
 
   // Save selected word + explanation into the vocabulary notebook
-  const saveWordToNotebook = () => {
-    if (!selWord) return;
+  // Chưa có nghĩa + đã cấu hình Gemini → tự tra cứu trước khi lưu
+  const saveWordToNotebook = async () => {
+    if (!selWord || savingWord) return;
+    const word = selWord.slice(0, 80);
+    let meaning =
+      wordExpl && !wordExpl.startsWith("😢") && !wordExpl.startsWith("Đang tra")
+        ? wordExpl
+        : "";
+    if (!meaning && geminiKey) {
+      setSavingWord(true);
+      try {
+        const resp = await callAI(
+          [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `Giải nghĩa từ/cụm từ sau cho học sinh tiểu học lớp ${book.grade}: "${word}". Ngắn gọn 2-3 câu, dùng ví dụ gần gũi trẻ em, thêm emoji.`,
+                },
+              ],
+            },
+          ],
+          "Bạn là trợ lý chuyên môn từ điển sư phạm tiểu học, giải thích chính xác, súc tích, hỗ trợ giáo viên chuẩn bị bài giảng theo chương trình GDPT 2018.",
+        );
+        if (resp && !resp.startsWith("😢")) meaning = resp.trim();
+      } catch (err) {
+        // Đổi sách → BỎ lưu (tránh gắn từ cũ vào sách mới khi book/pageNum đã đổi);
+        // lỗi mạng / quota / người bấm Dừng → vẫn lưu từ, chỉ thiếu nghĩa
+        if (err && err.name === "BookChanged") return;
+        console.warn("[BookReader] auto-explain on save failed:", err);
+      } finally {
+        setSavingWord(false);
+      }
+    }
     // addVocabEntry đã emit VOCAB_CREATED + DATA_UPDATED — không emit lại để tránh double-count
     addVocabEntry({
-      word: selWord.slice(0, 80),
-      meaning:
-        wordExpl &&
-        !wordExpl.startsWith("😢") &&
-        !wordExpl.startsWith("Đang tra")
-          ? wordExpl
-          : "",
+      word,
+      meaning,
       file: book.filename,
       bookTitle: book.title,
       grade: book.grade,
       page: pageNum,
     });
-    notify(`Đã thêm "${selWord.slice(0, 30)}" vào sổ tay từ vựng. 📓`);
+    notify(`Đã thêm "${word.slice(0, 30)}" vào sổ tay từ vựng. 📓`);
     setSelWord("");
+    setWordExpl("");
   };
 
   // ─── UI Tab Icons (collapsed mode) ───────────────────────────
@@ -3716,7 +3844,7 @@ export default function BookReader({
       label: "Phân tích nâng cao",
       category: "Phân tích",
       description: "Phân tích nội dung trang sâu",
-      action: () => setActiveTab("analyze"),
+      action: () => { setAiCollapsed(false); setActiveTab("analyze"); },
     },
     {
       id: "drawing",
@@ -3732,7 +3860,7 @@ export default function BookReader({
       label: "Dữ liệu",
       category: "Phân tích",
       description: "Xuất và phân tích dữ liệu",
-      action: () => setActiveTab("analyze"),
+      action: () => { setAiCollapsed(false); setActiveTab("analyze"); },
     },
     {
       id: "language",
@@ -4046,7 +4174,7 @@ export default function BookReader({
   // ── Keyboard handler — uses flattened displayed list + shortcuts cực chi tiết ──
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (matchesShortcut(e, getShortcut("global.commandPalette"))) {
+      if (matchesShortcut(e, getShortcut("reader.commandPalette"))) {
         // Đã xử lý ở keyHandlerRef (tránh double toggle) — chỉ xử lý khi handler kia chưa bắt (fallback khi typing)
         const t = document.activeElement;
         const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
@@ -4063,6 +4191,19 @@ export default function BookReader({
         return;
       }
       if (showCommandPalette) {
+        // Enter/↑↓ chỉ thuộc bảng lệnh khi đang gõ TRONG bảng lệnh.
+        // Nếu focus ở ô nhập khác (ô tìm kiếm Ctrl+K của GlobalSearch, ô tìm mục lục…)
+        // mà vẫn bắt, Enter chọn kết quả tìm kiếm sẽ đồng thời thực thi một lệnh
+        // reader ẩn (vd "Đi đến trang...") — hai lớp cùng phản ứng một phím.
+        const act = document.activeElement;
+        const inPalette = !!(act && act.closest && act.closest(".command-palette"));
+        const typing =
+          act &&
+          (act.tagName === "INPUT" ||
+            act.tagName === "TEXTAREA" ||
+            act.tagName === "SELECT" ||
+            act.isContentEditable);
+        if (typing && !inPalette) return;
         const displayed = getDisplayedCommands();
         if (e.key === "ArrowDown") {
           e.preventDefault();
@@ -4383,15 +4524,6 @@ export default function BookReader({
 
   // ─── RENDER ───────────────────────────────────────────────────
   // ── Research helpers: trích đoạn (clip) ──────────────────────
-  const captureSel = () => {
-    try {
-      const s = window.getSelection();
-      pendingSelRef.current = s ? (s.toString() || "").trim() : "";
-    } catch {
-      pendingSelRef.current = "";
-    }
-  };
-
   const openClipDialog = () => {
     setClipCollName("");
     const sel = pendingSelRef.current;
@@ -4504,7 +4636,7 @@ export default function BookReader({
             </div>
           </div>
           <div style={{ flex: 1, display:"flex", alignItems:"center", justifyContent:"center", padding:"1.5rem", background:"var(--bg)" }}>
-            <div style={{ textAlign: "center", maxWidth: 520, padding: "2rem", background: "#fff", border: "1px solid var(--border-color)", borderRadius: 16 }}>
+            <div style={{ textAlign: "center", maxWidth: 520, padding: "2rem", background: "var(--surface)", border: "1px solid var(--border-color)", borderRadius: 16 }}>
               <FileText size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
               <h3 style={{ margin: "0 0 0.5rem" }}>{book.title}</h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "1rem" }}>Định dạng <b>{fileExt}</b> chưa xem trực tiếp. Hãy tải xuống để mở bằng ứng dụng phù hợp.</p>
@@ -4953,11 +5085,14 @@ export default function BookReader({
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; } catch {} }}
                 onDrop={(e) => {
                   e.preventDefault(); e.stopPropagation();
-                  const f = [...(e.dataTransfer?.files || [])].find((x) => /\.(xlsx|xls)$/i.test(x.name || ""));
-                  if (f) handleUploadToc(f);
-                  else if (e.dataTransfer?.files?.length) notify("Chỉ nhận file Excel (.xlsx/.xls) cho mục lục", "warning");
+                  const dropped = [...(e.dataTransfer?.files || [])];
+                  const imgs = dropped.filter((x) => String(x.type || "").toLowerCase().startsWith("image/"));
+                  const xlsxF = dropped.find((x) => /\.(xlsx|xls)$/i.test(x.name || ""));
+                  if (imgs.length) handleTocAiFiles(imgs);
+                  else if (xlsxF) handleUploadToc(xlsxF);
+                  else if (dropped.length) notify("Chỉ nhận file Excel (.xlsx/.xls) hoặc ẢNH mục lục (JPG/PNG/WebP)", "warning");
                 }}
-                title="Mẹo: kéo thả file Excel mục lục vào đây"
+                title="Mẹo: kéo thả file Excel HOẶC ảnh trang mục lục vào đây (ảnh sẽ do AI đọc)"
               >
                 <div className="reader-toc-header">
                   <h3 className="reader-toc-title">MỤC LỤC</h3>
@@ -4975,12 +5110,39 @@ export default function BookReader({
                       e.target.value = "";
                     }}
                   />
+                  <input
+                    ref={tocAiFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      if (e.target.files?.length)
+                        handleTocAiFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => tocAiFileRef.current?.click()}
+                    title={
+                      tocAiBusy
+                        ? "Đang AI đọc ảnh mục lục…"
+                        : geminiKey
+                          ? `Tạo mục lục bằng AI từ ảnh — chọn nhiều ảnh mục lục (tối đa ${TOC_AI_MAX_IMAGES})`
+                          : "Cần cấu hình Gemini API Key trong Cài đặt AI"
+                    }
+                    aria-label="Tạo mục lục bằng AI từ ảnh"
+                    disabled={tocAiBusy || !geminiKey}
+                    style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}
+                  >
+                    {tocAiBusy ? <Loader2 size={14} className="spinner" /> : <Sparkles size={14} />}
+                  </button>
                   <button
                     className="btn btn-primary btn-xs"
                     onClick={() => tocFileRef.current?.click()}
                     title="Tải lên hoặc kéo thả file Excel vào panel — chỉ cần 2 cột Tên và Trang (Excel)"
                     aria-label="Tải lên mục lục"
-                    style={{ marginLeft: "auto" }}
                   >
                     <Upload size={14} /> Tải lên
                   </button>
@@ -5085,7 +5247,7 @@ export default function BookReader({
                                 e.stopPropagation();
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              style={{ width: 56, textAlign: "right", fontWeight: 700, border: "1px solid var(--primary, #3b82f6)", borderRadius: 4, padding: "1px 4px", fontSize: "0.85em", background: "#fff" }}
+                               style={{ width: 56, textAlign: "right", fontWeight: 700, border: "1px solid var(--primary, #3b82f6)", borderRadius: 4, padding: "1px 4px", fontSize: "0.85em", background: "var(--input-bg)" }}
                               min={1}
                               max={isWordFile ? (htmlBookPages.length || 1) : (numPages ? numPages - 1 : 9999)}
                             />
@@ -5127,7 +5289,7 @@ export default function BookReader({
               <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:12, padding:"60px 0", color:"var(--text-muted)", background:"#eef2f7"}}><div className="spinner" style={{width:28,height:28}}/><span>Đang tải nội dung...</span></div>
             ) : htmlBookError ? (
               <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", background:"#eef2f7", padding:"20px"}}>
-                <div style={{ textAlign:"center", padding:"2rem", background:"#fff", border:"1px solid var(--border-color)", borderRadius:12, maxWidth:520}}>
+                <div style={{ textAlign:"center", padding:"2rem", background:"var(--surface)", border:"1px solid var(--border-color)", borderRadius:12, maxWidth:520}}>
                   <AlertCircle size={28} style={{color:"var(--danger)", marginBottom:8}}/>
                   <p style={{color:"var(--danger)", fontWeight:700}}>{htmlBookError}</p>
                 </div>
@@ -5283,7 +5445,19 @@ export default function BookReader({
               <span style={{ fontSize: "0.62rem", fontWeight: 800, letterSpacing: "0.04em", color: "var(--text-mid)", textTransform: "uppercase" }}>AI LIÊN KẾT</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--surface-soft)", border: "1px solid rgba(226,232,240,0.9)", padding: "2px 7px", borderRadius: 999, fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dark)", boxShadow: "0 1px 4px rgba(15,23,42,0.04)" }} title={`Mức độ: ${{quick:"Nhanh",balanced:"Cân bằng",deep:"Sâu"}[chatEffort]}`}>⚡ { {quick:"Nhanh",balanced:"Cân bằng",deep:"Sâu"}[chatEffort] }</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--surface-soft)", border: "1px solid rgba(226,232,240,0.9)", padding: "2px 7px", borderRadius: 999, fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dark)", boxShadow: "0 1px 4px rgba(15,23,42,0.04)" }} title={`Độ dài: ${{concise:"Ngắn",balanced:"Vừa",detailed:"Dài"}[chatResponseLength]}`}>↕ { {concise:"Ngắn",balanced:"Vừa",detailed:"Dài"}[chatResponseLength] }</span>
-              <span style={{ marginLeft: "auto", fontSize: "0.62rem", color: "var(--text-mid)", fontWeight: 600 }}>Áp dụng mọi công cụ</span>
+              {aiBusy ? (
+                <button
+                  className="btn btn-danger btn-xs"
+                  style={{ marginLeft: "auto" }}
+                  onClick={stopAi}
+                  title="Dừng AI đang chạy"
+                  aria-label="Dừng AI"
+                >
+                  <Square size={11} fill="currentColor" /> Dừng
+                </button>
+              ) : (
+                <span style={{ marginLeft: "auto", fontSize: "0.62rem", color: "var(--text-mid)", fontWeight: 600 }}>Áp dụng mọi công cụ</span>
+              )}
               <button onClick={() => setActiveTab("chat")} title="Đổi mức độ / độ dài ở tab Hỏi AI" style={{ fontSize: "0.62rem", fontWeight: 700, color: "var(--color-action, var(--primary))", background: "var(--surface)", border: "1px solid var(--border-color)", padding: "2px 7px", borderRadius: 999, cursor: "pointer", boxShadow: "none" }}>Đổi →</button>
             </div>
 
@@ -5454,7 +5628,7 @@ export default function BookReader({
                       className="btn btn-primary"
                       style={{ padding: "0.6rem" }}
                       disabled={chatLoading || !geminiKey}
-                      title={!geminiKey ? "Cần cấu hình Gemini API Key" : "Gửi"}
+                      title={chatLoading ? "Đang trả lời — bấm Dừng ở thanh trên" : !geminiKey ? "Cần cấu hình Gemini API Key" : "Gửi"}
                       aria-label="Gửi"
                     >
                       <Send size={16} />
@@ -5782,6 +5956,23 @@ export default function BookReader({
                         </>
                       )}
                     </button>
+                    {quizError && (
+                      <div
+                        role="alert"
+                        style={{
+                          marginTop: "0.5rem",
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          color: "var(--danger, #dc2626)",
+                          background: "var(--danger-soft, rgba(220,38,38,0.08))",
+                          border: "1px solid var(--danger, #dc2626)",
+                          borderRadius: 8,
+                          padding: "0.4rem 0.5rem",
+                        }}
+                      >
+                        {quizError}
+                      </div>
+                    )}
                   </div>
 
                   {quizQuestions.length > 0 && (
@@ -6439,7 +6630,6 @@ export default function BookReader({
                   let globalIdx = recentCount;
 
                   return categories.map(([category, commands]) => {
-                    const sectionStartIdx = globalIdx;
                     return (
                       <div key={category} className="command-palette-section">
                         <div className="command-palette-section-title">
@@ -6939,9 +7129,17 @@ export default function BookReader({
                     <button
                       className="ai-bubble-item"
                       onClick={saveWordToNotebook}
+                      disabled={savingWord}
+                      title={
+                        savingWord
+                          ? "Đang tra nghĩa bằng AI trước khi lưu…"
+                          : !wordExpl && geminiKey
+                            ? "Sẽ tự AI giải nghĩa rồi lưu"
+                            : "Lưu ngay vào sổ tay từ vựng"
+                      }
                     >
-                      <NotebookPen size={14} color="var(--primary)" /> Thêm vào
-                      sổ tay từ vựng
+                      <NotebookPen size={14} color="var(--primary)" />{" "}
+                      {savingWord ? "Đang tra & lưu…" : "Thêm vào sổ tay từ vựng"}
                     </button>
                   </div>
                 </div>

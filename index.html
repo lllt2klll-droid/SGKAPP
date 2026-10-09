@@ -26,6 +26,19 @@
       href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Mulish:wght@500;600;700;800&family=Quicksand:wght@500;700&family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Serif:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
+    <!-- Pre-paint theme: đọc localStorage TRƯỚC khi paint lần đầu (chống nháy tông màu
+         khi app còn đang tải JS). Main.jsx sẽ apply lại đầy đủ khi mount. -->
+    <script>
+      try {
+        var _s = JSON.parse(localStorage.getItem("sgk_settings") || "null") || {};
+        var _t = (_s.appearance && _s.appearance.theme) || localStorage.getItem("sgk_theme") || "system";
+        var _dark = _t === "dark" || (_t === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute("data-theme", _dark ? "dark" : "light");
+        if (_s.accessibility && _s.accessibility.highContrast) {
+          document.documentElement.setAttribute("data-high-contrast", "true");
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -28,7 +28,7 @@ function lazyWithRetry(factory, retries = 1) {
         const msg = String(err?.message || "");
         const isChunkError = msg.includes("Failed to fetch") || msg.includes("dynamically imported") || msg.includes("Loading chunk") || msg.includes("Importing a module script failed");
         if (isChunkError && i < retries) {
-          // Th? cập nhật SW rồi reload một lần
+          // Thử cập nhật SW rồi reload một lần
           try {
             if ("serviceWorker" in navigator) {
               const regs = await navigator.serviceWorker.getRegistrations();
@@ -85,7 +85,6 @@ import {
   CheckCheck,
   Bookmark,
   BookmarkCheck,
-  NotebookPen,
   Award as AwardIcon,
   FileSearch,
   Columns2,
@@ -146,9 +145,10 @@ import { moveToTrash, takeFromTrash, listTrash, listTrashByType, TRASH_TYPE, TRA
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage";
 import SampleButton from "./SampleButton";
 import DataTable from "./DataTable";
+import VocabView from "./VocabView.jsx";
 import AssistantBubble from "./AssistantBubble";
 import MobileBottomNav from "./components/MobileBottomNav.jsx";
-import { fillSampleVocab, fillSampleQuiz } from "./sampleData";
+import { fillSampleQuiz } from "./sampleData";
 import MissionWidget from "./MissionWidget";
 import SettingsCenter from "./SettingsCenter";
 import { loadSettings, saveSettings, applySettings, getStartPage, recordLastView, shouldConfirmDelete, shouldShowNotifications, vibrateFeedback, refreshNotificationTimer, updateSettings } from "./settingsStore";
@@ -169,14 +169,15 @@ import {
   removeVocabEntry,
   clearVocab,
   updateVocabMeaning,
+  updateVocabEntry,
+  addVocabEntry,
   getQuizHistory,
   clearQuizHistory,
   formatDateTime,
   clearLastPages,
 } from "./userdata";
-import { getGeminiApiKey, setGeminiApiKey } from "./storage";
+import { getGeminiApiKey } from "./storage";
 import { formatSuggestedBookTitle } from "./bookUtils";
-import aiService, { getFriendlyErrorMessage } from "./aiService";
 import { pdfjsLib } from "./pdfjs-config";
 import { buildIndex, needsRebuild, getIndexMeta } from "./searchIndex";
 
@@ -412,6 +413,11 @@ export default function App() {
     return v || "system";
   });
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState("general");
+  const openSettings = (section = "general") => {
+    setSettingsSection(section);
+    setShowSettings(true);
+  };
   const [settingsState, setSettingsState] = useState(() => loadSettings());
   const autoIndexedBooksRef = useRef(new Set());
   const [uploadingBook, setUploadingBook] = useState(false);
@@ -425,8 +431,9 @@ export default function App() {
   const uploadInputRef = useRef(null);
   const [showTextModal, setShowTextModal] = useState(false);
   const [editingTextBook, setEditingTextBook] = useState(null);
-  const [showKey, setShowKey] = useState(false);
   const [lpOpenId, setLpOpenId] = useState(null);
+  // Từ khóa lọc sổ tay từ vựng khi được mở từ Tìm kiếm toàn cục
+  const [vocabQuery, setVocabQuery] = useState("");
   // tinh tế: thay confirm/prompt bằng modal
   const [deleteTarget, setDeleteTarget] = useState(null);
   // A2 • số mục trong Thùng rác → badge ở mục "Sao lưu & Khôi phục"
@@ -443,9 +450,6 @@ export default function App() {
   const [storageNotice, setStorageNotice] = useState(null); // { level: "warn" | "danger", text }
   const dismissedStorageLevelsRef = useRef({});
   const [geminiKey, setGeminiKey] = useState(() => getGeminiApiKey());
-  const [keyError, setKeyError] = useState("");
-  const [testingKey, setTestingKey] = useState(false);
-  const [keyTestResult, setKeyTestResult] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement);
   // App is designed for teachers - teacher mode is always enabled
   const teacherMode = true;
@@ -491,6 +495,13 @@ export default function App() {
     }, 5500);
     return () => clearTimeout(noticeTimerRef.current);
   }, [uploadNotice, uploadError]);
+
+  // Thông báo toàn app kèm nút "Hoàn tác" (dùng cho xóa từ vựng, ...)
+  const notifyWithUndo = useCallback((text, undo) => {
+    try { if (!shouldShowNotifications()) return; } catch {}
+    setUploadNotice(text);
+    setNoticeUndo(undo ? { text, run: undo } : null);
+  }, []);
 
   const showStorageNotice = useCallback((level, text) => {
     setStorageNotice((prev) => {
@@ -622,7 +633,7 @@ export default function App() {
   }, [dataVersion]);
   const plansCount = useMemo(() => {
     void dataVersion;
-    // Kho mới (khbd_v2_*) + kho cu còn sót (sgk_lessonplans) • tr? trùng id
+    // Kho mới (khbd_v2_*) + kho cũ còn sót (sgk_lessonplans) • trừ trùng id
     try {
       const ids = new Set();
       for (const p of getKhbdV2Plans()) ids.add(p.id);
@@ -741,7 +752,7 @@ export default function App() {
   }, [settingsState?.library?.groupBySubject]);
   // -- Lập lịch nhắc hằng ngày 1 lần khi app khởi động
   useEffect(() => { try { refreshNotificationTimer(loadSettings()); } catch {} }, []);
-  // -- Apply settings + missions init • ch? chạy khi loading chuyển false (1 lần), không rerun theo books.length
+  // -- Apply settings + missions init • chỉ chạy khi loading chuyển false (1 lần), không rerun theo books.length
   useEffect(() => {
     if (loading) return;
     try {
@@ -860,6 +871,16 @@ export default function App() {
     closeBook("library");
   }, [closeBook]);
 
+  // onNavigate cho GlobalSearch — PHẢI useCallback: inline arrow đổi reference mỗi
+  // render App → effect tìm kiếm re-run (quét lại toàn bộ localStorage) dù query không đổi.
+  const handleGlobalNavigate = useCallback((v, opts) => {
+    // Phải đi qua closeBook (đóng sách + validate view + emit hub) nếu không
+    // đang đọc sách sẽ che mất view đích — ví dụ bấm kết quả "Từ vựng" khi đọc.
+    if (v === "vocab" && opts && typeof opts.query === "string") setVocabQuery(opts.query);
+    closeBook(v, opts || {});
+    setMobileNavOpen(false);
+  }, [closeBook]);
+
   // Open source from scan badge (global event)
   useEffect(() => {
     const onOpenSource = (e) => {
@@ -883,8 +904,9 @@ export default function App() {
   useEffect(() => {
     const onNavigate = (e) => {
       try { if (e && e.__fromAppEvents) return; } catch {}
-      const { view, tab, planId } = e.detail || {};
+      const { view, tab, planId, query } = e.detail || {};
       if (view) {
+        if (view === "vocab" && typeof query === "string") setVocabQuery(query);
         closeBook(view, { ...(planId ? { planId } : {}), ...(tab ? { tab } : {}) });
         setMobileNavOpen(false);
       }
@@ -893,8 +915,9 @@ export default function App() {
       try {
         return appEventsCore.on(AppEventsCore.NAVIGATE, (detail) => {
           if (!detail || detail.source === "hub") return;
-          const { view, tab, planId } = detail || {};
+          const { view, tab, planId, query } = detail || {};
           if (view) {
+            if (view === "vocab" && typeof query === "string") setVocabQuery(query);
             closeBook(view, { ...(planId ? { planId } : {}), ...(tab ? { tab } : {}) });
             setMobileNavOpen(false);
           }
@@ -1143,7 +1166,7 @@ export default function App() {
               const { saveJSON } = await import("./storage.js");
               const { safeRemove } = await import("./safeStorage.js");
               try { saveJSON(`sgk_idxmeta_${book.filename}`, meta); } catch (e) { console.warn("Word idxmeta save failed", book.filename, e?.message); }
-              // IDB-first (chứa được index lớn), localStorage ch? best-effort:
+              // IDB-first (chứa được index lớn), localStorage chỉ best-effort:
               // saveJSON ném lỗi khi quota và còn xóa oan cache khác nên không được gọi trực tiếp
               const indexData = { pages, builtAt: now };
               let idbOk = false;
@@ -1232,7 +1255,7 @@ export default function App() {
     };
   }, [mobileNavOpen]);
 
-  // Đóng modal tinh từ bằng Esc + tr? focus
+  // Đóng modal bằng Esc + trả focus
   useEffect(() => {
     if (!deleteTarget && !renameTarget && !showUrlModal) return;
     const h = (e) => {
@@ -1485,79 +1508,6 @@ export default function App() {
     lastPageMap,
     lastTotalMap,
   ]);
-
-  const handleSaveSettings = (e) => {
-    e.preventDefault();
-    if (!geminiKey.trim()) {
-      setKeyError("Vui lòng nhập Gemini API Key trước khi lưu.");
-      return;
-    }
-    setKeyError("");
-    try {
-      setGeminiApiKey(geminiKey);
-      const res = safeSetString("SGK_TEACHER_MODE", teacherMode ? "1" : "0");
-      if (!res.ok && res.quota) {
-        console.warn("Không thể lưu dữ liệu vì bộ nhớ trình duyệt đã đầy");
-      } else if (!res.ok) {
-        console.warn("[App] safeSetString failed SGK_TEACHER_MODE:", res.error);
-      }
-    } catch (e) { console.warn("[App] safeSetString exception SGK_TEACHER_MODE:", e); }
-    setShowSettings(false);
-  };
-
-  const handleTestKey = async () => {
-    if (!geminiKey.trim()) {
-      setKeyTestResult({
-        ok: false,
-        msg: "Vui lòng nhập API Key trước khi kiểm tra.",
-      });
-      return;
-    }
-    setTestingKey(true);
-    setKeyTestResult(null);
-    try {
-      const model = (() => {
-        try {
-          return loadSettings().ai?.model || "gemini-2.5-flash";
-        } catch {
-          return "gemini-2.5-flash";
-        }
-      })();
-      const text = await aiService.callAI({
-        apiKey: geminiKey.trim(),
-        model,
-        contents: [{ role: "user", parts: [{ text: "Xin chào" }] }],
-        systemInstruction: { parts: [{ text: "Chỗ trợ lại: OK" }] },
-        generationConfig: { temperature: 0, maxOutputTokens: 50 },
-        timeout: 30000,
-        maxRetries: 1,
-        requestId: `test-key-${Date.now()}`,
-      });
-      setKeyTestResult({
-        ok: true,
-        msg: "Kết nối thành công! API Key hoạt động tốt.",
-      });
-    } catch (err) {
-      console.error(err);
-      const friendly = getFriendlyErrorMessage(err.status, err.message);
-      const isNoResponse =
-        err.code === "NO_RESPONSE" ||
-        (err.message || "").includes("không đưa ra câu trả lời");
-      const hint = isNoResponse
-        ? "⚠️ AI trả về rỗng, hãy thử lại hoặc chọn model gemini-1.5-flash."
-        : err.status === 500
-          ? "⚠️ Kiểm tra backend (http://localhost:5000/api/health) đang chạy."
-          : err.status === 401 || err.status === 403 || err.status === 400
-            ? "⚠️ Kiểm tra API Key tại aistudio.google.com"
-            : "";
-      setKeyTestResult({
-        ok: false,
-        msg: `${friendly}${err.status ? ` [${err.status}]` : ""}${hint}`,
-      });
-    } finally {
-      setTestingKey(false);
-    }
-  };
 
   const hasActiveFilters =
     gradeFilter !== null ||
@@ -1832,7 +1782,7 @@ export default function App() {
     const base = getFooterNav(); // [{id:"settings",...},{id:"datatools",...},{id:"help",...}]
     return base.map(item => {
       const iconEl = item.icon ? React.createElement(item.icon, { size: 16 }) : null;
-      if (item.id === "settings") return { id: item.id, icon: iconEl, label: item.label, action: () => setShowSettings(true) };
+      if (item.id === "settings") return { id: item.id, icon: iconEl, label: item.label, action: () => openSettings("general") };
       return { id: item.id, icon: iconEl, label: item.label };
     });
   }, []);
@@ -2131,6 +2081,16 @@ export default function App() {
                   {geminiKey ? "AI đã sẵn sàng" : "Chưa có API Key"}
                 </span>
               )}
+              {!geminiKey && !sidebarCollapsed && (
+                <button
+                  type="button"
+                  className="ai-config-link"
+                  onClick={() => openSettings("ai")}
+                  title="Mở Cài đặt → Gemini API"
+                >
+                  Cấu hình
+                </button>
+              )}
             </div>
 
             <nav className="sidebar-footer-nav" aria-label="Tiện ích">
@@ -2305,7 +2265,7 @@ export default function App() {
 
                     {/* Theme Toggle */}
                     <button
-                      className="header-action-btn"
+                      className="header-action-btn header-action-optional"
                       onClick={() => {
                         if (theme === "light") setTheme("dark");
                         else if (theme === "dark") setTheme("system");
@@ -2321,7 +2281,7 @@ export default function App() {
 
                       {/* Xóa cache & tải lại • góc trên bên phải, chỉ icon mũi tên 360° */}
                     <button
-                      className="header-action-btn"
+                      className="header-action-btn header-action-optional"
                       onClick={handleClearCacheAndReload}
                       aria-label="Xóa cache và tải lại"
                       title="Xóa cache và tải lại"
@@ -2331,7 +2291,7 @@ export default function App() {
 
                     {/* Toàn màn hình • cạnh nút xóa cache */}
                     <button
-                      className="header-action-btn"
+                      className="header-action-btn header-action-optional"
                       onClick={toggleFullscreen}
                       aria-label={isFullscreen ? "Thoát toàn màn hình" : "toán màn hình"}
                       title={isFullscreen ? "Thoát toàn màn hình (Esc)" : "Toàn màn hình"}
@@ -2340,24 +2300,29 @@ export default function App() {
                     </button>
 
                     {/* AI Status Indicator */}
-                    <div
-                      className={`ai-status-indicator ${geminiKey ? "active" : ""}`}
+                    <button
+                      type="button"
+                      className={`ai-status-indicator ${geminiKey ? "active" : "missing"}`}
+                      onClick={() => openSettings("ai")}
                       title={
-                        geminiKey ? "AI đã sẵn sàng" : "Chưa cấu hình API Key"
+                        geminiKey
+                          ? "AI đã sẵn sàng • bấm để mở Cài đặt → Gemini API"
+                          : "Chưa cấu hình API Key • bấm để mở Cài đặt → Gemini API"
                       }
                       aria-label={
-                        geminiKey ? "AI đã sẵn sàng" : "Chưa cấu hình API Key"
+                        geminiKey
+                          ? "AI đã sẵn sàng, mở Cài đặt AI"
+                          : "Chưa cấu hình API Key, mở Cài đặt AI"
                       }
-                      role="status"
                     >
                       <Sparkles size={18} />
-                    </div>
+                    </button>
 
                     {/* More Menu */}
                     <div className="header-more-menu">
                       <button
                         className="header-action-btn"
-                        onClick={() => setShowSettings(true)}
+                        onClick={() => openSettings("general")}
                         aria-label="Cài đặt"
                         title="Cài đặt"
                       >
@@ -2446,7 +2411,7 @@ export default function App() {
                     hasActiveFilters={hasActiveFilters}
                     clearFilters={clearFilters}
                     geminiKey={geminiKey}
-                    onOpenSettings={() => setShowSettings(true)}
+                    onOpenSettings={() => openSettings("ai")}
                     uploadNotice={uploadNotice}
                     uploadError={uploadError}
                     noticeUndo={noticeUndo}
@@ -2505,6 +2470,11 @@ export default function App() {
                     onRemove={removeVocabEntry}
                     onClear={clearVocab}
                     onUpdateMeaning={updateVocabMeaning}
+                    onUpdate={updateVocabEntry}
+                    onSave={addVocabEntry}
+                    notify={notifyWithUndo}
+                    initialQuery={vocabQuery}
+                    onQueryConsumed={() => setVocabQuery("")}
                     onChanged={() => setDataVersion((v) => v + 1)}
                   />
                 )}
@@ -2522,6 +2492,8 @@ export default function App() {
                       setDataVersion((v) => v + 1);
                     }}
                     onOpenBook={handleOpenBook}
+                    vocabCount={vocabCount}
+                    onNavigate={closeBook}
                   />
                 )}
                 {/* Registry-driven views: resolved via viewRegistry • single source, lazy-loaded */}
@@ -2551,7 +2523,7 @@ export default function App() {
                     webtools: {},
                     whiteboard: {},
                     glossary: { geminiKey, inline: true },
-                    help: { geminiKey, onOpenSettings: () => setShowSettings(true), onNavigate: (v) => closeBook(v) },
+                    help: { geminiKey, onOpenSettings: (section) => openSettings(section || "ai"), onNavigate: (v) => closeBook(v) },
                   };
                   const props = viewPropsMap[view] || {};
                   return (
@@ -2580,7 +2552,7 @@ export default function App() {
 
         <AssistantBubble
           geminiKey={geminiKey}
-          onOpenSettings={() => setShowSettings(true)}
+          onOpenSettings={() => openSettings("ai")}
           teacherMode={teacherMode}
           appContext={{
             view,
@@ -2596,12 +2568,12 @@ export default function App() {
             Trùng render sẽ đăng ký keydown/sgk:open-global-search 2 lần -> Ctrl+K mở 2 overlay chồng nhau. */}
         <GlobalSearch
           books={books}
-          onNavigate={(v, opts) => { if (opts && opts.planId) setLpOpenId(opts.planId); if (v === "tasks" && opts && typeof opts.tab === "string") setTasksInitialTab(opts.tab); setView(v); try { if (v === "tasks" && opts && typeof opts.tab === "string") appEventsCore.emit(AppEventsCore.NAVIGATE, { view: v, tab: opts.tab, source: "hub" }); } catch {} }}
+          onNavigate={handleGlobalNavigate}
           onOpenBook={handleOpenBook}
         />
 
         {showSettings && (
-          <SettingsCenter onClose={() => setShowSettings(false)} />
+          <SettingsCenter onClose={() => setShowSettings(false)} initialSection={settingsSection} />
         )}
 
         {showTextModal && (
@@ -2901,7 +2873,7 @@ function LibraryView({
         <section aria-label="Tiếp tục học">
           <div className="libx-sec-head">
             <h2 className="libx-sec-title"><Clock size={15} /> Tiếp tục học</h2>
-            <span className="libx-sec-hint">{historyBooks.length} cuốn g?n dạy</span>
+            <span className="libx-sec-hint">{historyBooks.length} cuốn gần đây</span>
             <button
               className="btn btn-ghost btn-xs"
               onClick={() => {
@@ -3602,7 +3574,7 @@ function ContinueView({
       <div className="data-table-toolbar">
         <div className="data-table-toolbar-left">
           <span className="ui-s-a80a05">
-            {entries.length} cuốn đã mở g?n dạy
+            {entries.length} cuốn đã mở gần đây
           </span>
         </div>
         <div className="data-table-toolbar-right">
@@ -3890,248 +3862,6 @@ function BookmarksView({
   );
 }
 
-function VocabView({
-  vocab,
-  books,
-  geminiKey,
-  onOpenBook,
-  onRemove,
-  onClear,
-  onUpdateMeaning,
-  onChanged,
-}) {
-  const [query, setQuery] = useState("");
-  const [explainingId, setExplainingId] = useState(null);
-
-  const byFilename = useMemo(
-    () => new Map(books.map((b) => [b.filename, b])),
-    [books],
-  );
-
-  const autoFillVocab = () => {
-    const n = fillSampleVocab(books);
-    onChanged();
-    alert(
-      n
-        ? `Đã thêm ${n} từ vựng mẫu vào sổ tay.`
-                : "Không thêm mới: các từ mẫu đã có sẵn trong sổ tay rồi.",
-    );
-  };
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q
-      ? vocab.filter(
-          (v) =>
-            v.word.toLowerCase().includes(q) ||
-            (v.meaning || "").toLowerCase().includes(q),
-        )
-      : vocab;
-  }, [vocab, query]);
-
-  const explainAgain = async (entry) => {
-    if (!geminiKey || explainingId) return;
-    setExplainingId(entry.id);
-    try {
-      const text = await aiService.callAI({
-        apiKey: geminiKey,
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `Giải nghĩa từ/cụm từ sau để giáo viên có thể giải thích cho học sinh tiểu học lớp ${entry.grade || 1}: "${entry.word}". Ngắn gọn 2-3 câu, dùng văn phong gần gũi, thêm emoji. Giải thích theo góc nhìn giáo viên.`,
-              },
-            ],
-          },
-        ],
-        systemInstruction: {
-          parts: [
-            {
-              text: "Bạn là trợ lý từ điển hỗ trợ giáo viên giải thích từ vựng cho học sinh tiểu học.",
-            },
-          ],
-        },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 600 },
-        timeout: 60000,
-        maxRetries: 2,
-        requestId: `vocab_${entry.id}`,
-      });
-      if (text) {
-        onUpdateMeaning(entry.id, text.trim());
-        onChanged();
-      }
-    } catch (e) {
-      alert(
-        getFriendlyErrorMessage(e.status, e.message) || "Không thể giải nghĩa.",
-      );
-    } finally {
-      setExplainingId(null);
-    }
-  };
-
-  if (!vocab.length) {
-    return (
-      <div className="dash-empty">
-        <NotebookPen size={46} />
-        <p>
-          Chưa có từ vựng nào. Hãy bôi đen từ trong sách và chọn “Lưu từ vựng”, hoặc
-          bấm nút “Thêm mẫu” bên dưới.
-        </p>
-        <button className="btn btn-primary" onClick={autoFillVocab}>
-          Thêm mẫu
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="data-table-toolbar">
-        <div className="data-table-toolbar-left">
-          <div className="search-input-wrapper ui-s-903b9c">
-            <Search className="search-icon" size={14} />
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Tìm từ / nghĩa…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Tìm từ vựng"
-            />
-            {query && (
-              <button
-                className="search-clear"
-                onClick={() => setQuery("")}
-                aria-label="Xóa"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-          <span className="ui-s-1f9717">
-            {filtered.length}/{vocab.length} t?
-          </span>
-        </div>
-        <div className="data-table-toolbar-right">
-          <button className="btn btn-secondary btn-xs" onClick={autoFillVocab}>
-            Tự động làm
-          </button>
-          <button
-            className="btn btn-danger btn-xs"
-            onClick={() => {
-              if (confirm("Xóa toàn bộ sổ tay?")) {
-                onClear();
-                onChanged();
-              }
-            }}
-          >
-            <Trash2 size={12} /> Xóa hết
-          </button>
-        </div>
-      </div>
-      <DataTable
-        columns={[
-          {
-            key: "word",
-            label: "Từ",
-            sortable: true,
-            render: (v) => <span className="ui-s-0dbc82">{v}</span>,
-          },
-          {
-            key: "meaning",
-            label: "Nghĩa / ghi chú",
-            render: (v, row) =>
-              v ? (
-                <span className="cell-clamp" title={v}>
-                  {v}
-                </span>
-              ) : (
-                <span className="text-muted">—</span>
-              ),
-          },
-          {
-            key: "file",
-            label: "Sách",
-            hideOnMobile: true,
-            render: (v) =>
-              v ? (
-                <span className="ui-s-ec599c">
-                  {(byFilename.get(v)?.title || v).slice(0, 24)}
-                </span>
-              ) : (
-                "—"
-              ),
-          },
-          {
-            key: "page",
-            label: "Trang",
-            width: "80px",
-            align: "right",
-            sortable: true,
-            hideOnMobile: true,
-            render: (v) => (v ? String(Math.max(1, v - 1)) : "—"),
-          },
-          {
-            key: "_actions",
-            label: "Thao tác",
-            width: "200px",
-            align: "right",
-            render: (_, row) => (
-              <span className="data-table-actions">
-                <button
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => {
-                    const b = byFilename.get(row.file);
-                    if (b) onOpenBook(b, row.page || 1);
-                  }}
-                  title={row.file ? "Mở sách" : "Từ vựng thủ công • chưa gắn sách"}
-                  disabled={!row.file}
-                >
-                  <BookOpen size={12} />
-                </button>
-                <button
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => explainAgain(row)}
-                  disabled={!!explainingId || !geminiKey}
-                  title={
-                    geminiKey ? "Giải nghĩa lại bằng AI" : "Cần cấu hình Gemini"
-                  }
-                >
-                  {explainingId === row.id ? (
-                    "..."
-                  ) : (
-                    <>
-                      <Sparkles size={12} /> Giải nghĩa
-                    </>
-                  )}
-                </button>
-                <button
-                  className="btn btn-danger btn-xs"
-                  onClick={() => {
-                    onRemove(row.id);
-                    onChanged();
-                  }}
-                  title="Xóa"
-                  aria-label="Xóa"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </span>
-            ),
-          },
-        ]}
-        data={filtered}
-        keyField="id"
-        emptyText={
-          query ? `Không tìm thấy kết quả cho "${query}"` : "Chưa có dữ liệu"
-        }
-        emptyHint={query ? "Hãy thay đổi từ khóa." : ""}
-      />
-    </div>
-  );
-}
-
 function StatsView({
   books,
   counts,
@@ -4142,6 +3872,8 @@ function StatsView({
   onReset,
   onOpenBook,
   onSampleQuiz,
+  vocabCount = 0,
+  onNavigate,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSubject, setFilterSubject] = useState("all");
@@ -4151,7 +3883,6 @@ function StatsView({
   const [rowSort, setRowSort] = useState("count"); // count | pct | title | quizAvg
 
   const totalBooks = books.length;
-  const openedBooks = Object.keys(counts).filter((k) => (counts[k] || 0) > 0);
   const totalOpened = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
   const totalPagesRead = books.reduce(
     (a, b) => a + bookProgress(b.filename, lastPageMap, lastTotalMap).page,
@@ -4345,6 +4076,15 @@ function StatsView({
           <div className="stx-kpi"><span className="stx-kpi-ic">❤️</span><span><span className="stx-kpi-val">{totalFavs}</span><br /><span className="stx-kpi-label">Yêu thích</span></span></div>
           <div className="stx-kpi"><span className="stx-kpi-ic">📝</span><span><span className="stx-kpi-val">{quizTotals.n}</span><br /><span className="stx-kpi-label">Bài luyện tập</span></span></div>
           <div className="stx-kpi"><span className="stx-kpi-ic">⭐</span><span><span className="stx-kpi-val">{quizAvgAll}%</span><br /><span className="stx-kpi-label">Điểm TB</span></span></div>
+          <button
+            type="button"
+            className="stx-kpi"
+            onClick={() => onNavigate && onNavigate("vocab")}
+            title="Mở Sổ tay từ vựng"
+            style={{ cursor: onNavigate ? "pointer" : "default", textAlign: "left" }}
+          >
+            <span className="stx-kpi-ic">📓</span><span><span className="stx-kpi-val">{vocabCount}</span><br /><span className="stx-kpi-label">Từ vựng →</span></span>
+          </button>
         </div>
       </div>
 
@@ -4429,7 +4169,7 @@ function StatsView({
         </div>
       </div>
 
-      {/* Th? từng sách */}
+      {/* Thứ tự từng sách */}
       {sortedRows.length === 0 ? (
         <div className="stx-empty">
           <p style={{ margin: "0 0 4px", fontWeight: 700 }}>Không tìm thấy sách phù hợp</p>

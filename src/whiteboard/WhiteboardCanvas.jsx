@@ -139,7 +139,6 @@ export default function WhiteboardCanvas(props) {
   const [dropTarget, setDropTarget] = useState(null);
   const [editing, setEditing] = useState(null); // {id, text}
   const [spaceDown, setSpaceDown] = useState(false);
-  const [penDraft, setPenDraft] = useState(null);
   const pinchRef = useRef(null);
   const lastClickRef = useRef({ id: null, time: 0 });
   const nodesRef = useRef(new Map());
@@ -321,7 +320,6 @@ export default function WhiteboardCanvas(props) {
     setDropTarget(null);
     setMarquee(null);
     setTempConn(null);
-    setPenDraft(null);
     dragRef.current = null;
   }, []);
 
@@ -437,7 +435,6 @@ export default function WhiteboardCanvas(props) {
       };
       dragRef.current = { mode: "pen", id: stroke.id, checkpointed: true };
       onObjects([...objects, stroke], false);
-      setPenDraft(stroke.id);
     } else if (tool === "eraser") {
       // Xóa nét vẽ dưới con trỏ (không xóa node)
       const hit = [...objects].reverse().find((o) => o.kind === "stroke" && strokeHit(o, w, 10 / zoom));

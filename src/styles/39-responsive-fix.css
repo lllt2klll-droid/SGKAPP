@@ -1,0 +1,420 @@
+﻿/* ============================================================
+   39-responsive-fix.css — FIX LOI MOBILE / TABLET
+   - File nay CHI chua rule nam trong @media, khong co rule tran,
+     nen desktop (>=1280px) giu nguyen 100%.
+   - Load SAU CUNG (main.jsx) nen ghi de duoc cac lop truoc do
+     va ca <style> inline nam trong component JSX.
+   - Nguong: phone <=767.98px, tablet <=1180.98px
+     (desktop >=1280px khong doi).
+   ============================================================ */
+
+/* ============================================================
+   A. HEADER PHONE — nut khong bi nut Search de, khong tran ngang
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* App.jsx dang set inline style="display:flex" → phai co !important
+     thi 32-mobile-app.css moi an duoc nhom nut mini nay */
+  .header-add-group {
+    display: none !important;
+  }
+
+  /* 3 nut phu khong vua man hinh phone (Doi giao dien / Xoa cache /
+     Toan man hinh) → vao Cai dat. Giu Tim kiem + AI + Cai dat + Them. */
+  .header-action-optional {
+    display: none !important;
+  }
+
+  /* O trai (nut + breadcrumb) khong duoc co ve 0 */
+  .global-header-left {
+    flex: 1 1 auto;
+    min-width: 40px;
+  }
+  .breadcrumb {
+    min-width: 0;
+  }
+  .breadcrumb-current {
+    min-width: 0;
+  }
+
+  /* O phai giu nguyen be rong (khong bi keo hep → nut Them sach tran ra ngoai) */
+  .global-header-right,
+  .header-more-menu {
+    flex: 0 0 auto;
+  }
+
+  /* Chot lai: nut luong nam tren moi phan tu cung hang */
+  .mobile-menu-btn {
+    position: relative;
+    z-index: 3;
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* ============================================================
+   B. AI FAB — khong de thanh nav duoi (phone)
+   ============================================================ */
+@media (max-width: 767.98px) {
+  .aia-wrap {
+    bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ============================================================
+   C. AI FAB — khong de dock cong cu cua Whiteboard
+   (dock do ben phai goc phai doi 78px luc <768, 104px luc >=768)
+   ============================================================ */
+@media (max-width: 767.98px) {
+  body:has(.whiteboard-root) .aia-wrap {
+    right: 78px;
+  }
+}
+@media (min-width: 768px) and (max-width: 1180.98px) {
+  body:has(.whiteboard-root) .aia-wrap {
+    right: 104px;
+  }
+}
+
+/* ============================================================
+   D. WEBTOOLS — nut sua/xoa phai hien va bam duoc tren thiet bi cam ung
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  .wt-tile-actions {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 3;
+  }
+  .wt-tile-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+}
+
+/* ============================================================
+   E. COMPARE — nut doi chieu khong bi thanh keo chia doi de
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  .cmp-swap {
+    padding: 0.25rem;
+  }
+  .cmp-swap-btn {
+    position: relative;
+    z-index: 6;
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ============================================================
+   E2. LIBRARY — 2 nut chuyen luoi/danh sach du lon
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  .libx-seg button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* ============================================================
+   F. WHITEBOARD — unibar khong co nut con 2px; nut thu gon du lon
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  .wb-uni-left > * {
+    flex-shrink: 0;
+  }
+  .wb-collapse-btn {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
+/* ============================================================
+   G. SIDEBAR TABLET — tay cam thu gon khong thoi ra ngoai (chong tran)
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  .sidebar .panel-resizer-right {
+    right: 0;
+  }
+}
+
+/* ============================================================
+   H. TOUCH TARGET >= 40px (chi mobile/tablet)
+   - Noi co `!important` la do file khac (03/34-flat-pro/22-library…)
+     dang dung !important nen phai danh lai !important moi thang.
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  /* --- Header --- */
+  .header-action-btn,
+  .ai-status-indicator {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    flex-shrink: 0;
+  }
+
+  /* --- Sidebar --- */
+  .nav-item {
+    min-height: 40px;
+  }
+  .sidebar-section-header,
+  .sidebar-section-header-large,
+  .sidebar-subsection-header {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+  }
+  .sidebar-logo {
+    min-height: 40px;
+  }
+  .btn-sidebar-toggle {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .ai-config-link {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* --- Nut chung (.btn de rieng vi tablet dang ep 42px, khong ha xuong) --- */
+  .btn-sm,
+  .btn-xs {
+    min-height: 40px !important;
+  }
+  .btn-icon,
+  .itn-navbtn,
+  .libx-icobtn,
+  .stx-icobtn,
+  .libx-fav,
+  .cmp-btn-icon,
+  .help-step-check {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* --- Lich thuc tap: 7 cot khong du cho 40px trong the ~300px
+         (7x40 + 6x3 = 298px > 266..270px) -> de o co dan (32-43px, dat WCAG AA 24px)
+         neu ep 40px thi o se tran ra ngoai card/viewport --- */
+
+
+  /* --- Chip / tab / filter --- */
+  .libx-fbtn,
+  .actx-chip,
+  .stx-check,
+  .stx-open,
+  .vocab-filter-chip,
+  .db-backup-pill,
+  .btn-link-reset,
+  .libx-open,
+  .vocab-tab,
+  .seg-tab,
+  .filter-btn,
+  .itn-today {
+    min-height: 40px !important;
+  }
+  .lib-grade-btn {
+    width: 40px !important;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* --- O nhap / chon (22-webtoolbox + sort-select dang ep 30px) --- */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    min-height: 40px !important;
+  }
+  .sort-select {
+    min-height: 40px !important;
+  }
+
+  /* --- Whiteboard --- */
+  .whiteboard-dock .wb-tool,
+  .wb-collapse-btn,
+  .wb-zoom-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* ============================================================
+   J. CHECKBOX trong nhan label (Giáo án / dán URL)
+   - Rule toan cuc `input { width: 100% }` (19-responsive-master)
+     keo checkbox ra thanh 371x13 (rong 371 cao 13) → de cham qua nho.
+   - Thu ve kich thuoc on dinh 40x40 va cho nhan label cao >=40px.
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  .khbd-root label > input[type="checkbox"] {
+    width: auto !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    flex-shrink: 0;
+  }
+  .khbd-root label:has(> input[type="checkbox"]) {
+    min-height: 40px;
+  }
+}
+
+/* ============================================================
+   I. FONT SIZE TOI THIEU 11px (chi mobile/tablet)
+   - Selector co !important nam trong <style> inline cua component
+     JSX (App.jsx / DashboardView.jsx / InternshipView / ActivitiesView)
+     nen phai co !important moi ghi de duoc.
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  .mbn-label,
+  .sidebar-section-title,
+  .logo-text-wrapper p,
+  .wt-tile-label,
+  .wt-tile-host,
+  .wb-group-label,
+  .help-mod-group,
+  .help-step-num,
+  .help-mod-badge,
+  .help-quick-title,
+  .quick-stat-sub,
+  .nav-item-badge,
+  .tag-pill,
+  .mission-item-bonus,
+  .mission-card-bonus,
+  .whiteboard-save-dot {
+    font-size: max(11px, 0.7rem) !important;
+  }
+
+  .libx-grade,
+  .libx-stat-label,
+  .libx-cont-m,
+  .stx-chip,
+  .stx-kpi-label,
+  .db-kpi-label,
+  .db-stage-count,
+  .db-count,
+  .db-chip,
+  .db-qa small,
+  .itn-week,
+  .itn-date span,
+  .itn-badge,
+  .actx-chip .n,
+  .actx-badge,
+  .qbx-badge,
+  .wsx-badge,
+  .cropd-badge {
+    font-size: max(11px, 0.7rem) !important;
+  }
+
+  /* --- Settings modal (khong nam trong VIEWS nen audit chinh bo qua) --- */
+  .st-group-title,
+  .st-nav-tx small,
+  .st-chip,
+  .st-kbd-info small,
+  .st-scale-cell {
+    font-size: max(11px, 0.7rem) !important;
+  }
+  .st-scale-cell span {
+    font-size: max(11px, 0.68rem) !important;
+  }
+
+}
+
+/* ============================================================
+   K. SETTINGS MODAL (st-overlay) — chua co trong danh sach audit vi la modal
+    - K1: media 860px (36-settings-redesign.css:125) doi .st-side sang
+      hang ngang nhung khong co flex-shrink:0 → 18 nut .st-nav bi co
+      xuong ~20-34px, nhan <b> bi thua ra va DE LEN NHAU (vo hieu hoa).
+      Them nguyen nhan goc: 19-responsive-master.css:265 dat
+      `* { max-width: 100% }` → .st-group bi gioi han bang chieu rong
+      noi dung cua .st-side (266px @320) trong khi noi dung can 486-706px
+      → cac nut con thua ra ngoai hop nhom va DE LEN NHAU.
+      → can `max-width: none` cho .st-group khi .st-side la hang ngang.
+    - K2: cac nut trong Settings qua nho tren cam ung.
+    - K3: .st-field khong co flex-wrap → o man hinh rat hep (320px) nhom
+      dieu khien vuot .st-card (overflow:hidden) bi CẮT (ai/behavior).
+    ============================================================ */
+@media (max-width: 860px) {
+  .st-side .st-group {
+    flex-shrink: 0;
+    max-width: none;
+  }
+  .st-nav {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 1180.98px) {
+  .st-icon-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .st-seg-btn {
+    min-height: 40px;
+  }
+  .st-dot,
+  .st-dot-custom {
+    width: 40px;
+    height: 40px;
+  }
+  .st-btn {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  .st-field {
+    flex-wrap: wrap;
+  }
+  .st-field-ctl {
+    min-width: 0;
+  }
+  /* .st-field-ctl > span (SettingsCenter.jsx inline style) la flex khong
+     wrap + .st-input min-width:180 / .st-range min-width:150 (36-lines
+     48 & 59) khong cho thu co → nut "Kiểm tra" / "35%" thua ra ngoai
+     .st-card (overflow:hidden) bi CẮT. */
+  .st-field-ctl > span {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .st-field-ctl .st-input,
+  .st-field-ctl .st-range {
+    min-width: 0;
+  }
+}
+
+/* K4: dong phim tat (Pím tắt) — .st-kbd-row la grid `1fr auto auto`:
+   .st-kbd-btns can 130px ma cot chi duoc ~92px → thua 38px, cot info
+   bi don ve 0 → .st-kbd-group (overflow:hidden) cat noi dung.
+   Chuyen sang flex-wrap tren dien thoai: info 1 hang, keys 1 hang,
+   nut 1 hang. */
+@media (max-width: 767.98px) {
+  .st-kbd-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
+  .st-kbd-info {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .st-kbd-keys {
+    flex: 0 0 auto;
+  }
+  .st-kbd-btns {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+}
+
+/* ============================================================
+   L. AI FAB khong che nut chinh cua modal
+   - --z-bubble: 9999 > --z-modal: 3000 > .st-overlay: 500
+     nen nut FAB luon nam TREN cac modal → che nut "Xong" cua Settings.
+   - Chi an .aia-fab (khong an .aia-wrap) de khong mat hoi tho AI dang mo.
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  body:has(.st-overlay) .aia-fab,
+  body:has(.modal-overlay) .aia-fab,
+  body:has(.global-search-overlay) .aia-fab {
+    display: none;
+  }
+}

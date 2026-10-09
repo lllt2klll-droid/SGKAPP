@@ -23,7 +23,7 @@
 }
 .toast {
   background: var(--text-dark);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   padding: 0.6rem 1.1rem;
   border-radius: 10px;
   font-size: 0.85rem;
@@ -68,7 +68,7 @@
   border-radius: 50%;
   background: var(--color-action, var(--red-action));
   border: 1px solid var(--color-action, var(--red-action));
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   font-size: 1.5rem;
   cursor: pointer;
   display: flex;
@@ -94,7 +94,7 @@
   top: -3px;
   right: -3px;
   background: var(--warning);
-  color: #fff;
+  color: #1f2937;
   border: 1px solid var(--warning-deep);
   border-radius: var(--radius-full);
   font-size: 0.68rem;
@@ -109,7 +109,7 @@
 .aia-online {
   background: var(--success);
   border: 1px solid var(--success-deep);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border-radius: var(--radius-full);
   padding: 0.12rem 0.55rem;
   font-size: 0.66rem;
@@ -309,7 +309,7 @@
   border-radius: 12px;
   background: var(--color-action, var(--red-action));
   border: 1px solid var(--color-action, var(--red-action));
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   font-size: 1rem;
   cursor: pointer;
   box-shadow: none;

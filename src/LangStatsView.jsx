@@ -24,7 +24,7 @@ export default function LangStatsView({ books }) {
   const [tab, setTab] = useState("overview");
 
   const [idx, setIdx] = useState(null);
-  const [_indexLoading, setIndexLoading] = useState(false);
+  const [indexLoading, setIndexLoading] = useState(false);
 
   const book = books.find((b) => b.filename === file) || null;
   const meta = book ? getIndexMeta(book.filename) : null;
@@ -255,7 +255,13 @@ export default function LangStatsView({ books }) {
         </div>
       </div>
 
-      {!meta || !idx ? (
+      {indexLoading ? (
+        <div className="panel-box border-accent">
+          <p className="font-bold-flex">
+            <span className="spinner spinner-sm" /> Đang nạp chỉ mục toàn văn…
+          </p>
+        </div>
+      ) : !meta || !idx ? (
         <div className="panel-box border-accent">
           <p className="font-bold-flex">
             <Info size={16} color="var(--accent)" /> Sách này chưa có chỉ mục

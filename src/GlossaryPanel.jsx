@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   X,
   Search,
@@ -7,11 +7,13 @@ import {
   Copy,
   Check,
   Loader2,
+  NotebookPen,
 } from "lucide-react";
 import aiService, { getFriendlyErrorMessage } from "./aiService";
 import { loadSettings } from "./settingsStore";
 import MarkdownText from "./MarkdownText";
 import { safeGetJSON, safeSetJSON } from "./safeStorage";
+import { addVocabEntry } from "./userdata";
 const HISTORY_KEY = "glossary_history";
 
 const SUGGESTIONS = [
@@ -31,6 +33,7 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [savedWord, setSavedWord] = useState(false);
   const [history, setHistory] = useState(() => {
     try {
       return safeGetJSON(HISTORY_KEY, [], Array.isArray);
@@ -39,6 +42,12 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
       return [];
     }
   });
+
+  // Đóng panel khi đang tra cứu → hủy request "glossary-" (không chạy nền tốn token,
+  // không setState sau unmount)
+  useEffect(() => {
+    return () => { try { aiService.cancelRequestsByPrefix("glossary-"); } catch {} };
+  }, []);
 
   const lookup = async (t = term) => {
     const q = (t || "").trim();
@@ -52,7 +61,13 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
     setError("");
     setResult("");
     try {
-      const model = (()=>{ try{ return loadSettings().ai?.model || "gemini-2.5-flash"; } catch { return "gemini-2.5-flash"; } })();
+      const s = (()=>{ try{ return loadSettings(); } catch { return {}; } })();
+      const model = s.ai?.model || "gemini-2.5-flash";
+      // Theo cài đặt AI: độ dài ("responseLength") quyết định số từ + số token,
+      // nhiệt độ ("temperature") quyết định độ ổn định của câu trả lời
+      const LEN = { concise: { words: 120, tokens: 600 }, balanced: { words: 180, tokens: 900 }, detailed: { words: 300, tokens: 1400 } };
+      const len = LEN[s.ai?.responseLength] || LEN.balanced;
+      const temperature = Number.isFinite(s.ai?.temperature) ? s.ai.temperature : 0.3;
       const text = await aiService.callAI({
         apiKey: geminiKey,
         model,
@@ -61,7 +76,7 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
             role: "user",
             parts: [
               {
-                text: `Giải thích thuật ngữ sư phạm tiểu học: "${q}". Trình bày ngắn gọn 3 phần: (1) Khái niệm, (2) Ý nghĩa trong dạy học tiểu học, (3) Ví dụ áp dụng cụ thể. Tối đa 180 từ, dùng từ chuyên môn chuẩn theo chương trình GDPT 2018.`,
+                text: `Giải thích thuật ngữ sư phạm tiểu học: "${q}". Trình bày ngắn gọn 3 phần: (1) Khái niệm, (2) Ý nghĩa trong dạy học tiểu học, (3) Ví dụ áp dụng cụ thể. Tối đa ${len.words} từ, dùng từ chuyên môn chuẩn theo chương trình GDPT 2018.`,
               },
             ],
           },
@@ -73,7 +88,7 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
             },
           ],
         },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 800 },
+        generationConfig: { temperature, maxOutputTokens: len.tokens },
         timeout: 60000,
         maxRetries: 2,
         requestId: `glossary-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
@@ -107,6 +122,27 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       /* clipboard blocked */
+    }
+  };
+
+  const saveToNotebook = () => {
+    const q = String(term || "").trim();
+    if (!q || !result) return;
+    try {
+      addVocabEntry({
+        word: q.slice(0, 80),
+        meaning: result,
+        file: "",
+        bookTitle: "",
+        grade: null,
+        page: null,
+        tags: ["thuật ngữ"],
+      });
+      setSavedWord(true);
+      setTimeout(() => setSavedWord(false), 2500);
+    } catch (e) {
+      console.warn("[GlossaryPanel] saveToNotebook failed", e);
+      setError("Không lưu được vào sổ tay từ vựng (bộ nhớ trình duyệt đầy?).");
     }
   };
 
@@ -177,6 +213,29 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
             className="flex-row-between"
           >
             <h4 className="gl-result-title">{term}</h4>
+            <div className="gl-result-actions">
+            <button
+              className="btn btn-secondary"
+              style={{
+                padding: "0.25rem 0.55rem",
+                fontSize: "0.72rem",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+              onClick={saveToNotebook}
+              title="Lưu thuật ngữ này vào sổ tay từ vựng"
+            >
+              {savedWord ? (
+                <>
+                  <Check size={13} /> Đã lưu
+                </>
+              ) : (
+                <>
+                  <NotebookPen size={13} /> Lưu vào sổ tay
+                </>
+              )}
+            </button>
             <button
               className="btn btn-secondary"
               style={{
@@ -198,6 +257,7 @@ export default function GlossaryPanel({ geminiKey, onClose, inline = false }) {
                 </>
               )}
             </button>
+            </div>
           </div>
           <div style={{ fontSize: "0.86rem", lineHeight: 1.55 }}>
             <MarkdownText text={result} />

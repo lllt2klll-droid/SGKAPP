@@ -735,7 +735,11 @@ export default function CollectionsView({ books, onOpenBook, onNavigate }) {
             </div>
 
             {/* Clips DataTable */}
-            {selClips.length ? (
+            {clipsLoading ? (
+              <p className="panel-hint mt-md">
+                <span className="spinner spinner-sm" /> Đang tải trích đoạn…
+              </p>
+            ) : selClips.length ? (
               <div className="mt-md">
                 <DataTable
                   columns={clipColumns}

@@ -153,6 +153,38 @@ export function updateVocabMeaning(id, meaning) {
   return next;
 }
 
+// Sửa nhiều trường 1 lúc (từ, nghĩa, sách, trang, lớp, tags) — giữ nguyên id
+export function updateVocabEntry(id, patch = {}) {
+  let changed = false;
+  const next = readJSON(KEYS.vocab, []).map(e => {
+    if (e.id !== id) return e;
+    changed = true;
+    const merged = { ...e };
+    for (const k of ["word", "meaning", "file", "bookTitle", "page", "grade"]) {
+      if (k in patch) merged[k] = patch[k];
+    }
+    if ("tags" in patch) merged.tags = Array.isArray(patch.tags) ? patch.tags : [];
+    return merged;
+  });
+  if (changed) {
+    saveJSON(KEYS.vocab, next);
+    notifyDataUpdated();
+  }
+  return next;
+}
+
+// Khôi phục từ Thùng rác / Hoàn tác: gộp theo id, không nhân bản
+export function restoreVocabEntries(entries) {
+  const incoming = (Array.isArray(entries) ? entries : []).filter(e => e && e.id);
+  if (!incoming.length) return readJSON(KEYS.vocab, []);
+  const list = readJSON(KEYS.vocab, []);
+  const ids = new Set(incoming.map(e => e.id));
+  const next = [...incoming, ...list.filter(e => !ids.has(e.id))];
+  saveJSON(KEYS.vocab, next);
+  notifyDataUpdated();
+  return next;
+}
+
 export function clearVocab() {
   saveJSON(KEYS.vocab, []);
   notifyDataUpdated();

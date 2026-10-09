@@ -472,7 +472,7 @@
 }
 .lp-card .flex-row.gap-sm .btn-secondary:last-child {
   background: var(--primary);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border-color: var(--primary);
 }
 @media (max-width: 900px) {

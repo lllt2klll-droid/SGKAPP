@@ -262,6 +262,13 @@
   font-weight: 700;
   color: var(--text-dark);
 }
+.help-kbd-help {
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--text-mid);
+  opacity: 0.85;
+  padding: 0.15rem 0.25rem 0;
+}
 
 /* Walkthrough — dt-card */
 .help-walk {
@@ -318,8 +325,8 @@
   font-size: 0.72rem; font-weight: 700; color: var(--text-mid);
   flex-shrink: 0;
 }
-.help-walk-step.active .help-walk-num { background: var(--color-action, var(--primary)); color: #fff; border-color: var(--color-action, var(--primary)); }
-.help-walk-step.done .help-walk-num { background: var(--success); color: #fff; border-color: var(--success); }
+.help-walk-step.active .help-walk-num { background: var(--color-action, var(--primary)); color: var(--btn-primary-text, #fff); border-color: var(--color-action, var(--primary)); }
+.help-walk-step.done .help-walk-num { background: var(--success); color: var(--btn-primary-text, #fff); border-color: var(--success); }
 .help-walk-stitle { font-size: 0.78rem; font-weight: 600; color: var(--text-dark); line-height: 1.25; }
 .help-walk-card {
   display: flex;
@@ -387,7 +394,7 @@
 .help-mod-summary { font-size: 0.76rem; font-weight: 500; color: var(--text-muted); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .help-mod-right { display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
 .help-mod-badge {
-  font-size: 0.62rem; font-weight: 700; color: #fff;
+  font-size: 0.62rem; font-weight: 700; color: var(--btn-primary-text, #fff);
   padding: 0.15rem 0.4rem; border-radius: 99px; letter-spacing: 0.02em;
 }
 .help-mod-pct {
@@ -424,7 +431,7 @@
   display: grid; place-items: center;
   color: #fff;
 }
-.help-step.checked .help-check-box { background: var(--success); border-color: var(--success); color: #fff; }
+.help-step.checked .help-check-box { background: var(--success); border-color: var(--success); color: var(--btn-primary-text, #fff); }
 .help-step-content { flex: 1; min-width: 0; }
 .help-step-title { font-size: 0.82rem; font-weight: 700; color: var(--text-dark); display: flex; align-items: center; gap: 0.3rem; }
 .help-step-num {

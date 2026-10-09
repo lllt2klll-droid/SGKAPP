@@ -209,8 +209,10 @@ textarea:focus-visible,
 
 /* ============================================================
    Accessibility - High Contrast
+   Light-forced palette CHỈ khi KHÔNG ở dark theme
+   (trước đây ép nền trắng cả dark → lật tông màu).
    ============================================================ */
-[data-high-contrast="true"] {
+[data-high-contrast="true"]:not([data-theme="dark"]) {
   --bg-main: #ffffff;
   --surface: #ffffff;
   --surface-soft: #f0f0f0;
@@ -232,6 +234,37 @@ textarea:focus-visible,
   --success: #008000;
   --warning: #ff8c00;
   --danger: #ff0000;
+
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+}
+
+/* High Contrast — biến thể DARK (đen tuyền + viền/chữ trắng) */
+[data-high-contrast="true"][data-theme="dark"] {
+  --bg-main: #000000;
+  --surface: #000000;
+  --surface-soft: #111111;
+  --bg-alt: #000000;
+  --paper: #000000;
+
+  --text-dark: #ffffff;
+  --text-mid: #ffffff;
+  --text-muted: #e5e5e5;
+  --text-light: #e5e5e5;
+
+  --border-color: #ffffff;
+  --border-strong: #ffffff;
+  --input-border: #ffffff;
+
+  --primary: #93c5fd;
+  --primary-dark: #ffffff;
+  --primary-light: rgba(147, 197, 253, 0.25);
+
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
 
   --shadow-xs: none;
   --shadow-sm: none;

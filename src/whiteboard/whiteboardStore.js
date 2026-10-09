@@ -20,6 +20,12 @@ async function idbGetBoard(id) { try { return await indexedDBService.get(STORES.
 async function idbGetAllBoards() { try { return await indexedDBService.getAll(STORES.WB_BOARDS); } catch { return []; } }
 async function idbPutBoard(board) { try { return await indexedDBService.set(STORES.WB_BOARDS, board.id, board); } catch { return false; } }
 async function idbDeleteBoard(id) { try { return await indexedDBService.delete(STORES.WB_BOARDS, id); } catch { return false; } }
+async function _idbFail(scope, id) {
+  try {
+    if (!(await idbAvailable())) return;
+    console.error(`[whiteboardStore] ${scope} IDB failed`, id);
+  } catch {}
+}
 
 // Migration LS -> IDB (TASK 2+17+18) — missing-index recovery, per-ID verify, preserve LS on fail
 export async function migrateWhiteboardToIDB() {
@@ -363,7 +369,7 @@ export function listBoards() {
       { id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt },
     ]);
     saveJSON(WB_BOARD_KEY(b.id), b);
-    try { idbPutBoard(b).then(() => _updateCache(b)); } catch {}
+    try { idbPutBoard(b).then((ok) => { _updateCache(b); if (ok === false) _idbFail("listBoards seed", b.id); }).catch((e) => console.error("[whiteboardStore] listBoards seed IDB error", e)); } catch {}
   } catch (e) { console.warn("[whiteboardStore] listBoards seed failed", e); }
   return [{ id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt }];
 }
@@ -398,7 +404,7 @@ export function loadBoard(id) {
     try {
       const sanitized = stripEphemeralSrc(nb);
       saveJSON(WB_BOARD_KEY(id), { ...sanitized, updatedAt: b.updatedAt || now() });
-      try { idbPutBoard({ ...sanitized, updatedAt: b.updatedAt || now() }).then(() => _updateCache({ ...sanitized, updatedAt: b.updatedAt || now() })); } catch {}
+      try { idbPutBoard({ ...sanitized, updatedAt: b.updatedAt || now() }).then((ok) => { _updateCache({ ...sanitized, updatedAt: b.updatedAt || now() }); if (ok === false) _idbFail("loadBoard sanitize", id); }).catch((e) => console.error("[whiteboardStore] loadBoard sanitize IDB error", e)); } catch {}
     } catch {}
   }
   return nb;
@@ -429,7 +435,7 @@ export function persistBoard(board) {
     return { ...board, updatedAt: next.updatedAt, _pendingPersist: true };
   }
   saveJSON(WB_BOARD_KEY(board.id), next);
-  try { idbPutBoard(next).then((ok) => { if (ok) _updateCache(next); }); } catch {}
+  try { idbPutBoard(next).then((ok) => { if (ok) _updateCache(next); else _idbFail("persistBoard(legacy)", board.id); }).catch((e) => console.error("[whiteboardStore] persistBoard(legacy) IDB error", e)); } catch {}
   try {
     const idx = readJSON(WB_INDEX_KEY, []);
     const arr = Array.isArray(idx) ? idx : [];
@@ -493,7 +499,7 @@ export function createBoard(name) {
     return b;
   }
   saveJSON(WB_BOARD_KEY(b.id), b);
-  try { idbPutBoard(b).then((ok) => { if (ok) _updateCache(b); }); } catch {}
+  try { idbPutBoard(b).then((ok) => { if (ok) _updateCache(b); else _idbFail("createBoard(legacy)", b.id); }).catch((e) => console.error("[whiteboardStore] createBoard(legacy) IDB error", e)); } catch {}
   try {
     const idx = readJSON(WB_INDEX_KEY, []);
     const arr = Array.isArray(idx) ? idx : [];
@@ -520,7 +526,7 @@ export function deleteBoard(id) {
     } catch (e) { console.error("[whiteboardStore] deleteBoard IDB error", e); }
     return;
   }
-  try { idbDeleteBoard(id).then(() => _removeFromCache(id)); } catch {}
+  try { idbDeleteBoard(id).then((ok) => { if (ok === false) _idbFail("deleteBoard(legacy)", id); _removeFromCache(id); }).catch((e) => console.error("[whiteboardStore] deleteBoard(legacy) IDB error", e)); } catch {}
   _removeFromCache(id);
   try {
     safeRemove(WB_BOARD_KEY(id));
@@ -588,7 +594,7 @@ export function duplicateBoard(id, suffix = " (bản sao)") {
       arr.unshift({ id: clone.id, name: clone.name, createdAt: clone.createdAt, updatedAt: clone.updatedAt });
       saveJSON(WB_INDEX_KEY, arr);
     } catch (e) { console.warn("[whiteboardStore] duplicateBoard index failed", e); }
-    try { idbPutBoard(clone).then((ok) => { if (ok) _updateCache(clone); }); } catch {}
+    try { idbPutBoard(clone).then((ok) => { if (ok) _updateCache(clone); else _idbFail("duplicateBoard(legacy)", clone.id); }).catch((e) => console.error("[whiteboardStore] duplicateBoard(legacy) IDB error", e)); } catch {}
     _emitWB("created", clone.id);
     return clone;
   }

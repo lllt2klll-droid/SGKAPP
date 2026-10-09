@@ -30,7 +30,7 @@ import {
 } from "./teachingDB";
 import { makeId } from "./storage";
 import { exportWord, exportCsv, printToPdf, escapeHtml } from "./exportDoc";
-import { normalizeGeneratedQuestion } from "./questionSchema";
+import { normalizeGeneratedQuestion, normalizeMucdo } from "./questionSchema";
 import SourceBadge from "./scan/SourceBadge";
 import SampleButton from "./SampleButton";
 import { fillSampleQuestions } from "./sampleData";
@@ -55,7 +55,7 @@ function normalizeCorrectIndex(raw) {
 }
 
 export default function QuestionBankView({ books, onNavigate }) {
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const refresh = () => setTick((t) => t + 1);
   useEffect(() => { const h = () => setTick(t=>t+1); window.addEventListener("sgk:data-updated", h); return () => window.removeEventListener("sgk:data-updated", h); }, []);
   const [query, setQuery] = useState("");
@@ -82,7 +82,11 @@ export default function QuestionBankView({ books, onNavigate }) {
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' | 'desc'
   const [showStats, setShowStats] = useState(false);
 
-  const questions = getQuestions();
+  // Chuẩn hóa mức độ khi đọc (dữ liệu cũ có thể còn 4 cấp: "Thông hiểu", "Nhận biết"…)
+  const questions = useMemo(
+    () => getQuestions().map((x) => (x && x.mucdo ? { ...x, mucdo: normalizeMucdo(x.mucdo) } : x)),
+    [tick],
+  );
 
   const subjects = useMemo(
     () => [...new Set(books.map((b) => b.subject))],
@@ -382,7 +386,7 @@ export default function QuestionBankView({ books, onNavigate }) {
           grade: q.grade ? parseInt(q.grade, 10) : null,
           chapter: q.chapter || '',
           yccd: q.yccd || '',
-          mucdo: q.mucdo || '',
+          mucdo: normalizeMucdo(q.mucdo),
         });
         addedCount++;
       } catch (err) {

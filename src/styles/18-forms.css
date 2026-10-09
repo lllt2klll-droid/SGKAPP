@@ -728,15 +728,15 @@
 }
 .badge-primary {
   background: var(--primary);
-  color: white;
+  color: var(--btn-primary-text, #fff);
 }
 .badge-success {
   background: var(--success);
-  color: white;
+  color: var(--btn-primary-text, #fff);
 }
 .badge-warning {
   background: var(--warning);
-  color: white;
+  color: #1f2937;
 }
 
 /* Sizing Utilities */
@@ -1256,7 +1256,7 @@
 /* Success background */
 .bg-success {
   background: var(--success);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
 }
 
 /* Button padding with nowrap */

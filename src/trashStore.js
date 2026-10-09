@@ -18,12 +18,14 @@ export const TRASH_TYPE = {
   BOOK: "book",
   PLAN: "plan",
   QUESTION: "question",
+  VOCAB: "vocab",
 };
 
 export const TRASH_TYPE_LABEL = {
   book: "Sách",
   plan: "Giáo án",
   question: "Câu hỏi",
+  vocab: "Từ vựng",
 };
 
 function notify(type) {

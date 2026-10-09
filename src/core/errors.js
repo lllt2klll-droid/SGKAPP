@@ -32,13 +32,20 @@ export class MigrationError extends AppError {
   constructor(message, opts={}) { super(message, { type:"MigrationError", recoverable:false, ...opts }); }
 }
 
+// Lấy địa chỉ backend thật (không hardcode localhost — production chạy same-origin)
+import { getApiBase } from "../apiConfig.js";
+
 export function toFriendlyError(err) {
   if (!err) return { type:"Unknown", message:"Đã có lỗi xảy ra.", recoverable:true };
   if (err.toUI) return err.toUI();
   const msg = String(err.message || err || "Đã có lỗi xảy ra.");
   // Map technical patterns to friendly Vietnamese
   if (msg.includes("QuotaExceeded") || msg.includes("quota")) return { type:"StorageError", message:"Bộ nhớ trình duyệt đã đầy. Vào Sao lưu & Khôi phục → Xóa cache để giải phóng.", recoverable:true, action:"clearCache" };
-  if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) return { type:"AppError", message:"Không kết nối được máy chủ. Kiểm tra backend http://localhost:5000.", recoverable:true, action:"retry" };
+  if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+    let where = "máy chủ";
+    try { const base = getApiBase(); if (base) where = base; } catch {}
+    return { type:"AppError", message:`Không kết nối được ${where}. Kiểm tra backend đang chạy rồi thử lại nhé.`, recoverable:true, action:"retry" };
+  }
   if (msg.includes("not found") || msg.includes("404")) return { type:"NotFoundError", message:"Không tìm thấy dữ liệu yêu cầu.", recoverable:false };
   return { type: err.name || "AppError", message: msg.slice(0, 400), recoverable:true };
 }

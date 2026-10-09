@@ -1280,21 +1280,18 @@ app.post("/api/gemini", rateLimit, async (req, res) => {
   const systemInstruction =
     typeof rawSys === "string" ? { parts: [{ text: rawSys }] } : rawSys;
 
-  // Validate and use requested model — fallback to 2.5-flash; allowlist prevents injection
+  // Validate and use requested model — allowlist chống injection (path traversal)
+  // và model đã retired (gemini-1.5/2.0 trả 404 từ Google)
   const ALLOWED_MODELS = new Set([
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
     "gemini-2.5-flash-latest",
-    "gemini-2.0-flash-latest",
   ]);
   let model = (typeof reqModel === "string" && reqModel.trim()) ? reqModel.trim() : "gemini-2.5-flash";
   // Strip possible " (Latest)" suffix from UI label
   model = model.replace(/\s*\(.*\)\s*$/, "").trim();
   if (!ALLOWED_MODELS.has(model)) {
-    // Allow any gemini-* model but block path traversal
-    if (!/^gemini-[a-z0-9._-]+$/i.test(model)) model = "gemini-2.5-flash";
+    console.warn("[gemini] Model không nằm trong allowlist, fallback:", model);
+    model = "gemini-2.5-flash";
   }
 
   const controller = new AbortController();

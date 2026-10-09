@@ -594,4 +594,8 @@
     gap: 0.6rem;
   }
 }
+
+[data-theme="dark"] .pdf-canvas-wrapper {
+  background: var(--surface);
+}
 

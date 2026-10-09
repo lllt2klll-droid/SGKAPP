@@ -115,7 +115,7 @@
 
 /* Fav riêng — giữ amber khi active */
 .filter-btn:has(.ui-s-24cad3) { padding-left:0.5rem !important; }
-.filter-btn.active:has(.ui-s-24cad3) { background:#f59e0b !important; border-color:#d97706 !important; color:#fff !important; }
+.filter-btn.active:has(.ui-s-24cad3) { background:#f59e0b !important; border-color:#d97706 !important; color:#1f2937 !important; }
 
 /* Không dùng vạch dọc — mỗi hàng đã tách bằng gap cột */
 .filter-group + .filter-group { padding-left:0 !important; }

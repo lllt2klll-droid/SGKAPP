@@ -9,7 +9,6 @@ import {
   AlignmentType, VerticalAlign, WidthType, TableLayoutType, BorderStyle,
   ShadingType, ImageRun, PageBreak,
 } from "docx";
-import { KTSP_ROUND_LOGO_B64 } from "../ktspLogo.js";
 import { dataUrlToBytes, isPngDataUrl } from "./khbdImages.js";
 import { bulletizeLines } from "./planModel.js";
 
@@ -70,23 +69,36 @@ function headCell(text) {
   });
 }
 
-function logoRun() {
+let _logoBytes = null;
+async function logoBytes() {
+  if (_logoBytes) return _logoBytes;
   try {
-    const b64 = String(KTSP_ROUND_LOGO_B64 || "").split(",").pop();
-    const bytes = typeof Buffer !== "undefined"
-      ? new Uint8Array(Buffer.from(b64, "base64"))
-      : Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+    const base = import.meta.env?.BASE_URL || "/";
+    const res = await fetch(`${base.endsWith("/") ? base : `${base}/`}assets/ktsp-logo.png`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    _logoBytes = buf.length ? buf : null;
+  } catch (e) {
+    console.warn("[docxBuilder] khong tai duoc logo KTSP:", e?.message || e);
+    _logoBytes = null;
+  }
+  return _logoBytes;
+}
+async function logoRun() {
+  try {
+    const bytes = await logoBytes();
+    if (!bytes) return null;
     return new ImageRun({ type: "png", data: bytes, transformation: { width: 150, height: 150 } });
   } catch { return null; }
 }
 
-function coverSection(plan) {
+async function coverSection(plan) {
   const kids = [];
   const center = (t, size = 28, bold = true) =>
     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: toText(t), font: TNR, size, bold, color: C.ink })] });
   kids.push(center("TRƯỜNG ĐẠI HỌC SÀI GÒN"));
   kids.push(center("TRƯỜNG TIỂU HỌC THỰC HÀNH ĐẠI HỌC SÀI GÒN"));
-  const logo = logoRun();
+  const logo = await logoRun();
   if (logo) kids.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [logo], spacing: { before: 400, after: 400 } }));
   else kids.push(new Paragraph({ children: [run("")] }));
   kids.push(center(`KẾ HOẠCH BÀI DẠY LỚP ${plan.lop?.trim() ? toText(plan.lop) : "…"}`, 56));
@@ -287,7 +299,7 @@ function tailSection(plan) {
   return kids;
 }
 
-export function buildKhbdDocument(plan) {
+export async function buildKhbdDocument(plan) {
   const p = plan || {};
   return new Document({
     creator: "SGK App",
@@ -300,7 +312,7 @@ export function buildKhbdDocument(plan) {
         },
       },
       children: [
-        ...coverSection(p),
+        ...(await coverSection(p)),
         ...metaSection(p),
         ...objectivesSection(p),
         ...materialsSection(p),
@@ -316,7 +328,7 @@ function safeName(s) {
 }
 
 export async function downloadGeneratedDocx(plan) {
-  const doc = buildKhbdDocument(plan);
+  const doc = await buildKhbdDocument(plan);
   const blob = await Packer.toBlob(doc);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

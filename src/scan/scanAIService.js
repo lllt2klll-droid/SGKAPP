@@ -119,7 +119,7 @@ Trả về JSON thuần (không markdown fence):
   "existingQuestions": ["Câu 1: …"],
   "suggestedMaterials": ["game","worksheet","question"],
   "confidence": 0.85,
-  "source": {"book":"${book?.filename || ""}","page":${page}}
+  "source": {"book":${JSON.stringify(book?.filename || "")},"page":${Number(page) || 0}}
 }`;
 
   let text;
@@ -139,6 +139,8 @@ Trả về JSON thuần (không markdown fence):
       requestId: `scan-analyze-${Date.now()}`,
     });
   } catch (e) {
+    // Giữ nguyên AIError (CANCELLED/TIMEOUT/NO_API_KEY…) — wrap thành Error thường làm mất code
+    if (e && typeof e.code === "string" && e.code) throw e;
     throw new Error(getFriendlyErrorMessage(e.status, e.message) || e.message || "AI phân tích lỗi");
   }
 
@@ -202,12 +204,17 @@ ${keepOriginal ? "QUY TẮC GIỮ GỐC: mọi câu trong khối gốc phải xu
     ? `\nQUY TẮC BẮT BUỘC: đưa toàn bộ câu gốc ở trên vào đầu mảng questions, mỗi câu giữ NGUYÊN TỪNG CHỮ và thêm "origin":"sgk_original". Câu bổ sung (nếu có) đặt SAU và thêm "origin":"ai".`
     : "";
 
+  // Tùy chỉnh nâng cao trong ScanModal: xáo trộn vị trí đáp án đúng (câu trắc nghiệm)
+  const shuffleRule = config?.randomizeAnswers
+    ? `\nXÁO TRỘN ĐÁP ÁN: với câu trắc nghiệm, đặt đáp án đúng ở vị trí ngẫu nhiên trong options (không để luôn ở vị trí đầu), không lặp lại cùng một vị trí cho mọi câu.`
+    : "";
+
   let prompt = "";
   let maxTokens = 3000;
   if (materialType === "original") {
     prompt = `${basePrompt}
 Nhiệm vụ: SỐ HÓA NGUYÊN BẢN vùng SGK trên — giữ nguyên 100% câu hỏi/bài tập/đề bài/số liệu, không diễn đạt lại.
-- Mỗi câu/bài gốc là 1 phần tử questions: {q:"<nguyên văn từng chữ>", question:"<nguyên văn>", type:"essay", origin:"sgk_original", mucdo:"${config?.level || "Thông hiểu"}"}
+- Mỗi câu/bài gốc là 1 phần tử questions: {q:"<nguyên văn từng chữ>", question:"<nguyên văn>", type:"essay", origin:"sgk_original", mucdo:"${config?.level || "Hiểu"}"}
 - Nếu câu gốc là trắc nghiệm trong sách (có A/B/C/D): giữ options nguyên văn + correctIndex đúng theo sách, origin sgk_original.
 - KHÔNG tự bịa thêm câu mới. Nếu ảnh mờ không đọc được: để nguyên văn đọc được + thêm "(cần đối chiếu sách)" vào explanation.
 Trả về JSON thuần:
@@ -221,7 +228,7 @@ Nhiệm vụ: Tạo TRÒ CHƠI học tập dạng "${gameType}" cho HS tiểu h�
 Yêu cầu: ${n} câu, độ khó ${config?.difficulty || "Trung bình"}, đối tượng ${config?.audience || "Cá nhân"}, thời lượng ${config?.timeLimit || "5 phút"}.
 - Nếu là Ghép đôi: tạo pairs [{a:"...vi...", b:"..."}]
 - Nếu Quiz/Kahoot: tạo questions [{q:"...", options:["A","B","C","D"], answer:0 (0-3), explanation:"..."}]
-Ngôn ngữ: tiếng Việt, vui nhộn nhưng chính xác sư phạm.${originRule}
+Ngôn ngữ: tiếng Việt, vui nhộn nhưng chính xác sư phạm.${originRule}${shuffleRule}
 Trả về JSON thuần:
 {"title":"Tên trò chơi","type":"${gameType}","instructions":"Hướng dẫn chơi 2-3 câu","questions":[{"q":"...","options":["A","B","C","D"],"answer":0,"explanation":"...","origin":"sgk_original"}],"timeLimit":"5 phút"}`;
     maxTokens = 4500;
@@ -229,8 +236,8 @@ Trả về JSON thuần:
     const qType = config?.questionType || "Trắc nghiệm";
     const n = Math.min(20, Math.max(5, Number(config?.numQuestions) || 10));
     prompt = `${basePrompt}
-Nhiệm vụ: Tạo PHIẾU HỌC TẬP (in được) ${n} câu, loại "${qType}", mức độ ${config?.level || "Thông hiểu"}, ${config?.withAnswer ? "CÓ đáp án/ hướng dẫn chấm" : "KHÔNG cần in đáp án"}.
-Cấu trúc mỗi câu: {q:"đề", type:"mc|essay|fill", options:["A","B","C","D"] (nếu mc), answer:0 hoặc "đáp án mẫu", explanation:"", mucdo:"Biết|Hiểu|Vận dụng", yccd:"", origin:"sgk_original|ai"}${originRule}
+Nhiệm vụ: Tạo PHIẾU HỌC TẬP (in được) ${n} câu, loại "${qType}", mức độ ${config?.level || "Hiểu"}, ${config?.withAnswer ? "CÓ đáp án/ hướng dẫn chấm" : "KHÔNG cần in đáp án"}.
+Cấu trúc mỗi câu: {q:"đề", type:"mc|essay|fill", options:["A","B","C","D"] (nếu mc), answer:0 hoặc "đáp án mẫu", explanation:"", mucdo:"Biết|Hiểu|Vận dụng", yccd:"", origin:"sgk_original|ai"}${originRule}${shuffleRule}
 Trả về JSON thuần:
 {"title":"Tiêu đề phiếu","instructions":"Hướng dẫn HS 1-2 câu","questions":[{"q":"...","type":"mc","options":["A","B","C","D"],"answer":0,"explanation":"...","mucdo":"Hiểu","yccd":"","origin":"sgk_original"}]}`;
     maxTokens = 5000;
@@ -238,8 +245,8 @@ Trả về JSON thuần:
     const n = Math.min(20, Math.max(3, Number(config?.numQuestions) || 10));
     prompt = `${basePrompt}
 Nhiệm vụ: Tạo ${n} CÂU HỎI cho NGÂN HÀNG (mỗi câu độc lập, chuẩn GDPT 2018).
-Loại: ${config?.questionType || "Trắc nghiệm"} (nếu "Tự luận" thì bỏ options), mức độ ${config?.level || "Thông hiểu"}.
-Mỗi câu: {question:"...", type:"mc|essay", options:["A","B","C","D"], correctIndex:0, answer:"giải thích/đáp án tự luận", mucdo:"${config?.level || "Hiểu"}", yccd:"...", origin:"sgk_original|ai"}${originRule}
+Loại: ${config?.questionType || "Trắc nghiệm"} (nếu "Tự luận" thì bỏ options), mức độ ${config?.level || "Hiểu"}.
+Mỗi câu: {question:"...", type:"mc|essay", options:["A","B","C","D"], correctIndex:0, answer:"giải thích/đáp án tự luận", mucdo:"${config?.level || "Hiểu"}", yccd:"...", origin:"sgk_original|ai"}${originRule}${shuffleRule}
 Trả về JSON thuần:
 {"questions":[{"question":"...","type":"mc","options":["A","B","C","D"],"correctIndex":0,"answer":"","mucdo":"${config?.level || "Hiểu"}","yccd":"","origin":"sgk_original"}]}`;
     maxTokens = 4000;
@@ -272,6 +279,8 @@ Trả về JSON thuần:
       requestId: `scan-gen-${materialType}-${Date.now()}`,
     });
   } catch (e) {
+    // Giữ nguyên AIError (CANCELLED/TIMEOUT/NO_API_KEY…) — wrap thành Error thường làm mất code
+    if (e && typeof e.code === "string" && e.code) throw e;
     throw new Error(getFriendlyErrorMessage(e.status, e.message) || e.message || "AI tạo học liệu lỗi");
   }
 
@@ -312,6 +321,10 @@ Trả về JSON thuần:
       }
     }
   } catch {}
+  // AI không trả JSON hợp lệ → báo lỗi rõ cho UI, tránh bước sau hiển thị nội dung rỗng
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("AI không trả về JSON hợp lệ cho học liệu. Vui lòng thử lại.");
+  }
   return { raw: text, parsed, materialType, config };
 }
 
@@ -330,7 +343,7 @@ export async function regenerateQuestion({ scan, analysis, materialType, config,
   const prompt = `Nguồn SGK: "${book.title || ""}" — Lớp ${book.grade} — Môn ${book.subject} — Trang ${scan.page}
 Chủ đề: ${analysis?.topic || ""} — ${analysis?.content?.slice(0, 400) || ""}
 Câu cũ #${(index ?? 0) + 1}: ${existingQText}
-Yêu cầu: Viết lại 1 câu hỏi MỚI thay thế câu trên, cùng mức độ ${config?.level || "Thông hiểu"}, loại ${config?.questionType || "Trắc nghiệm"}, bám SGK, không trùng.
+Yêu cầu: Viết lại 1 câu hỏi MỚI thay thế câu trên, cùng mức độ ${config?.level || "Hiểu"}, loại ${config?.questionType || "Trắc nghiệm"}, bám SGK, không trùng.${config?.randomizeAnswers ? " Đặt đáp án đúng ở vị trí ngẫu nhiên trong options." : ""}
 Trả JSON thuần (không markdown): {"q":"...","question":"...","type":"mc","options":["A","B","C","D"],"answer":0,"correctIndex":0,"explanation":"...","mucdo":"${config?.level || "Hiểu"}"}`;
 
   const text = await aiService.callAI({
@@ -345,7 +358,8 @@ Trả JSON thuần (không markdown): {"q":"...","question":"...","type":"mc","o
   if (parsed && typeof parsed === "object") {
     // normalize to have q/question
     const q = parsed.q || parsed.question || "";
-    return { q, question: q || parsed.question, ...parsed };
+    // spread lên đầu để q/question vừa chuẩn hóa không bị parsed ghi đè
+    return { ...parsed, q, question: q || parsed.question };
   }
   throw new Error("AI không trả về JSON hợp lệ cho câu hỏi mới");
 }

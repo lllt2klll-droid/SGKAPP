@@ -72,7 +72,7 @@ export function invalidateIndex(filename) {
       // Update meta to mark as stale
       const staleMeta = { ...meta, stale: true, invalidatedAt: Date.now() };
       saveJSON(META_KEY(filename), staleMeta);
-      console.log(`Index marked as stale for ${filename}`);
+      if (globalThis.__SGK_TEST__ !== true) console.debug(`Index marked as stale for ${filename}`);
     }
   } catch (err) {
     console.error(`Failed to invalidate index for ${filename}:`, err);

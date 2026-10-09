@@ -5,6 +5,13 @@
 import aiService from './aiService.js';
 import { getGeminiApiKey } from './storage.js';
 import aiDataStorage from './aiDataStorage.js';
+import { getSettings } from './settingsStore.js';
+import { DEFAULT_AI_MODEL, normalizeModel } from './apiConfig.js';
+
+// Model người dùng chọn trong Cài đặt AI (trước đây 4 callAI luôn dùng model mặc định)
+function currentModel() {
+  try { return normalizeModel(getSettings().ai?.model); } catch { return DEFAULT_AI_MODEL; }
+}
 
 /**
  * Convert image to base64 for API processing
@@ -47,7 +54,7 @@ QUY TẮC:
 3. Xác định đáp án đúng (0-3, không dùng E/F/G)
 4. Điền khuyết: type="fill", question + answer (dòng đáp án)
 5. Tự luận: type="essay", question + answerGuide (vùng trả lời)
-6. Phân loại mức độ khó: Nhận biết, Thông hiểu, Vận dụng, Vận dụng cao
+6. Phân loại mức độ khó theo 3 mức chuẩn: Biết, Hiểu, Vận dụng
 7. Giữ nguyên nội dung tiếng Việt, không thay đổi văn phong
 8. Nếu không tìm thấy thông tin, để trống hoặc null
 
@@ -64,7 +71,7 @@ OUTPUT FORMAT (JSON):
       "grade": "Lớp",
       "chapter": "Chương",
       "yccd": "Yêu cầu cần đạt",
-      "mucdo": "Nhận biết | Thông hiểu | Vận dụng | Vận dụng cao"
+      "mucdo": "Biết | Hiểu | Vận dụng"
     }
   ],
   "confidence": 0.0-1.0,
@@ -91,6 +98,7 @@ OUTPUT FORMAT (JSON):
   try {
     const response = await aiService.callAI({
       apiKey,
+      model: currentModel(),
       contents,
       systemInstruction,
       generationConfig: {
@@ -114,12 +122,23 @@ OUTPUT FORMAT (JSON):
       throw new Error('Dữ liệu câu hỏi không hợp lệ');
     }
     // Normalize via canonical schema (import lazy to avoid circular)
-    try {
-      const { normalizeGeneratedQuestion } = await import('./questionSchema.js');
-      const before = parsed.questions.length;
-      parsed.questions = parsed.questions.map(q=> normalizeGeneratedQuestion(q)).filter(Boolean);
-      if (parsed.questions.length === 0 && before > 0) throw new Error('Tất cả câu hỏi AI đều không hợp lệ sau chuẩn hóa');
-    } catch (e) { if (e.message && e.message.includes('không hợp lệ')) throw e; throw e; }
+    const { normalizeGeneratedQuestion, normalizeMucdo } = await import('./questionSchema.js');
+    const before = parsed.questions.length;
+    parsed.questions = parsed.questions.map((q) => {
+      const norm = normalizeGeneratedQuestion(q);
+      if (!norm) return null;
+      // normalizeGeneratedQuestion chỉ trả question cốt lõi — giữ lại metadata phân loại
+      // (subject/grade/chapter/yccd/mucdo) để QuestionBank lọc, sort, thống kê được.
+      return {
+        ...norm,
+        subject: String(q.subject || '').trim(),
+        grade: (q.grade === undefined || q.grade === null || q.grade === '') ? null : q.grade,
+        chapter: String(q.chapter || '').trim(),
+        yccd: String(q.yccd || '').trim(),
+        mucdo: normalizeMucdo(q.mucdo),
+      };
+    }).filter(Boolean);
+    if (parsed.questions.length === 0 && before > 0) throw new Error('Tất cả câu hỏi AI đều không hợp lệ sau chuẩn hóa');
     const resultId = `questions_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
     aiDataStorage.addAnalysisHistoryEntry({
       type: 'questions',
@@ -237,6 +256,7 @@ OUTPUT FORMAT (JSON):
   try {
     const response = await aiService.callAI({
       apiKey,
+      model: currentModel(),
       contents,
       systemInstruction,
       generationConfig: {
@@ -359,6 +379,7 @@ OUTPUT FORMAT (JSON):
   try {
     const response = await aiService.callAI({
       apiKey,
+      model: currentModel(),
       contents,
       systemInstruction,
       generationConfig: {
@@ -505,6 +526,7 @@ OUTPUT FORMAT (JSON):
   try {
     const response = await aiService.callAI({
       apiKey,
+      model: currentModel(),
       contents,
       systemInstruction,
       generationConfig: {

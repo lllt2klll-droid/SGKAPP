@@ -33,7 +33,7 @@ SettingsStore (behavior.soundEnabled / soundVolume / soundProfile) ──appEven
 | `src/audio/soundEvents.js` | `SOUND_EVENTS`, `SOUND_PROFILES` (minimal/standard), `normalizeEvent`, `isEventEnabledForProfile` |
 | `src/audio/soundAssets.js` | `SOUND_ASSETS` (id → file `.wav`), `SOUND_BASE_VOLUME`, `effectiveVolume()` |
 | `src/audio/useSound.js` | hook React (`useSound()`) |
-| `src/audio/index.js` | barrel export |
+| ~~`src/audio/index.js`~~ | barrel export — **0 importer, chuyển `docs/_attic/src-dead/` (2026-10-05)**; các file audio import trực tiếp `./audio/soundManager.js` |
 | `public/audio/ui/*.wav` | 11 file âm thật (3–10 KB) |
 
 ## 4. Event & âm lượng

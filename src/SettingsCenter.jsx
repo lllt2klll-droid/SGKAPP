@@ -21,7 +21,7 @@ import { getGeminiApiKey, setGeminiApiKey } from "./storage";
 import { safeRemove, listKeys } from "./safeStorage.js";
 import FileDropzone from "./components/FileDropzone.jsx";
 import { useFileDrag } from "./components/fileDropzoneUtils.js";
-import { getApiBase, apiUrl } from "./apiConfig";
+import { getApiBase, apiUrl, MODEL_OPTIONS, normalizeModel } from "./apiConfig";
 import aiService, { getFriendlyErrorMessage } from "./aiService";
 import { APP_COPYRIGHT, APP_DEVELOPER } from "./appPersona";
 import { pdfjsLib } from "./pdfjs-config";
@@ -44,22 +44,22 @@ const SECTIONS = [
   { id: "missions", label: "Nhiệm vụ", icon: <Target size={16} />, hint: "Gamification, XP, streak" },
   { id: "ai", label: "AI Gemini", icon: <Cpu size={16} />, hint: "Key, model, phong cách" },
   { id: "search", label: "Tìm kiếm", icon: <Search size={16} />, hint: "Mặc định, fuzzy, giới hạn" },
-  { id: "export", label: "Xuất dữ liệu", icon: <Download size={16} />, hint: "Định dạng, metadata" },
+  { id: "export", label: "Xuất dữ liệu", icon: <Download size={16} />, hint: "Kèm thời gian xuất" },
   { id: "backup", label: "Sao lưu", icon: <Database size={16} />, hint: "Xuất/nhập, reset" },
   { id: "behavior", label: "Hành vi & Âm thanh", icon: <Zap size={16} />, hint: "Xác nhận, tự lưu, loa" },
   { id: "notifications", label: "Thông báo", icon: <Bell size={16} />, hint: "Nhắc hằng ngày, thử" },
   { id: "keyboard", label: "Phím tắt", icon: <Keyboard size={16} />, hint: "Tự thiết lập" },
   { id: "accessibility", label: "Trợ năng", icon: <Accessibility size={16} />, hint: "Tương phản, chữ lớn" },
-  { id: "privacy", label: "Riêng tư", icon: <Shield size={16} />, hint: "Local-only, lịch sử" },
-  { id: "advanced", label: "Nâng cao", icon: <Timer size={16} />, hint: "Hiệu năng, cache, debug" },
+  { id: "privacy", label: "Riêng tư", icon: <Shield size={16} />, hint: "Lịch sử, dữ liệu" },
+  { id: "advanced", label: "Nâng cao", icon: <Timer size={16} />, hint: "Gỡ lỗi, chẩn đoán" },
   { id: "about", label: "Giới thiệu", icon: <Info size={16} />, hint: "Phiên bản" },
 ];
 
 function nowTime() { try { return new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }); } catch { return ""; } }
 
-export default function SettingsCenter({ onClose }) {
+export default function SettingsCenter({ onClose, initialSection = "general" }) {
   const [settings, setSettings] = useState(() => loadSettings());
-  const [active, setActive] = useState("general");
+  const [active, setActive] = useState(() => (SECTIONS.some((s) => s.id === initialSection) ? initialSection : "general"));
   const [query, setQuery] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
@@ -74,13 +74,20 @@ export default function SettingsCenter({ onClose }) {
   useEffect(() => { applySettings(settings); }, []);
   useEffect(() => { try { refreshNotificationTimer(settings); } catch {} }, []);
 
+  // Ghi API key rồi phát sự kiện — App chỉ đọc lại key khi nghe "sgk:settings-updated",
+  // nên ghi key không dispatch sẽ làm header/Trợ lý vẫn báo "Chưa có API Key".
+  const saveKey = (value) => {
+    try { setGeminiApiKey(value); } catch {}
+    try { dispatchSettingsUpdated(loadSettings()); } catch {}
+  };
   const persist = (next) => {
     const ok = saveSettings(next);
     if (!ok) { setSaveErr("Bộ nhớ đầy — đã thử dọn cache, hãy xuất sao lưu rồi thử lại."); }
     else { setSaveErr(""); setSavedAt(nowTime()); }
     applySettings(next);
+    // Ghi cả khi rỗng để người dùng xóa được key — ghi TRƯỚC khi phát sự kiện
+    setGeminiApiKey(geminiKey);
     dispatchSettingsUpdated(next);
-    if (geminiKey.trim()) setGeminiApiKey(geminiKey);
     return next;
   };
   const handleChange = (path, value) => {
@@ -193,7 +200,7 @@ export default function SettingsCenter({ onClose }) {
             {active === "library" && <LibrarySection settings={settings} onChange={handleChange} />}
             {active === "whiteboard" && <WhiteboardSection settings={settings} onChange={handleChange} />}
             {active === "missions" && <MissionsSection settings={settings} onChange={handleChange} />}
-            {active === "ai" && <AISection settings={settings} onChange={handleChange} geminiKey={geminiKey} setGeminiKey={setGeminiKey} showKey={showKey} setShowKey={setShowKey} testingKey={testingKey} setTestingKey={setTestingKey} keyResult={keyResult} setKeyResult={setKeyResult} />}
+            {active === "ai" && <AISection settings={settings} onChange={handleChange} geminiKey={geminiKey} setGeminiKey={setGeminiKey} saveKey={saveKey} showKey={showKey} setShowKey={setShowKey} testingKey={testingKey} setTestingKey={setTestingKey} keyResult={keyResult} setKeyResult={setKeyResult} />}
             {active === "search" && <SearchSection settings={settings} onChange={handleChange} />}
             {active === "export" && <ExportSection settings={settings} onChange={handleChange} />}
             {active === "backup" && <BackupSection settings={settings} onChange={handleChange} onImportFile={doImportFile} importErr={importErr} onExport={doExport} />}
@@ -270,7 +277,6 @@ function GeneralSection({ settings, onChange }) {
     <div>
       <Card id="sec-general" title="Tổng quan" desc="Tên hiển thị hiện ở Dashboard · Trang mở áp dụng ngay lần mở app sau · Ngày đầu tuần đổi cách tính tuần Nhiệm vụ." icon={<Settings size={15} />}>
         <Field label="Tên hiển thị" hint="Hiện lời chào ở Dashboard"><input className={inp} value={g.displayName} onChange={(e) => onChange(["general", "displayName"], e.target.value)} placeholder="Thầy/Cô …" /></Field>
-        <Field label="Ngôn ngữ"><select className={sel} value={g.language} onChange={(e) => onChange(["general", "language"], e.target.value)}><option value="vi">Tiếng Việt</option></select></Field>
         <Field label="Ngày bắt đầu tuần" hint="Đổi là bảng Tuần/Streak của Nhiệm vụ tính lại"><Seg value={g.weekStart} onPick={(v) => onChange(["general", "weekStart"], v)} options={[{ v: 1, t: "Thứ Hai" }, { v: 0, t: "Chủ Nhật" }]} /></Field>
         <Field label="Trang mở mặc định" hint="“Lần cuối” mở lại đúng trang trước khi thoát"><select className={sel} value={g.startPage} onChange={(e) => onChange(["general", "startPage"], e.target.value)}>
           <option value="dashboard">Tổng quan</option><option value="library">Thư viện</option><option value="search">Tìm kiếm</option><option value="lessonplans">Giáo án</option><option value="tasks">Nhiệm vụ</option><option value="last">Lần cuối đã mở</option>
@@ -453,7 +459,8 @@ function MissionsSection({ settings, onChange }) {
 }
 
 /* ── AI ─────────────────────────────── */
-function AISection({ settings, onChange, geminiKey, setGeminiKey, showKey, setShowKey, testingKey, setTestingKey, keyResult, setKeyResult }) {
+function AISection({ settings, onChange, geminiKey, setGeminiKey, saveKey, showKey, setShowKey, testingKey, setTestingKey, keyResult, setKeyResult }) {
+  const ai = settings.ai || {};
   const handleTest = async () => {
     if (!geminiKey.trim()) { setKeyResult({ ok: false, msg: "Vui lòng nhập API Key" }); return; }
     setTestingKey(true); setKeyResult(null);
@@ -464,16 +471,18 @@ function AISection({ settings, onChange, geminiKey, setGeminiKey, showKey, setSh
       if (!h || h.status !== "healthy") console.warn("Backend health check failed:", h);
     } catch {}
     try {
+      const testModel = normalizeModel(ai.model);
       const text = await aiService.callAI({
         apiKey: geminiKey.trim(),
         contents: [{ role: "user", parts: [{ text: "Xin chào" }] }],
         systemInstruction: { parts: [{ text: "Chỉ trả lời OK" }] },
-        generationConfig: { temperature: 0, maxOutputTokens: 50 },
-        model: settings.ai.model || "gemini-2.5-flash",
+        // maxOutputTokens phải lớn hơn thinking budget tối thiểu (128) nếu bật thinking
+        generationConfig: { temperature: 0, maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } },
+        model: testModel,
         timeout: 30000, maxRetries: 1, requestId: "test-key",
       });
-      setKeyResult({ ok: true, msg: text ? `Kết nối thành công! (model: ${settings.ai.model})` : "Kết nối thành công!" });
-      try { setGeminiApiKey(geminiKey.trim()); } catch {}
+      setKeyResult({ ok: true, msg: text ? `Kết nối thành công! (model: ${testModel})` : "Kết nối thành công!" });
+      saveKey(geminiKey.trim());
     } catch (err) {
       const friendly = getFriendlyErrorMessage(err.status, err.message);
       setKeyResult({ ok: false, msg: `${friendly}${err.status ? ` [${err.status}]` : ""}` });
@@ -481,30 +490,26 @@ function AISection({ settings, onChange, geminiKey, setGeminiKey, showKey, setSh
   };
   return (
     <div>
-      <Card id="sec-ai" title="Gemini API" desc="Key lưu trên máy · Model & độ dài/sáng tạo áp dụng cho mọi khung chat AI." icon={<Cpu size={15} />}>
+      <Card id="sec-ai" title="Gemini API" desc="Key lưu trên máy · Model áp dụng mọi công cụ AI · Độ dài & Sáng tạo áp dụng cho Trợ lý nổi và Hỏi AI." icon={<Cpu size={15} />}>
         <Field label="API Key" hint="Lấy tại aistudio.google.com">
           <span style={{ display: "flex", gap: 6, flex: 1 }}>
             <input className={inp} style={{ flex: 1 }} type={showKey ? "text" : "password"} value={geminiKey}
-              onChange={(e) => setGeminiKey(e.target.value)} onBlur={() => { try { if (geminiKey.trim()) setGeminiApiKey(geminiKey.trim()); } catch {} }} placeholder="AIzaSy..." />
+              onChange={(e) => { setGeminiKey(e.target.value); setKeyResult(null); }} onBlur={() => saveKey(geminiKey)} placeholder="AIzaSy..." />
             <button type="button" className="st-btn st-btn-ghost st-btn-sm" onClick={() => setShowKey((v) => !v)}>{showKey ? <EyeOff size={13} /> : <Eye size={13} />}</button>
             <button className="st-btn st-btn-ghost st-btn-sm" onClick={handleTest} disabled={testingKey}>{testingKey ? <RefreshCw size={12} className="spin" /> : "Kiểm tra"}</button>
           </span>
         </Field>
         {keyResult && <p className={`st-note ${keyResult.ok ? "ok" : "err"}`}>{keyResult.msg}</p>}
-        <Field label="Model"><select className={sel} value={settings.ai.model} onChange={(e) => onChange(["ai", "model"], e.target.value)}>
-          <option value="gemini-2.5-flash">gemini-2.5-flash (Latest)</option><option value="gemini-2.0-flash">gemini-2.0-flash</option><option value="gemini-1.5-flash">gemini-1.5-flash</option>
+        <Field label="Model" hint="Áp dụng mọi công cụ AI"><select className={sel} value={normalizeModel(ai.model)} onChange={(e) => onChange(["ai", "model"], e.target.value)}>
+          {MODEL_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select></Field>
-        <Field label="Độ dài trả lời"><Seg value={settings.ai.responseLength} onPick={(v) => onChange(["ai", "responseLength"], v)} options={[{ v: "concise", t: "Ngắn" }, { v: "balanced", t: "Cân bằng" }, { v: "detailed", t: "Chi tiết" }]} /></Field>
-        <Field label={`Sáng tạo — ${settings.ai.temperature}`} hint="0 chính xác · 1 bay bổng">
-          <input type="range" className="st-range" min={0} max={100} value={Math.round(settings.ai.temperature * 100)}
+        <Field label="Độ dài trả lời"><Seg value={ai.responseLength || "balanced"} onPick={(v) => onChange(["ai", "responseLength"], v)} options={[{ v: "concise", t: "Ngắn" }, { v: "balanced", t: "Cân bằng" }, { v: "detailed", t: "Chi tiết" }]} /></Field>
+        <Field label={`Sáng tạo — ${ai.temperature ?? 0.7}`} hint="0 chính xác · 1 bay bổng">
+          <input type="range" className="st-range" min={0} max={100} value={Math.round((ai.temperature ?? 0.7) * 100)}
             onChange={(e) => onChange(["ai", "temperature"], Math.min(1, Math.max(0, Number(e.target.value) / 100)))} />
         </Field>
-        <Field label="Cấp dạy"><Seg value={settings.ai.teachingLevel} onPick={(v) => onChange(["ai", "teachingLevel"], v)} options={[{ v: "primary", t: "Tiểu học" }, { v: "secondary", t: "THCS" }]} /></Field>
-        <Field label="Giọng dạy"><select className={sel} value={settings.ai.teachingStyle} onChange={(e) => onChange(["ai", "teachingStyle"], e.target.value)}>
-          <option value="academic">Học thuật</option><option value="friendly">Thân thiện</option><option value="primary">Giáo viên Tiểu học</option><option value="student">Giáo viên tập sự</option>
-        </select></Field>
       </Card>
-      <Card id="sec-ai-note" title="Quyền riêng tư AI" desc="AI chỉ gửi nội dung trang đang chọn · Dữ liệu local không tự đồng bộ cloud." icon={<Shield size={15} />}><p className="st-muted">Bật “Local-only” ở mục Riêng tư để khóa hẳn mọi gửi dữ liệu phụ.</p></Card>
+      <Card id="sec-ai-note" title="Quyền riêng tư AI" desc="AI chỉ gửi nội dung bạn đang chọn · Dữ liệu local không tự đồng bộ cloud." icon={<Shield size={15} />}><p className="st-muted">Ứng dụng chạy local-first: sách, ghi chú và cài đặt nằm trên máy bạn; AI chỉ nhận phần bạn chủ động gửi (trang/đoạn đang chọn).</p></Card>
     </div>
   );
 }
@@ -527,11 +532,8 @@ function SearchSection({ settings, onChange }) {
 function ExportSection({ settings, onChange }) {
   const exp = settings.export;
   return (
-      <Card id="sec-export" title="Xuất dữ liệu" desc="“Kèm thời gian” chèn ngày vào mọi file tải về · Định dạng/metadata/ZIP là mặc định cho các khung xuất hỗ trợ." icon={<Download size={15} />}>
-      <Field label="Định dạng"><Seg value={exp.format} onPick={(v) => onChange(["export", "format"], v)} options={[{ v: "docx", t: "Word" }, { v: "pdf", t: "PDF" }, { v: "xlsx", t: "Excel" }]} /></Field>
-      <Field label="Kèm metadata"><Toggle label="Meta" checked={exp.includeMeta} onChange={(v) => onChange(["export", "includeMeta"], v)} /></Field>
-      <Field label="Kèm thời gian xuất"><Toggle label="Time" checked={exp.includeTimestamp} onChange={(v) => onChange(["export", "includeTimestamp"], v)} /></Field>
-      <Field label="Tự ZIP nhiều file"><Toggle label="ZIP" checked={exp.autoZip} onChange={(v) => onChange(["export", "autoZip"], v)} /></Field>
+      <Card id="sec-export" title="Xuất dữ liệu" desc="“Kèm thời gian” chèn ngày vào mọi file tải về · Định dạng do từng khung xuất chọn trực tiếp khi xuất." icon={<Download size={15} />}>
+      <Field label="Kèm thời gian xuất" hint="Chèn ngày giờ vào file tải về"><Toggle label="Time" checked={exp.includeTimestamp !== false} onChange={(v) => onChange(["export", "includeTimestamp"], v)} /></Field>
     </Card>
   );
 }
@@ -616,7 +618,6 @@ function BehaviorSection({ settings, onChange }) {
     <div>
       <Card id="sec-behavior" title="Hành vi" desc="Tắt 'Hỏi khi xóa' là bấm xóa đi luôn · Tắt 'Hiện thông báo' là app im lặng." icon={<Zap size={15} />}>
         <Field label="Hỏi trước khi xóa" hint="Tắt = xóa ngay không hỏi"><Toggle label="Hỏi xóa" checked={beh.confirmDelete} onChange={(v) => onChange(["behavior", "confirmDelete"], v)} /></Field>
-        <Field label="Hỏi trước khi xuất"><Toggle label="Hỏi xuất" checked={beh.confirmExport} onChange={(v) => onChange(["behavior", "confirmExport"], v)} /></Field>
         <Field label="Tự động lưu" hint="Các khung soạn/nháp tự ghi"><Toggle label="Auto" checked={beh.autoSave} onChange={(v) => onChange(["behavior", "autoSave"], v)} /></Field>
         {beh.autoSave && <Field label={`Chờ ${beh.autoSaveDelay}ms sau khi gõ`}><input type="range" className="st-range" min={300} max={5000} step={100} value={beh.autoSaveDelay} onChange={(e) => onChange(["behavior", "autoSaveDelay"], Number(e.target.value))} /></Field>}
         <Field label="Hiện bong bóng thông báo"><Toggle label="Noti" checked={beh.showNotifications} onChange={(v) => onChange(["behavior", "showNotifications"], v)} /></Field>
@@ -655,8 +656,6 @@ function NotificationsSection({ settings, onChange }) {
         <Toggle label="Nhắc" checked={n.dailyReminder} onChange={(v) => { onChange(["notifications", "dailyReminder"], v); setTimeout(() => { try { refreshNotificationTimer(loadSettings()); } catch {} }, 50); }} />
       </Field>
       {n.dailyReminder && <Field label="Giờ nhắc"><input type="time" className={inp} value={n.dailyTime} onChange={(e) => { const v = e.target.value; if (/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v)) { onChange(["notifications", "dailyTime"], v); setTimeout(() => { try { refreshNotificationTimer(loadSettings()); } catch {} }, 50); } }} /></Field>}
-      <Field label="Nhắc giữ streak"><Toggle label="Streak" checked={n.streakReminder} onChange={(v) => onChange(["notifications", "streakReminder"], v)} /></Field>
-      <Field label="Báo mở khóa thành tựu"><Toggle label="Achieve" checked={n.achievementUnlocked} onChange={(v) => onChange(["notifications", "achievementUnlocked"], v)} /></Field>
       <div className="st-btn-row">
         <button className="st-btn st-btn-ghost st-btn-sm" onClick={ask}>Xin quyền ({perm})</button>
         <button className="st-btn st-btn-primary st-btn-sm" disabled={testing} onClick={sendTest}>{testing ? "Đang gửi…" : "Gửi thử"}</button>
@@ -757,9 +756,6 @@ function PrivacySection({ settings, onChange }) {
   };
   return (
     <Card id="sec-privacy" title="Quyền riêng tư" desc="App local-first: sách & cài đặt nằm trên máy · AI chỉ gửi trang đang chọn." icon={<Shield size={15} />}>
-      <Field label="Chỉ dùng local" hint="Khóa mọi gửi dữ liệu phụ (khuyên bật)"><Toggle label="Local" checked={p.localOnly !== false} onChange={(v) => onChange(["privacy", "localOnly"], v)} /></Field>
-      <Field label="Cho phép phân tích ẩn danh" hint="Hiện tại app không gửi analytics đi đâu"><Toggle label="Anal" checked={!!p.allowAnalytics} onChange={(v) => onChange(["privacy", "allowAnalytics"], v)} /></Field>
-      <Field label="Gửi báo cáo lỗi" hint="Hiện tại chỉ ghi console máy"><Toggle label="Crash" checked={!!p.sendCrashReports} onChange={(v) => onChange(["privacy", "sendCrashReports"], v)} /></Field>
       <Field label="Ghi nhớ lịch sử mở sách" hint="Tắt = không lưu sách đã mở"><Toggle label="Hist" checked={p.rememberHistory !== false} onChange={(v) => { onChange(["privacy", "rememberHistory"], v); if (!v) { try { safeRemove("sgk_history"); safeRemove("sgk_counts"); } catch {} } }} /></Field>
       <div className="st-btn-row"><button className="st-btn st-btn-danger-ghost st-btn-sm" onClick={clearHistory}>Xóa lịch sử mở sách</button></div>
     </Card>
@@ -791,17 +787,8 @@ function AdvancedSection({ settings, onChange }) {
   };
   return (
     <div>
-      <Card id="sec-perf" title="Hiệu năng & Bộ nhớ" desc="Tắt lazy/prefetch khi máy yếu · Chất lượng PDF đổi độ nét bìa." icon={<Timer size={15} />}>
-        <Field label="Lazy loading" hint="Chỉ vẽ bìa khi cuộn tới"><Toggle label="Lazy" checked={adv.lazyLoading} onChange={(v) => onChange(["advanced", "lazyLoading"], v)} /></Field>
-        <Field label="Tải trước bìa kế tiếp"><Toggle label="Prefetch" checked={adv.prefetch} onChange={(v) => onChange(["advanced", "prefetch"], v)} /></Field>
-        <Field label="Chất lượng PDF"><Seg value={adv.pdfQuality} onPick={(v) => onChange(["advanced", "pdfQuality"], v)} options={[{ v: "low", t: "Thấp" }, { v: "medium", t: "Vừa" }, { v: "high", t: "Cao" }]} /></Field>
-        <Field label="Cache PDF" hint="Tắt để luôn tải mới từ server"><Toggle label="Cache" checked={adv.cachePDFs} onChange={(v) => onChange(["advanced", "cachePDFs"], v)} /></Field>
-        <Field label="Giữ cache"><select className={sel} value={adv.cacheTimeout} onChange={(e) => onChange(["advanced", "cacheTimeout"], Number(e.target.value))}>
-          <option value={3600000}>1 giờ</option><option value={86400000}>1 ngày</option><option value={604800000}>1 tuần</option>
-        </select></Field>
-        <Field label="Chế độ offline" hint="Hiện băng-rôn offline, ưu tiên cache"><Toggle label="Offline" checked={adv.enableOfflineMode} onChange={(v) => onChange(["advanced", "enableOfflineMode"], v)} /></Field>
-        <Field label="Chế độ gỡ lỗi" hint="Hiện viền debug + log chi tiết"><Toggle label="Debug" checked={adv.debugMode} onChange={(v) => onChange(["advanced", "debugMode"], v)} /></Field>
-        <Field label="Analytics nội bộ" hint="Bị khóa nếu Riêng tư tắt analytics"><Toggle label="Anal" checked={adv.enableAnalytics} onChange={(v) => onChange(["advanced", "enableAnalytics"], v)} /></Field>
+      <Card id="sec-perf" title="Gỡ lỗi" desc="Bật log chi tiết luồng gọi AI (retry, timeout) trong Console." icon={<Timer size={15} />}>
+        <Field label="Chế độ gỡ lỗi" hint="Khi bật, mở Console (F12) để xem log chi tiết mỗi lần gọi AI"><Toggle label="Debug" checked={!!adv.debugMode} onChange={(v) => onChange(["advanced", "debugMode"], v)} /></Field>
       </Card>
       <Card id="sec-diag" title="Chẩn đoán" desc="Kiểm tra nhanh backend, key, engine." icon={<Zap size={15} />}>
         <p className="st-muted">Phiên bản 0.0.0 · Schema 2 · Local-first</p>

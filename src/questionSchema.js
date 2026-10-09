@@ -7,6 +7,37 @@ export const QUESTION_TYPES = {
 };
 export const ALLOWED_TYPES = new Set(Object.values(QUESTION_TYPES));
 
+// ── Mức độ — Canonical scale (3 cấp, khớp MUC_DO của ctgpt/teachingDB/QuestionBank) ──
+export const MUC_DO_LEVELS = ['Biết', 'Hiểu', 'Vận dụng'];
+
+// Các biến thể AI / UI sinh ra (4 cấp) → quy về 3 cấp canonical.
+// Không khớp → trả '' để filter/cân bằng không rơi vào bucket lạ.
+const MUC_DO_ALIASES = {
+  'nhận biết': 'Biết',
+  'nhan biet': 'Biết',
+  'biết': 'Biết',
+  'biet': 'Biết',
+  'thông hiểu': 'Hiểu',
+  'thong hieu': 'Hiểu',
+  'hiểu': 'Hiểu',
+  'hieu': 'Hiểu',
+  'vận dụng': 'Vận dụng',
+  'van dung': 'Vận dụng',
+  'vận dụng cao': 'Vận dụng',
+  'van dung cao': 'Vận dụng',
+};
+
+/**
+ * Chuẩn hóa mức độ về canonical 3 cấp.
+ * @param {*} raw - giá trị từ AI / UI / dữ liệu cũ
+ * @returns {'Biết'|'Hiểu'|'Vận dụng'|''}
+ */
+export function normalizeMucdo(raw) {
+  const key = String(raw ?? '').trim().toLowerCase();
+  if (!key) return '';
+  return MUC_DO_ALIASES[key] || '';
+}
+
 // Legacy type mapping
 const LEGACY_TYPE_MAP = {
   'mc': 'mc',

@@ -2,8 +2,9 @@
 // Progressive disclosure, full a11y, stepper, loading/error/retry, editable preview.
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, Sparkles, Loader2, BookOpen, FileText, Puzzle, Database, ClipboardList, StickyNote, Zap, Check, ArrowLeft, ArrowRight, RefreshCw, Save, Trash2, ChevronUp, ChevronDown, Eye, AlertTriangle, Wand2, LayoutGrid, Library, Crop, Palette } from "lucide-react";
+import { X, Sparkles, Loader2, BookOpen, FileText, Puzzle, Database, ClipboardList, StickyNote, Zap, Check, ArrowLeft, ArrowRight, RefreshCw, Save, Trash2, ChevronUp, ChevronDown, Eye, AlertTriangle, Wand2, LayoutGrid, Library, Crop, Palette, Square } from "lucide-react";
 import { analyzeScan, generateMaterial, regenerateQuestion } from "./scanAIService.js";
+import aiService from "../aiService.js";
 import { saveScanMaterial } from "./materialGenerator.js";
 import CropPreview from "./CropPreview.jsx";
 import { appEvents, AppEvents } from "../core/appEvents.js";
@@ -38,11 +39,12 @@ export default function ScanModal({ scan, onClose, onSaved }) {
     numQuestions: 8,
     difficulty: "Trung bình",
     questionType: "Trắc nghiệm",
-    level: "Thông hiểu",
+    level: "Hiểu",
     withAnswer: true,
     gameType: "Quiz",
     audience: "Cá nhân",
     timeLimit: "5 phút",
+    randomizeAnswers: false,
     fidelity: "Giữ nguyên gốc",
     keepOriginal: true,
     phase: "luyenTap",
@@ -64,6 +66,17 @@ export default function ScanModal({ scan, onClose, onSaved }) {
   const [analysisEditOpen, setAnalysisEditOpen] = useState(false);
   const overlayRef = useRef(null);
   const closeBtnRef = useRef(null);
+
+  // Dừng AI của màn hình quét — scanAIService cấp requestId bắt đầu bằng "scan-"
+  const stopScanAi = () => {
+    try { aiService.cancelRequestsByPrefix("scan-"); } catch {}
+  };
+
+  // Đóng modal khi đang chạy → hủy hết request "scan-" (không chạy nền tốn token,
+  // không còn setState sau unmount / trùng request khi mở lại)
+  useEffect(() => {
+    return () => { try { aiService.cancelRequestsByPrefix("scan-"); } catch {} };
+  }, []);
 
   useEffect(() => {
     if (!savedInfo) return;
@@ -98,7 +111,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
       setAnalysisEditOpen(false);
       setStep(2);
     } catch (e) {
-      setError(e.message || "AI phân tích lỗi");
+      setError(e?.code === "CANCELLED" ? "Đã dừng phân tích." : e.message || "AI phân tích lỗi");
     } finally { setLoading(false); setLoadingLabel(""); }
   }, [scan, adjustedScan]);
 
@@ -115,7 +128,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
       const t = gen?.parsed?.title || gen?.parsed?.name || "";
       setEditTitle(t);
       setStep(4);
-    } catch (e) { setError(e.message || "AI tạo lỗi"); } finally { setLoading(false); setLoadingLabel(""); }
+    } catch (e) { setError(e?.code === "CANCELLED" ? "Đã dừng tạo học liệu." : e.message || "AI tạo lỗi"); } finally { setLoading(false); setLoadingLabel(""); }
   };
 
   const handleRegenerateOne = async (idx) => {
@@ -139,7 +152,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
       };
       nextQs[idx] = mapped;
       setGenerated({ ...generated, parsed: { ...generated.parsed, questions: nextQs } });
-    } catch (e) { setError(e.message || "Tạo lại câu hỏi lỗi"); } finally { setRegenIdx(null); }
+    } catch (e) { setError(e?.code === "CANCELLED" ? "Đã dừng." : e.message || "Tạo lại câu hỏi lỗi"); } finally { setRegenIdx(null); }
   };
 
   const moveQuestion = (idx, dir) => {
@@ -221,13 +234,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
       } catch {}
       onSaved?.({ type: "batch", batch: results, analysis, scan: scanToUse });
       setSavedInfo({ type: "batch", batch: results, analysis, scan: scanToUse });
-    } catch (e) { setError(e.message || "Tạo bộ thất bại"); } finally { setLoading(false); setLoadingLabel(""); }
-  };
-
-  // Thêm vào KHBD: đã gỡ theo module mới (soạn trực tiếp trong Giáo án).
-  // Giữ hàm stub để không vỡ nút gọi cũ.
-  const handleAddToKhbd = async () => {
-    setError("Tính năng đưa vào KHBD đã chuyển sang module Giáo án mới.");
+    } catch (e) { setError(e?.code === "CANCELLED" ? "Đã dừng tạo bộ." : e.message || "Tạo bộ thất bại"); } finally { setLoading(false); setLoadingLabel(""); }
   };
 
   const handleAddToCollection = async () => {
@@ -283,7 +290,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
       const effectiveAnalysis = analysis ? { ...analysis, content: (analysisEdit?.trim() || analysis.content) } : analysis;
       generateMaterial({ scan: { ...scanToUse, analysis: effectiveAnalysis }, analysis: effectiveAnalysis, materialType: suggested, config })
         .then((gen) => { setGenerated(gen); setEditTitle(gen?.parsed?.title || gen?.parsed?.name || ""); setStep(4); setMaterialType(suggested); })
-        .catch((e) => setError(e.message))
+        .catch((e) => setError(e?.code === "CANCELLED" ? "Đã dừng." : e.message))
         .finally(() => setLoading(false));
     }, 80);
   };
@@ -508,9 +515,10 @@ export default function ScanModal({ scan, onClose, onSaved }) {
 
           <div className="scanm-right" style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
 
-          {loading && (
+          {(loading || regenIdx !== null) && (
             <div role="status" aria-live="polite" style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", padding: 12, color: "var(--primary)", background: "var(--primary-light)", border: "1px solid var(--primary)", borderRadius: 10 }}>
-              <Loader2 size={18} className="aia-spin-svg" style={{ animation: "spin 0.9s linear infinite" }} /> <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>{loadingLabel || "Đang xử lý…"}</span>
+              <Loader2 size={18} className="aia-spin-svg" style={{ animation: "spin 0.9s linear infinite" }} /> <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>{regenIdx !== null ? "🧠 AI đang tạo lại câu hỏi…" : (loadingLabel || "Đang xử lý…")}</span>
+              <button className="btn btn-danger btn-xs" style={{ marginLeft: "auto", flexShrink: 0 }} onClick={stopScanAi} title="Dừng AI" aria-label="Dừng AI"><Square size={11} fill="currentColor" /> Dừng</button>
             </div>
           )}
           {error && (
@@ -673,7 +681,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                   </label>
                   <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Mức độ
                     <select className="form-control" value={config.level} onChange={(e)=>setConfig({...config, level: e.target.value})} style={{ minWidth: 120 }}>
-                      <option>Biết</option><option>Thông hiểu</option><option>Vận dụng</option><option>Vận dụng cao</option>
+                      <option>Biết</option><option>Hiểu</option><option>Vận dụng</option>
                     </select>
                   </label>
                   <label style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6, marginTop: 18 }}>
@@ -690,7 +698,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                   </label>
                   <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Mức độ
                     <select className="form-control" value={config.level} onChange={(e)=>setConfig({...config, level: e.target.value})} style={{ minWidth: 120 }}>
-                      <option>Biết</option><option>Thông hiểu</option><option>Vận dụng</option>
+                      <option>Biết</option><option>Hiểu</option><option>Vận dụng</option>
                     </select>
                   </label>
                 </div>
@@ -734,8 +742,8 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                       <label style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>Đối tượng
                         <select className="form-control" value={config.audience} onChange={(e)=>setConfig({...config, audience:e.target.value})} style={{ minWidth:110 }}><option>Cá nhân</option><option>Cặp đôi</option><option>Nhóm</option><option>Cả lớp</option></select>
                       </label>
-                      <label style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>Random
-                        <select className="form-control" onChange={()=>{}} style={{ minWidth:120 }}><option>Random câu hỏi</option><option>Random đáp án</option><option>Không random</option></select>
+                      <label style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>Xáo trộn đáp án
+                        <select className="form-control" value={config.randomizeAnswers ? "on" : "off"} onChange={(e)=>setConfig({...config, randomizeAnswers: e.target.value === "on"})} style={{ minWidth:130 }}><option value="off">Giữ thứ tự sách</option><option value="on">Xáo trộn vị trí đáp án</option></select>
                       </label>
                     </div>
                     <div style={{ fontSize:11, color:"var(--text-muted)" }}>Mặc định đã tối ưu. Chỉ mở khi cần tinh chỉnh chuyên sâu.</div>

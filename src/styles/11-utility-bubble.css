@@ -33,7 +33,7 @@
   border-radius: 50%;
   background: var(--color-action, var(--pen-blue));
   border: 1px solid var(--color-action, var(--pen-blue));
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   font-size: 1.4rem;
   cursor: pointer;
   display: flex;
@@ -59,7 +59,7 @@
   top: -3px;
   right: -3px;
   background: var(--red-action);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border: 1px solid var(--red-action-deep);
   border-radius: var(--radius-full);
   font-size: 0.66rem;
@@ -128,7 +128,7 @@
 }
 .util-bubble-close.dark {
   background: var(--text-dark);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border-color: var(--text-dark);
 }
 .util-bubble-body {
@@ -388,14 +388,14 @@
 }
 .toc-row:hover .toc-page-pill {
   background: var(--pen-blue);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border-color: var(--pen-blue-deep);
   box-shadow: 0 2px 4px rgba(31, 117, 254, 0.25);
 }
 .toc-row.active .toc-page-pill {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
 }
 
 /* Responsive TOC modal */

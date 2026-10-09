@@ -5,19 +5,18 @@
 // This addresses BUG-016: No unified AI service layer
 // Each component was calling API directly with inconsistent error handling.
 
-import { getApiBase } from "./apiConfig.js";
+import { getApiBase, DEFAULT_AI_MODEL, normalizeModel } from "./apiConfig.js";
 import { uiMessage } from "./core/errors.js";
+import aiDataStorage from "./aiDataStorage.js";
 
 const API_BASE = getApiBase();
 // ── Models ──────────────────────────────────────────────────────────────
+// Danh sách model còn hỗ trợ — giữ đồng bộ với MODEL_OPTIONS trong apiConfig.js
 const AVAILABLE_MODELS = {
-  GEMINI_2_0_FLASH: "gemini-2.0-flash",
-  GEMINI_2_5_FLASH: "gemini-2.5-flash",
-  GEMINI_1_5_FLASH: "gemini-1.5-flash",
-  GEMINI_1_5_PRO: "gemini-1.5-pro",
+  GEMINI_2_5_FLASH: DEFAULT_AI_MODEL,
 };
 
-const DEFAULT_MODEL = AVAILABLE_MODELS.GEMINI_2_5_FLASH; // Use 2.5 Flash as default
+const DEFAULT_MODEL = DEFAULT_AI_MODEL;
 // ── Configuration ───────────────────────────────────────────────────────
 const DEFAULT_TIMEOUT = 90000; // 90 seconds
 const MAX_RETRIES = 3;
@@ -67,13 +66,16 @@ function getFriendlyErrorMessage(status, message) {
   return "Có lỗi xảy ra khi gọi AI. Hãy thử lại nhé!";
 }
 
-function delay(ms, signal) {
+function delay(ms, controller) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(resolve, ms);
+    const signal = controller?.signal;
     if (!signal) return;
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new AIError("Đã dừng yêu cầu AI.", 499, "CANCELLED"));
+      // Timer timeout cũng abort → phải báo TIMEOUT, không phải "đã dừng"
+      if (controller.cancelled) reject(new AIError("Đã dừng yêu cầu AI.", 499, "CANCELLED"));
+      else reject(new AIError("AI trả lời quá lâu rồi! Hãy thử lại sau nhé.", 504, "TIMEOUT"));
     };
     if (signal.aborted) onAbort();
     else signal.addEventListener("abort", onAbort, { once: true });
@@ -82,6 +84,30 @@ function delay(ms, signal) {
 
 function isRetryableStatus(status) {
   return RETRYABLE_STATUS_CODES.includes(status);
+}
+
+// thinkingBudget phải < maxOutputTokens, nếu không Gemini trả 400/rỗng
+function clampThinkingBudget(cfg) {
+  if (!cfg || typeof cfg !== "object") return cfg;
+  const budget = cfg?.thinkingConfig?.thinkingBudget;
+  const maxOut = Number(cfg.maxOutputTokens);
+  if (!Number.isFinite(budget) || budget <= 0 || !Number.isFinite(maxOut)) return cfg;
+  if (budget < maxOut) return cfg;
+  return {
+    ...cfg,
+    thinkingConfig: { ...cfg.thinkingConfig, thinkingBudget: Math.max(0, Math.floor(maxOut * 0.5)) },
+  };
+}
+
+// Cài đặt → Nâng cao → "Chế độ gỡ lỗi": chỉ khi bật mới hiện log chi tiết retry của AI
+function isDebugEnabled() {
+  if (globalThis.__SGK_TEST__ === true) return false;
+  try {
+    const raw = localStorage.getItem("sgk_settings");
+    return !!raw && JSON.parse(raw)?.advanced?.debugMode === true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Main AI Service ───────────────────────────────────────────────────────
@@ -139,6 +165,10 @@ class AIService {
     const finalRequestId =
       requestId || `ai_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
+    // Ép model về danh sách đang hỗ trợ: model retired trả 404 từ Google
+    const finalModel = normalizeModel(model);
+    const finalGenerationConfig = clampThinkingBudget(generationConfig);
+
     let lastError = null;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const controller = new AbortController();
@@ -155,10 +185,10 @@ class AIService {
             "x-gemini-key": apiKey,
           },
           body: JSON.stringify({
-            model,
+            model: finalModel,
             contents,
             systemInstruction: normalizedSystemInstruction,
-            generationConfig: generationConfig || {
+            generationConfig: finalGenerationConfig || {
               temperature: 0.4,
               topP: 0.95,
               maxOutputTokens: 2048,
@@ -180,10 +210,12 @@ class AIService {
           if (isRetryableStatus(response.status) && attempt < maxRetries - 1) {
             lastError = error;
             const delayMs = RETRY_DELAY_BASE * Math.pow(2, attempt);
-            console.log(
-              `AI retry attempt ${attempt + 1}/${maxRetries} after ${delayMs}ms (status: ${response.status})`,
-            );
-            await delay(delayMs, controller.signal);
+            if (isDebugEnabled()) {
+              console.debug(
+                `AI retry attempt ${attempt + 1}/${maxRetries} after ${delayMs}ms (status: ${response.status})`,
+              );
+            }
+            await delay(delayMs, controller);
             continue;
           }
 
@@ -193,10 +225,11 @@ class AIService {
         const cand = data?.candidates?.[0];
         const text = cand?.content?.parts?.[0]?.text;
         if (!text) {
-          const blockReason =
-            data?.promptFeedback?.blockReason ||
-            cand?.finishReason ||
-            data?.candidates?.[0]?.finishReason;
+          // Chỉ "block" thật khi Gemini chặn nội dung (promptFeedback) hoặc cắt vì hết token.
+          // finishReason STOP/OTHER rỗng là lỗi tạm thời → PHẢI được retry.
+          const promptBlock = String(data?.promptFeedback?.blockReason || "");
+          const finish = String(cand?.finishReason || "").toUpperCase();
+          const blockCode = promptBlock || (finish === "MAX_TOKENS" ? "MAX_TOKENS" : "");
           // Mã chặn của Gemini (SAFETY/RECITATION/…) là tiếng Anh kỹ thuật → dịch ra Việt, giữ mã gốc trong console
           const BLOCK_REASON_VI = {
             SAFETY: "bộ lọc an toàn", OTHER: "lý do khác", BLOCKLIST: "danh sách chặn",
@@ -204,22 +237,49 @@ class AIService {
             LANGUAGE: "ngôn ngữ chưa được hỗ trợ", MAX_TOKENS: "vượt giới hạn độ dài",
             STOP: "đã dừng", FINISH_REASON_UNSPECIFIED: "không rõ",
           };
-          const reasonVi = BLOCK_REASON_VI[String(blockReason || "").toUpperCase()] || "không rõ";
-          const detail = blockReason ? ` (lý do: ${reasonVi})` : "";
+          const reasonVi = BLOCK_REASON_VI[blockCode.toUpperCase()] || "không rõ";
+          const detail = blockCode ? ` (lý do: ${reasonVi})` : "";
           // Log raw for debugging but don't expose full payload to user
-          console.warn(
-            "Gemini empty response:",
-            JSON.stringify(data).slice(0, 800),
-          );
-          throw new AIError(
+          if (isDebugEnabled()) {
+            console.warn(
+              "Gemini empty response:",
+              JSON.stringify(data).slice(0, 800),
+            );
+          }
+          const error = new AIError(
             `AI không đưa ra câu trả lời nào${detail}. Hãy thử lại nhé!`,
             500,
             "NO_RESPONSE",
           );
+          if (!blockCode && attempt < maxRetries - 1) {
+            lastError = error;
+            const delayMs = RETRY_DELAY_BASE * Math.pow(2, attempt);
+            if (isDebugEnabled()) {
+              console.debug(
+                `AI retry attempt ${attempt + 1}/${maxRetries} after ${delayMs}ms (empty response)`,
+              );
+            }
+            await delay(delayMs, controller);
+            continue;
+          }
+          throw error;
         }
 
+        try { aiDataStorage.recordUsageStats({ requests: 1, successful: 1 }); } catch {}
         return text;
       } catch (err) {
+        // Lỗi cuối cùng (không còn lượt retry) mới tính là request thất bại.
+        // Người dùng chủ động dừng không phải là lỗi.
+        const isFinal =
+          err.name === "AbortError" ||
+          err instanceof AIError ||
+          attempt >= maxRetries - 1;
+        const stopped =
+          (err.name === "AbortError" && controller.cancelled) ||
+          (err instanceof AIError && err.code === "CANCELLED");
+        if (isFinal && !stopped) {
+          try { aiDataStorage.recordUsageStats({ requests: 1, failed: 1 }); } catch {}
+        }
         if (err.name === "AbortError") {
           if (controller.cancelled) {
             throw new AIError("Đã dừng yêu cầu AI.", 499, "CANCELLED");
@@ -240,7 +300,15 @@ class AIService {
         if (attempt < maxRetries - 1) {
           lastError = err;
           const delayMs = RETRY_DELAY_BASE * Math.pow(2, attempt);
-          await delay(delayMs, controller.signal);
+          try {
+            await delay(delayMs, controller);
+          } catch (delayErr) {
+            // Hủy/timeout lúc chờ retry → thoát ngay nhưng vẫn phải ghi stats
+            if (delayErr?.code !== "CANCELLED") {
+              try { aiDataStorage.recordUsageStats({ requests: 1, failed: 1 }); } catch {}
+            }
+            throw delayErr;
+          }
           continue;
         }
 
@@ -282,9 +350,31 @@ class AIService {
    */
   cancelAllRequests() {
     this.activeControllers.forEach((controller) => {
+      // Đánh dấu là hủy chủ động để AbortError thành CANCELLED, không phải TIMEOUT
+      controller.cancelled = true;
       controller.abort();
     });
     this.activeControllers.clear();
+  }
+
+  /**
+   * Hủy các request đang chạy theo đầu ID (vd: "scan-", "wb-mindmap-").
+   * Dùng khi nút Dừng của một màn hình chỉ được dừng đúng việc của nó.
+   * @param {string} prefix
+   * @returns {number} số request đã hủy
+   */
+  cancelRequestsByPrefix(prefix) {
+    if (!prefix) return 0;
+    let n = 0;
+    for (const [id, controller] of [...this.activeControllers.entries()]) {
+      if (id.startsWith(prefix)) {
+        controller.cancelled = true;
+        controller.abort();
+        this.activeControllers.delete(id);
+        n += 1;
+      }
+    }
+    return n;
   }
 
   /**

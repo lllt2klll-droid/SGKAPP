@@ -12,6 +12,7 @@ import {
   Copy,
   Download,
   RefreshCw,
+  NotebookPen,
 } from "lucide-react";
 import { escapeHtml } from "./exportDoc";
 import { TEACHER_SYSTEM_PROMPT, APP_PERSONA } from "./appPersona";
@@ -20,6 +21,7 @@ import { loadSettings } from "./settingsStore";
 import { soundManager } from "./audio/soundManager.js";
 import { searchAll } from "./searchIndex";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove } from "./safeStorage";
+import { addVocabEntry } from "./userdata";
 
 const MAX_MSGS = 40;
 const HISTORY_KEY = "assistant_history";
@@ -192,6 +194,7 @@ export default function AssistantBubble({
   const [loading, setLoading] = useState(false);
   const [unread, setUnread] = useState(0);
   const [copiedId, setCopiedId] = useState(null);
+const [savedVocabId, setSavedVocabId] = useState(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const wrapRef = useRef(null);
   const bodyRef = useRef(null);
@@ -391,7 +394,8 @@ export default function AssistantBubble({
       favoritesCount: appContext.favoritesCount || 0,
       historyCount: appContext.historyCount || 0,
       settings: {
-        language: settings.general?.language,
+        // App 1 ngôn ngữ (Tiếng Việt) — không còn key general.language trong Settings
+        language: "vi",
         theme: settings.appearance?.theme,
         readingLayout: settings.reading?.layout,
         aiModel: settings.ai?.model,
@@ -536,6 +540,37 @@ export default function AssistantBubble({
     }
   };
 
+  // Lưu câu trả lời của AI vào Sổ tay từ vựng (word = câu hỏi tương ứng)
+  const saveMsgToNotebook = (id, text) => {
+    try {
+      const idx = messages.findIndex((m) => m.id === id);
+      let question = "";
+      for (let i = idx > 0 ? idx - 1 : messages.length - 1; i >= 0; i--) {
+        if (messages[i] && messages[i].role === "user") {
+          question = messages[i].text;
+          break;
+        }
+      }
+      const word =
+        String(question || "").trim().slice(0, 80) || "Ghi chú từ Trợ lý AI";
+      addVocabEntry({
+        word,
+        meaning: String(text || "").slice(0, 1500),
+        file: "",
+        bookTitle: "",
+        grade: null,
+        page: null,
+        tags: ["trợ lý ai"],
+      });
+      setSavedVocabId(id);
+      setTimeout(() => setSavedVocabId((v) => (v === id ? null : v)), 2500);
+    } catch (e) {
+      console.warn("[AssistantBubble] saveMsgToNotebook failed:", e);
+      setCopyError("Không lưu được vào sổ tay từ vựng (bộ nhớ đầy?).");
+      setTimeout(() => setCopyError(""), 3000);
+    }
+  };
+
   const fmtTime = (at) => {
     try {
       return new Date(at).toLocaleTimeString("vi-VN", {
@@ -673,6 +708,23 @@ export default function AssistantBubble({
                         ) : (
                           <>
                             <Copy size={12} /> Sao chép
+                          </>
+                        )}
+                      </button>
+                    )}
+                    {!m.openSettings && !m.error && (
+                      <button
+                        className="aia-copy"
+                        onClick={() => saveMsgToNotebook(m.id, m.text)}
+                        title="Lưu câu trả lời này vào Sổ tay từ vựng"
+                      >
+                        {savedVocabId === m.id ? (
+                          <>
+                            <Check size={12} /> Đã lưu
+                          </>
+                        ) : (
+                          <>
+                            <NotebookPen size={12} /> Lưu sổ tay
                           </>
                         )}
                       </button>

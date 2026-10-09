@@ -457,6 +457,11 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       if (e.key === "Escape"){
         if(showTablePick || showColorPick){ setShowTablePick(false); setShowColorPick(null); e.preventDefault(); return; }
         if(showFind){ setShowFind(false); e.preventDefault(); return; }
+        // Lỗi #5: modal đang mở là lớp trên cùng — Escape phải dừng ở đây,
+        // không nổi lên reader (tắt note/panel ẩn) hay các layer khác.
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         onClose(); return;
       }
       if (isMod && k==="s"){ e.preventDefault(); handleSubmit(); return; }
@@ -464,7 +469,13 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       if (isMod && k==="p"){ e.preventDefault(); handlePrint(); return; }
       if (isMod && k==="f" && !e.shiftKey){ e.preventDefault(); setShowFind(v=>!v); return; }
       if (isMod && k==="h"){ e.preventDefault(); setShowFind(true); return; }
-      if (isMod && k==="k"){ e.preventDefault(); insertLink(); return; }
+      if (isMod && k==="k"){
+        // Phân quyền Ctrl+K: search overlay đang giữ focus → phím thuộc search,
+        // modal không được nuốt (chèn link) — tránh chạy chung với overlay.
+        const a = document.activeElement;
+        if (a && a.closest && a.closest(".global-search-overlay")) return;
+        e.preventDefault(); insertLink(); return;
+      }
       if (isMod && k==="b"){ e.preventDefault(); exec("bold"); return; }
       if (isMod && k==="i"){ e.preventDefault(); exec("italic"); return; }
       if (isMod && k==="u"){ e.preventDefault(); exec("underline"); return; }

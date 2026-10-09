@@ -22,7 +22,6 @@ export const DEFAULT_SHORTCUTS = {
   "nav.questionbank": "Alt+Q",
   "nav.whiteboard": "Alt+B",
   "nav.tasks": "Alt+T",
-  "nav.dashboard2": "Alt+0",
   // ── Whiteboard — Công cụ ──
   "whiteboard.select": "V",
   "whiteboard.pan": "H",
@@ -64,13 +63,14 @@ export const DEFAULT_SHORTCUTS = {
   "reader.drawing": "d",
   "reader.tts": "Ctrl+Shift+V",
   "reader.scan": "Ctrl+Shift+X",
-  // ── Reader — Khác ──
-  "reader.undoNote": "Ctrl+Z",
-  "reader.clearCanvas": "Delete",
+  // Bảng lệnh khi đọc — phím RIÊNG, không dùng Ctrl+K (trùng với global.commandPalette).
+  "reader.commandPalette": "Alt+K",
 };
 
 export const SHORTCUT_META = {
-  "global.commandPalette": { label: "Mở bảng lệnh", cat: "Chung", desc: "Mở bảng lệnh nhanh" },
+  // Ctrl+K = GlobalSearch (tìm kiếm toàn cục) — KHÔNG phải bảng lệnh.
+  // Bảng lệnh của Reader là phím RIÊNG reader.commandPalette (Alt+K).
+  "global.commandPalette": { label: "Tìm kiếm toàn cục", cat: "Chung", desc: "Mở ô tìm kiếm Ctrl+K (mục lục, sách, ghi chú…)" },
   "global.search": { label: "Tìm kiếm toàn cục", cat: "Chung", desc: "Mở tìm kiếm" },
   "global.close": { label: "Đóng modal / Thoát", cat: "Chung", desc: "Esc để đóng" },
   "global.help": { label: "Trợ giúp phím tắt", cat: "Chung", desc: "Mở trợ giúp" },
@@ -88,7 +88,6 @@ export const SHORTCUT_META = {
   "nav.questionbank": { label: "Ngân hàng câu hỏi", cat: "Chuyển trang", desc: "Đến Ngân hàng" },
   "nav.whiteboard": { label: "Whiteboard", cat: "Chuyển trang", desc: "Đến Bảng trắng" },
   "nav.tasks": { label: "Nhiệm vụ", cat: "Chuyển trang", desc: "Đến hub Nhiệm vụ (daily + việc cần làm)" },
-  "nav.dashboard2": { label: "Dashboard (Alt+0)", cat: "Chuyển trang", desc: "Dự phòng" },
   "whiteboard.select": { label: "Chọn", cat: "Whiteboard", desc: "Công cụ chọn (V)" },
   "whiteboard.pan": { label: "Di chuyển", cat: "Whiteboard", desc: "Kéo canvas (H/Space)" },
   "whiteboard.pen": { label: "Bút", cat: "Whiteboard", desc: "Vẽ tự do (P)" },
@@ -125,11 +124,10 @@ export const SHORTCUT_META = {
   "reader.drawing": { label: "Bảng nháp", cat: "Đọc — Công cụ", desc: "Mở tab Công cụ / vẽ" },
   "reader.tts": { label: "Đọc sách (TTS)", cat: "Đọc — Công cụ", desc: "Bật/tắt TTS" },
   "reader.scan": { label: "Quét vùng (Scan)", cat: "Đọc — Công cụ", desc: "Bật/tắt quét vùng" },
-  "reader.undoNote": { label: "Hoàn tác ghi chú", cat: "Đọc — Khác", desc: "Undo note" },
-  "reader.clearCanvas": { label: "Xóa bảng vẽ", cat: "Đọc — Khác", desc: "Xóa canvas" },
+  "reader.commandPalette": { label: "Bảng lệnh khi đọc", cat: "Đọc — Công cụ", desc: "Mở bảng lệnh của Reader — phím riêng Alt+K (Ctrl+K thuộc tìm kiếm toàn cục)" },
 };
 
-export const SHORTCUT_CATEGORIES = ["Chung","Chuyển trang","Whiteboard","Đọc — Điều hướng","Đọc — Xem","Đọc — AI","Đọc — Công cụ","Đọc — Khác"];
+export const SHORTCUT_CATEGORIES = ["Chung","Chuyển trang","Whiteboard","Đọc — Điều hướng","Đọc — Xem","Đọc — AI","Đọc — Công cụ"];
 
 export function getShortcuts() {
   try {
@@ -145,6 +143,15 @@ export function getShortcuts() {
 export function getShortcut(id) {
   const map = getShortcuts();
   return map[id] || DEFAULT_SHORTCUTS[id] || "";
+}
+
+// Tách combo "Ctrl+Shift+K" → ["Ctrl","Shift","K"] — dùng cho <kbd> hint (#13)
+// và cho matchesShortcut. Tách riêng để unit test được (coverage #17).
+export function splitCombo(combo) {
+  return String(combo || "")
+    .split("+")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export function comboToString(e) {
@@ -168,14 +175,16 @@ export function comboToString(e) {
 
 export function matchesShortcut(e, combo) {
   if (!combo) return false;
-  const wanted = combo.split("+").map(s=>s.trim());
+  const wanted = splitCombo(combo);
   const needCtrl = wanted.includes("Ctrl");
   const needAlt = wanted.includes("Alt");
   const needShift = wanted.includes("Shift");
   const needMeta = wanted.includes("Meta");
   // Find main key (last non-modifier)
   const main = [...wanted].reverse().find(k=>!["Ctrl","Alt","Shift","Meta"].includes(k)) || "";
-  const hasCtrl = !!(e.ctrlKey || e.metaKey);
+  // Cmd (macOS) đóng vai Ctrl — nhưng CHỈ khi combo đang tìm Ctrl. Combo "Meta+K"
+  // phải phân biệt được Cmd thật; combo không cần Ctrl/Meta thì Cmd cũng không hợp lệ.
+  const hasCtrl = !!(e.ctrlKey || (e.metaKey && needCtrl && !needMeta));
   const hasAlt = !!e.altKey;
   const hasShift = !!e.shiftKey;
   const hasMeta = !!e.metaKey;
@@ -217,7 +226,14 @@ export function matchesShortcut(e, combo) {
   } else {
     if (needShift !== hasShift) return false;
   }
-  if (needMeta !== hasMeta) return false;
+  // Cmd (macOS) đóng vai Ctrl: khi combo CÓ Ctrl thì metaKey đã được tính vào
+  // hasCtrl (dòng 182). Nếu vẫn enforce needMeta!==hasMeta thì "Ctrl+K" không bao
+  // giờ khớp Cmd+K trên macOS (lỗi #8). Chỉ enforce Meta khi combo KHÔNG có Ctrl.
+  if (needMeta) {
+    if (!hasMeta) return false;
+  } else if (needCtrl) {
+    // metaKey (nếu có) đã dùng thay Ctrl — bỏ qua
+  } else if (hasMeta) return false;
   return true;
 }
 

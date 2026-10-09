@@ -4,6 +4,7 @@
 import { ACCENT_PALETTES, generateAccentScale, accentSemanticsFromScale } from "./designTokens.js";
 import { safeGetJSON, safeGetString, safeSetJSON, safeSetString, safeRemove, listKeys } from "./safeStorage.js";
 import { STORAGE_KEYS, isCacheKey as isCacheKeyCore } from "./core/storageKeys.js";
+import { normalizeModel } from "./apiConfig.js";
 
 export const SETTINGS_KEY = STORAGE_KEYS.SETTINGS;
 
@@ -11,7 +12,6 @@ export const DEFAULT_SETTINGS = {
   version: 1,
   general: {
     displayName: "",
-    language: "vi",
     weekStart: 1,
     startPage: "dashboard",
     timezone: "auto",
@@ -66,16 +66,10 @@ export const DEFAULT_SETTINGS = {
     temperature: 0.7,
     effort: "balanced",
     responseLength: "balanced",
-    language: "vi",
-    teachingLevel: "primary",
-    behavior: "balanced",
-    teachingStyle: "friendly",
   },
   notifications: {
     dailyReminder: false,
     dailyTime: "08:00",
-    streakReminder: true,
-    achievementUnlocked: true,
   },
   accessibility: {
     highContrast: false,
@@ -84,10 +78,7 @@ export const DEFAULT_SETTINGS = {
     focusIndicators: true,
   },
   export: {
-    format: "docx",
-    includeMeta: true,
     includeTimestamp: true,
-    autoZip: false,
   },
   backup: {
     autoBackup: true,
@@ -97,7 +88,6 @@ export const DEFAULT_SETTINGS = {
   },
   behavior: {
     confirmDelete: true,
-    confirmExport: false,
     autoSave: true,
     autoSaveDelay: 1000,
     showNotifications: true,
@@ -136,20 +126,15 @@ export const DEFAULT_SETTINGS = {
   },
   data: { cachedBooks: 0, indexedBooks: 0, indexedSize: 0 },
   advanced: {
-    lazyLoading: true,
-    prefetch: true,
-    pdfQuality: "medium",
-    cachePDFs: true,
-    cacheTimeout: 3600000,
-    enableOfflineMode: false,
+    // Chỉ giữ debugMode — đã nối thật với log chi tiết của aiService + data-debug.
+    // Các khóa cũ (lazyLoading/prefetch/pdfQuality/cachePDFs/cacheTimeout/
+    // enableOfflineMode/enableAnalytics) không nơi nào đọc → bỏ, migrate dọn.
     debugMode: false,
-    enableAnalytics: false,
   },
   keyboard: { shortcuts: {} },
   privacy: {
-    localOnly: true,
-    allowAnalytics: false,
-    sendCrashReports: false,
+    // Chỉ giữ rememberHistory (đã có UI). localOnly/sendCrashReports không nơi
+    // nào đọc, không có toggle → bỏ, migrate dọn khỏi storage.
     rememberHistory: true,
   },
 };
@@ -174,6 +159,11 @@ function deepMerge(target, src) {
   return out;
 }
 
+// deepMerge trả object lồng sâu vẫn CHỈ CHO THAM CHIẾU tới DEFAULT_SETTINGS cho các
+// section thiếu trong storage — migrate*() ghi tại chỗ sẽ làm bẩn default cả phiên.
+// Clone trước khi merge để không bao giờ dùng chung ref.
+const cloneDefaults = () => JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+
 function migrateAppearance(appearance) {
   if (!appearance) return;
   if (appearance.accent && !appearance.accentMode) appearance.accentMode = "preset";
@@ -194,11 +184,20 @@ function migrateBehavior(behavior) {
   if (behavior.soundProfile !== "minimal" && behavior.soundProfile !== "standard") behavior.soundProfile = "minimal";
   if (typeof behavior.soundEnabled !== "boolean") behavior.soundEnabled = false;
   if (typeof behavior.confirmDelete !== "boolean") behavior.confirmDelete = true;
-  if (typeof behavior.confirmExport !== "boolean") behavior.confirmExport = false;
   if (typeof behavior.autoSave !== "boolean") behavior.autoSave = true;
   if (!Number.isFinite(behavior.autoSaveDelay)) behavior.autoSaveDelay = 1000;
   if (typeof behavior.showNotifications !== "boolean") behavior.showNotifications = true;
   if (typeof behavior.vibrateEnabled !== "boolean") behavior.vibrateEnabled = false;
+  // Mục cũ: không luồng xuất nào gọi shouldConfirmExport() → toggle vô hiệu, gỡ khỏi UI
+  delete behavior.confirmExport;
+}
+
+function migrateNotifications(notifications) {
+  if (!notifications || typeof notifications !== "object") return;
+  // Cả 2 khóa chỉ nằm trong getNotificationConfig() — timer nhắc hằng ngày
+  // (refreshNotificationTimer) không đọc → toggle không có tác dụng, gỡ khỏi UI.
+  delete notifications.streakReminder;
+  delete notifications.achievementUnlocked;
 }
 
 function migrateReading(reading) {
@@ -216,14 +215,17 @@ function migrateGeneral(general) {
   if (typeof general.displayName !== "string") general.displayName = "";
   if (!general.timezone) general.timezone = "auto";
   if (typeof general.lastView !== "string" || !general.lastView) general.lastView = "dashboard";
+  // Mục cũ: app 1 ngôn ngữ (Tiếng Việt), không có i18n → không nơi nào đọc
+  delete general.language;
 }
 
 function migratePrivacy(privacy) {
   if (!privacy || typeof privacy !== "object") return;
-  if (typeof privacy.localOnly !== "boolean") privacy.localOnly = true;
-  if (typeof privacy.allowAnalytics !== "boolean") privacy.allowAnalytics = false;
-  if (typeof privacy.sendCrashReports !== "boolean") privacy.sendCrashReports = false;
   if (typeof privacy.rememberHistory !== "boolean") privacy.rememberHistory = true;
+  // Mục cũ: app không có analytics/không gửi crash report, không nơi nào đọc → dọn khỏi storage
+  delete privacy.allowAnalytics;
+  delete privacy.localOnly;
+  delete privacy.sendCrashReports;
 }
 
 function migrateSearch(search) {
@@ -237,34 +239,85 @@ function migrateSearch(search) {
   }
 }
 
+// Storage hỏng/cũ có thể để section = null (deepMerge ghi đè thẳng) → khôi phục default
+function ensureSections(merged) {
+  for (const k of Object.keys(DEFAULT_SETTINGS)) {
+    const def = DEFAULT_SETTINGS[k];
+    if (!def || typeof def !== "object" || Array.isArray(def)) continue;
+    if (!merged[k] || typeof merged[k] !== "object" || Array.isArray(merged[k])) {
+      merged[k] = JSON.parse(JSON.stringify(def));
+    }
+  }
+}
+
+// AI: model retired (1.5/2.0) trả 404 → ép về model đang hỗ trợ
+function migrateAI(ai) {
+  if (!ai || typeof ai !== "object") return;
+  ai.model = normalizeModel(ai.model);
+  if (!Number.isFinite(ai.temperature)) ai.temperature = 0.7;
+  else ai.temperature = Math.min(1, Math.max(0, Number(ai.temperature)));
+  if (typeof ai.responseLength !== "string") ai.responseLength = "balanced";
+  if (typeof ai.effort !== "string") ai.effort = "balanced";
+  // Mục cũ: không nơi nào đọc, không có trong UI → dọn khỏi storage
+  delete ai.language;
+  delete ai.behavior;
+}
+
+// Nâng cao: chỉ debugMode còn được đọc (aiService + data-debug) → dọn khóa cũ
+function migrateAdvanced(advanced) {
+  if (!advanced || typeof advanced !== "object") return;
+  if (typeof advanced.debugMode !== "boolean") advanced.debugMode = false;
+  for (const k of ["lazyLoading", "prefetch", "pdfQuality", "cachePDFs", "cacheTimeout", "enableOfflineMode", "enableAnalytics"]) {
+    delete advanced[k];
+  }
+}
+
+// Xuất: chỉ includeTimestamp còn được đọc (exportDoc) → dọn khóa cũ
+function migrateExport(exp) {
+  if (!exp || typeof exp !== "object") return;
+  if (typeof exp.includeTimestamp !== "boolean") exp.includeTimestamp = true;
+  for (const k of ["format", "includeMeta", "autoZip"]) delete exp[k];
+}
+
 export function loadSettings() {
   try {
     const parsed = safeGetJSON(SETTINGS_KEY, null);
+    const base = cloneDefaults();
     if (!parsed) {
       const legacy = {};
       const theme = safeGetString(STORAGE_KEYS.THEME, null);
       if (theme) legacy.appearance = { theme };
-      const merged = deepMerge(DEFAULT_SETTINGS, legacy);
+      const merged = deepMerge(base, legacy);
+      ensureSections(merged);
       migrateAppearance(merged.appearance);
       migrateBehavior(merged.behavior);
+      migrateNotifications(merged.notifications);
       migrateReading(merged.reading);
       migrateGeneral(merged.general);
       migratePrivacy(merged.privacy);
       migrateSearch(merged.search);
+      migrateAI(merged.ai);
+      migrateAdvanced(merged.advanced);
+      migrateExport(merged.export);
       return merged;
     }
-    if (!parsed || typeof parsed !== "object") return { ...DEFAULT_SETTINGS };
-    const merged = deepMerge(DEFAULT_SETTINGS, parsed);
+    if (!parsed || typeof parsed !== "object") return base;
+    const merged = deepMerge(base, parsed);
+    ensureSections(merged);
     migrateAppearance(merged.appearance);
     migrateBehavior(merged.behavior);
+    migrateNotifications(merged.notifications);
     migrateReading(merged.reading);
     migrateGeneral(merged.general);
     migratePrivacy(merged.privacy);
     migrateSearch(merged.search);
+    migrateAI(merged.ai);
+    migrateAdvanced(merged.advanced);
+    migrateExport(merged.export);
     merged.version = DEFAULT_SETTINGS.version;
     return merged;
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return cloneDefaults();
   }
 }
 
@@ -371,9 +424,6 @@ export function recordLastView(viewId) {
 export function shouldConfirmDelete(settings) {
   try { const s = settings || loadSettings(); return s.behavior?.confirmDelete !== false; } catch { return true; }
 }
-export function shouldConfirmExport(settings) {
-  try { const s = settings || loadSettings(); return s.behavior?.confirmExport === true; } catch { return false; }
-}
 export function isAutoSaveEnabled(settings) {
   try { const s = settings || loadSettings(); return s.behavior?.autoSave !== false; } catch { return true; }
 }
@@ -410,23 +460,30 @@ export function getSearchConfig(settings) {
     };
   } catch { return { defaultType: "all", caseSensitive: false, wholeWord: false, fuzzyMatch: true, maxResults: 100 }; }
 }
-/** Áp dụng search config vào query — dùng chung cho SearchView/GlobalSearch. */
-export function applySearchConfig(query, text) {
-  const cfg = getSearchConfig();
-  let q = String(query || "");
-  let hay = String(text || "");
-  if (!cfg.caseSensitive) { q = q.toLowerCase(); hay = hay.toLowerCase(); }
-  // Chuẩn hoá tiếng Việt khi fuzzy
-  if (cfg.fuzzyMatch) {
-    const norm = (s) => s.replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    q = norm(q); hay = norm(hay);
+/** Áp dụng search config vào query — dùng chung cho SearchView/GlobalSearch.
+ *  cfg truyền sẵn để không loadSettings() cho từng item (tìm kiếm quét hàng trăm phần tử). */
+export function applySearchConfig(query, text, cfg) {
+  try {
+    const c = cfg || getSearchConfig();
+    let q = String(query || "");
+    let hay = String(text || "");
+    if (!q) return false;
+    if (!c.caseSensitive) { q = q.toLowerCase(); hay = hay.toLowerCase(); }
+    // Chuẩn hoá tiếng Việt khi fuzzy (mặc định bật): không dấu — "sach" khớp "Sách"
+    if (c.fuzzyMatch) {
+      const norm = (s) => s.replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      q = norm(q); hay = norm(hay);
+    }
+    if (!q) return false;
+    if (c.wholeWord) {
+      // Cả từ: ranh giới phi-word; caseSensitive=true thì không thêm cờ i
+      const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(^|\\W)${esc}(\\W|$)`, c.caseSensitive ? "" : "i").test(hay);
+    }
+    return hay.includes(q);
+  } catch {
+    return false;
   }
-  if (!q) return false;
-  if (cfg.wholeWord) {
-    const words = hay.split(/[^a-zA-Z0-9À-ỹ_]+/).filter(Boolean);
-    return words.includes(q) || hay.split(/\s+/).includes(query);
-  }
-  return hay.includes(q);
 }
 export function getLibraryConfig(settings) {
   try {
@@ -440,49 +497,16 @@ export function getLibraryConfig(settings) {
     };
   } catch { return { viewMode: "grid", sortBy: "modified", showPreviews: true, groupBySubject: true, autoIndexNewBooks: false }; }
 }
-export function getExportConfig(settings) {
-  try {
-    const s = settings || loadSettings();
-    return {
-      format: s.export?.format || "docx",
-      includeMeta: s.export?.includeMeta !== false,
-      includeTimestamp: s.export?.includeTimestamp !== false,
-      autoZip: s.export?.autoZip === true,
-    };
-  } catch { return { format: "docx", includeMeta: true, includeTimestamp: true, autoZip: false }; }
-}
-export function getAdvancedConfig(settings) {
-  try {
-    const s = settings || loadSettings();
-    return {
-      lazyLoading: s.advanced?.lazyLoading !== false,
-      prefetch: s.advanced?.prefetch !== false,
-      pdfQuality: s.advanced?.pdfQuality || "medium",
-      cachePDFs: s.advanced?.cachePDFs !== false,
-      cacheTimeout: Number(s.advanced?.cacheTimeout) || 3600000,
-      enableOfflineMode: s.advanced?.enableOfflineMode === true,
-      debugMode: s.advanced?.debugMode === true,
-      enableAnalytics: s.advanced?.enableAnalytics === true,
-    };
-  } catch { return { lazyLoading: true, prefetch: true, pdfQuality: "medium", cachePDFs: true, cacheTimeout: 3600000, enableOfflineMode: false, debugMode: false, enableAnalytics: false }; }
-}
-export function isAnalyticsAllowed(settings) {
-  try {
-    const s = settings || loadSettings();
-    if (s.privacy?.allowAnalytics === true) return true;
-    return s.advanced?.enableAnalytics === true;
-  } catch { return false; }
-}
+// Đã xóa getExportConfig/getAdvancedConfig/isAnalyticsAllowed: 0 nơi gọi,
+// phục vụ các toggle không có tác dụng thật (giờ đã gỡ khỏi UI).
 export function getNotificationConfig(settings) {
   try {
     const s = settings || loadSettings();
     return {
       dailyReminder: s.notifications?.dailyReminder === true,
       dailyTime: /^\d{2}:\d{2}$/.test(s.notifications?.dailyTime || "") ? s.notifications.dailyTime : "08:00",
-      streakReminder: s.notifications?.streakReminder !== false,
-      achievementUnlocked: s.notifications?.achievementUnlocked !== false,
     };
-  } catch { return { dailyReminder: false, dailyTime: "08:00", streakReminder: true, achievementUnlocked: true }; }
+  } catch { return { dailyReminder: false, dailyTime: "08:00" }; }
 }
 
 // ── Notifications: lập lịch nhắc hằng ngày local-only ──
@@ -544,7 +568,22 @@ export function parseSettingsBackup(text) {
   const data = JSON.parse(text);
   const s = data.settings || data;
   if (!s || typeof s !== "object") throw new Error("File không đúng định dạng");
-  return deepMerge(DEFAULT_SETTINGS, s);
+  const merged = deepMerge(cloneDefaults(), s);
+  // Import backup cũ (có khóa đã gỡ: export.format, advanced.*, privacy.allowAnalytics…)
+  // phải đi qua migrate NGAY, không để key rác nằm chờ lần loadSettings sau.
+  ensureSections(merged);
+  migrateAppearance(merged.appearance);
+  migrateBehavior(merged.behavior);
+  migrateNotifications(merged.notifications);
+  migrateReading(merged.reading);
+  migrateGeneral(merged.general);
+  migratePrivacy(merged.privacy);
+  migrateSearch(merged.search);
+  migrateAI(merged.ai);
+  migrateAdvanced(merged.advanced);
+  migrateExport(merged.export);
+  merged.version = DEFAULT_SETTINGS.version;
+  return merged;
 }
 export function getStorageUsage() {
   try {
@@ -665,9 +704,6 @@ export function applySettings(s) {
     root.style.setProperty("--transition-base", "200ms cubic-bezier(0.4,0,0.2,1)");
     root.style.setProperty("--transition-slow", "300ms cubic-bezier(0.4,0,0.2,1)");
   }
-  // Sidebar mode — App đọc data-sidebar để auto/collapse
-  root.setAttribute("data-sidebar-mode", a.sidebar || "auto");
-
   // Accessibility flags
   const acc = s.accessibility || {};
   if (acc.reduceMotion) root.setAttribute("data-reduce-motion", "true"); else root.removeAttribute("data-reduce-motion");
@@ -676,17 +712,10 @@ export function applySettings(s) {
   if (acc.focusIndicators) root.setAttribute("data-focus-indicators", "true"); else root.removeAttribute("data-focus-indicators");
 
   // Behavior / system flags — để CSS + JS đọc
-  const beh = s.behavior || {};
-  root.setAttribute("data-confirm-delete", beh.confirmDelete !== false ? "true" : "false");
-  root.setAttribute("data-show-notifications", beh.showNotifications !== false ? "true" : "false");
   const adv = s.advanced || {};
   if (adv.debugMode) root.setAttribute("data-debug", "true"); else root.removeAttribute("data-debug");
-  if (adv.enableOfflineMode) root.setAttribute("data-offline", "true"); else root.removeAttribute("data-offline");
   const lib = s.library || {};
   root.setAttribute("data-lib-previews", lib.showPreviews !== false ? "true" : "false");
-  root.setAttribute("data-lib-group", lib.groupBySubject !== false ? "true" : "false");
-  const srch = s.search || {};
-  root.setAttribute("data-search-fuzzy", srch.fuzzyMatch !== false ? "true" : "false");
   // Display name → title亲切
   try {
     const name = (s.general?.displayName || "").trim();
@@ -699,7 +728,7 @@ export function getSettings() { return loadSettings(); }
 // Re-export guard: file redesigned 2026-09-19 — backup in _backup/settings-redesign-*
 
 export const SETTINGS_SEARCH_INDEX = [
-  { q: ["tổng quan", "general", "tên", "ngôn ngữ", "tuần", "trang mở", "múi giờ"], section: "general", anchor: "sec-general" },
+  { q: ["tổng quan", "general", "tên", "tuần", "trang mở", "múi giờ"], section: "general", anchor: "sec-general" },
   { q: ["editor", "soạn thảo", "word", "font", "thước", "ruler", "zoom", "nháp"], section: "editor", anchor: "sec-editor" },
   { q: ["whiteboard", "bảng trắng", "bảng", "grid", "lưới", "snap", "mindmap"], section: "whiteboard", anchor: "sec-whiteboard" },
   { q: ["sound", "âm thanh", "volume", "âm lượng", "profile", "loa"], section: "behavior", anchor: "sec-sound" },
@@ -718,12 +747,12 @@ export const SETTINGS_SEARCH_INDEX = [
   { q: ["keyboard", "phím tắt", "shortcut"], section: "keyboard", anchor: "sec-keys" },
   { q: ["accessibility", "tiếp cận", "tương phản", "high contrast"], section: "accessibility", anchor: "sec-a11y" },
   { q: ["data", "dữ liệu", "storage", "backup", "restore", "import", "export", "sao lưu"], section: "backup", anchor: "sec-backup" },
-  { q: ["privacy", "riêng tư", "analytics", "lịch sử"], section: "privacy", anchor: "sec-privacy" },
-  { q: ["performance", "hiệu năng", "lazy", "prefetch", "cache", "offline", "debug"], section: "advanced", anchor: "sec-perf" },
-  { q: ["developer", "diagnostics", "chẩn đoán", "version"], section: "advanced", anchor: "sec-diag" },
+  { q: ["privacy", "riêng tư", "lịch sử", "dữ liệu cá nhân"], section: "privacy", anchor: "sec-privacy" },
+  { q: ["gỡ lỗi", "debug", "log", "console", "developer"], section: "advanced", anchor: "sec-perf" },
+  { q: ["diagnostics", "chẩn đoán", "version", "kiểm tra"], section: "advanced", anchor: "sec-diag" },
   { q: ["thư viện", "library", "lưới", "sắp xếp", "xem trước"], section: "library", anchor: "sec-library" },
   { q: ["tìm kiếm", "search", "fuzzy", "hoa thường"], section: "search", anchor: "sec-search" },
-  { q: ["xuất", "export", "docx", "zip"], section: "export", anchor: "sec-export" },
+  { q: ["xuất", "export", "thời gian", "timestamp"], section: "export", anchor: "sec-export" },
   { q: ["hành vi", "behavior", "xác nhận", "xóa", "rung"], section: "behavior", anchor: "sec-behavior" },
 ];
 

@@ -17,11 +17,10 @@ import { safeGetJSON, safeSetJSON } from "./safeStorage";
 export default function InventoryView({ books, onOpenBook }) {
   const [file, setFile] = useState("");
   // Phase 8: removed fake storage loop
-  const [_openPage, setOpenPage] = useState(null);
   const [minQ, setMinQ] = useState(1);
 
   const [idx, setIdx] = useState(null);
-  const [_indexLoading, setIndexLoading] = useState(false);
+  const [indexLoading, setIndexLoading] = useState(false);
 
   const book = books.find((b) => b.filename === file) || null;
   const meta = book ? getIndexMeta(book.filename) : null;
@@ -177,7 +176,6 @@ export default function InventoryView({ books, onOpenBook }) {
           value={file}
           onChange={(e) => {
             setFile(e.target.value);
-            setOpenPage(null);
           }}
         >
           <option value="">— Chọn sách —</option>
@@ -231,7 +229,13 @@ export default function InventoryView({ books, onOpenBook }) {
         </div>
       </div>
 
-      {!meta || !idx ? (
+      {indexLoading ? (
+        <div className="panel-box border-accent">
+          <p className="font-bold-flex">
+            <span className="spinner spinner-sm" /> Đang nạp chỉ mục toàn văn…
+          </p>
+        </div>
+      ) : !meta || !idx ? (
         <div className="panel-box border-accent">
           <p className="font-bold-flex">
             <Info size={16} color="var(--accent)" /> Sách chưa có chỉ mục toàn

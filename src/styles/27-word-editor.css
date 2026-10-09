@@ -41,7 +41,7 @@
   position:relative; z-index:20;
 }
 .word-header-left{ display:flex; align-items:center; gap:8px; min-width:0; flex:1; }
-.word-header-icon{ width:30px; height:30px; display:flex; align-items:center; justify-content:center; background: var(--primary, #2563eb); color:#fff; border-radius:8px; flex-shrink:0; font-size:0.9rem; }
+.word-header-icon{ width:30px; height:30px; display:flex; align-items:center; justify-content:center; background: var(--primary, #2563eb); color:var(--btn-primary-text,#fff); border-radius:8px; flex-shrink:0; font-size:0.9rem; }
 .word-header-titles{ display:flex; flex-direction:column; gap:0; min-width:0; flex:1; }
 .word-header-titles h2{ margin:0; font-size:0.88rem; font-weight:800; color:var(--text-dark); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .word-header-sub{ font-size:0.60rem; font-weight:600; color:var(--text-muted); letter-spacing:0.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -98,7 +98,7 @@
 }
 .word-tbtn svg{ width:13px; height:13px; }
 .word-tbtn:hover{ background:#f1f5f9; border-color:#e2e8f0; color:#0f172a; }
-.word-tbtn.on{ background: var(--primary, #2563eb); color:#fff; border-color: var(--primary-dark, #1d4ed8); box-shadow: 0 1px 0 var(--primary-dark); }
+.word-tbtn.on{ background: var(--primary, #2563eb); color:var(--btn-primary-text,#fff); border-color: var(--primary-dark, #1d4ed8); box-shadow: 0 1px 0 var(--primary-dark); }
 .word-tbtn:active{ transform: translateY(1px); }
 .word-tbtn:disabled{ opacity:0.45; cursor:not-allowed; }
 .word-tsep{ width:1px; height:18px; background:#e2e8f0; margin:0 2px; flex-shrink:0; }
@@ -401,3 +401,17 @@
 [data-theme="dark"] .word-draft-banner{ background:#2e2210; border-color:#92400e; color:#fde68a; }
 [data-theme="dark"] .word-modal{ background:#111827; border-color:#273449; box-shadow: 0 24px 64px rgba(0,0,0,0.5); }
 [data-theme="dark"] .word-modal-overlay{ background: rgba(2,6,23,0.62); }
+
+/* — dark: bảng biểu, chip pill, ô màu, banner lỗi trên trang tối — */
+[data-theme="dark"] .word-editable td, [data-theme="dark"] .word-editable th,
+[data-theme="dark"] .word-book-content td, [data-theme="dark"] .word-book-content th{ border-color:#334155; }
+[data-theme="dark"] .word-editable th, [data-theme="dark"] .word-book-content th{ background:#0f172a; }
+[data-theme="dark"] .word-editable code{ background:#0f172a; border-color:#334155; }
+[data-theme="dark"] .word-editable hr, [data-theme="dark"] .word-book-content hr{ border-top-color:#334155; }
+[data-theme="dark"] .word-table-cell{ background:var(--surface); border-color:var(--border-color); color:var(--text-mid); }
+[data-theme="dark"] .word-page-number{ background:#1e293b; color:#cbd5e1; border-color:#334155; }
+[data-theme="dark"] .word-pages-hint, [data-theme="dark"] .word-page-count-badge{ background:var(--surface); border-color:var(--border-color); color:var(--text-mid); }
+[data-theme="dark"] .word-color-dot{ border-color:#334155; }
+[data-theme="dark"] .word-color-dot:hover{ border-color:#64748b; }
+[data-theme="dark"] .word-field-error{ background:var(--danger-soft); border-top-color:rgba(248,113,113,0.4); color:var(--color-danger-text); }
+[data-theme="dark"] .word-error{ background:var(--danger-soft); border-color:rgba(248,113,113,0.4); color:var(--color-danger-text); }

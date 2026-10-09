@@ -25,6 +25,7 @@ import {
   ChevronUp,
   Palette,
   Scissors,
+  Play,
 } from "lucide-react";
 import { getTasks, toggleTaskComplete } from "./personalDB";
 import { getIdeas } from "./personalDB";
@@ -37,6 +38,69 @@ import { loadSettings } from "./settingsStore";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage";
 import { appEvents, AppEvents } from "./core/appEvents.js";
 import { bookProgress } from "./readingProgress.js";
+
+// ── Trợ giúp hiển thị cho 2 khối "Đang đọc" / "Giáo án gần đây" ──────
+const stripDiacritics = (s) =>
+  String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+
+// Màu nhận diện theo môn — khớp trên chuỗi không dấu, bọc hai đầu bằng space
+const SUBJECT_HUE_RULES = [
+  [/ (toan|math)( |$)/, 221],
+  [/ (tieng viet|ngu van|van)( |$)/, 262],
+  [/ (tieng anh|anh van|english|ngoai ngu)( |$)/, 158],
+  [/ (lich su)( |$)/, 26],
+  [/ (dia)( |$)/, 172],
+  [/ (khoa hoc|tu nhien|sinh hoc|cai tri)( |$)/, 145],
+  [/ (vat li)( |$)/, 200],
+  [/ (hoa hoc)( |$)/, 5],
+  [/ (cong nghe|tin hoc|lap trinh|may tinh)( |$)/, 250],
+  [/ (my thuat|am nhac|nghe thuat|the duc)( |$)/, 322],
+  [/ (cong dan|dao duc|gdcd|phap luat)( |$)/, 35],
+];
+const FALLBACK_HUES = [215, 262, 158, 26, 172, 145, 350, 35, 200, 285, 195, 95];
+
+function subjectHue(name) {
+  const hay = ` ${stripDiacritics(name).trim().toLowerCase().replace(/\s+/g, " ")} `;
+  if (!hay.trim()) return 215;
+  for (const [re, hue] of SUBJECT_HUE_RULES) if (re.test(hay)) return hue;
+  let h = 0;
+  for (let i = 0; i < hay.length; i += 1) h = (h * 31 + hay.charCodeAt(i)) >>> 0;
+  return FALLBACK_HUES[h % FALLBACK_HUES.length];
+}
+
+function subjectInitials(name) {
+  const words = stripDiacritics(name).trim().split(/[\s-]+/).filter(Boolean);
+  if (!words.length) return "📖";
+  return words.slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+
+function withPrefix(value, prefix) {
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  const norm = stripDiacritics(s).toLowerCase();
+  const p = stripDiacritics(prefix).toLowerCase();
+  if (new RegExp(`(^|\\s)${p}(\\s|$)`).test(norm)) return s;
+  return `${prefix} ${s}`;
+}
+
+function relTime(ts) {
+  const t = Number(ts) || 0;
+  if (!t) return "";
+  const diff = Date.now() - t;
+  if (diff < 60000) return "Vừa xong";
+  const min = Math.floor(diff / 60000);
+  if (min < 60) return `${min} phút trước`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} giờ trước`;
+  const day = Math.floor(hr / 24);
+  if (day === 1) return "Hôm qua";
+  if (day < 8) return `${day} ngày trước`;
+  return new Date(t).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
 
 export default function DashboardView({
   books,
@@ -210,8 +274,8 @@ export default function DashboardView({
       icon: <FileText size={20} />,
       label: "Giáo án",
       value: plansCount,
-      color: "var(--purple)",
-      bg: "var(--purple-soft)",
+      color: "var(--secondary)",
+      bg: "var(--secondary-light)",
     },
     {
       id: "ideas",
@@ -242,8 +306,8 @@ export default function DashboardView({
       icon: <Lightbulb size={20} />,
       label: "Khái niệm",
       value: conceptsCount,
-      color: "var(--purple)",
-      bg: "var(--purple-soft)",
+      color: "var(--secondary)",
+      bg: "var(--secondary-light)",
     },
     {
       id: "refs",
@@ -453,15 +517,22 @@ export default function DashboardView({
     .map((item) => {
       const book = books.find((b) => b.filename === item.filename);
       if (!book) return null;
-      const { page, total, pct } = bookProgress(book.filename, lastPageMap, lastTotalMap);
+      const { last, page, total, pct } = bookProgress(book.filename, lastPageMap, lastTotalMap);
       return {
         book,
+        lastPdf: last,
         lastPage: page,
         totalPages: total,
         progress: pct,
+        at: item.at,
       };
     })
     .filter(Boolean);
+
+  // Giáo án gần đây — sắp theo lần sửa/cập nhật mới nhất
+  const recentPlans = [...lessonPlans]
+    .sort((a, b) => (Number(b.updatedAt) || Number(b.createdAt) || 0) - (Number(a.updatedAt) || Number(a.createdAt) || 0))
+    .slice(0, 3);
 
   // Tasks preview (pending tasks only, max 5)
   const pendingTasksList = tasks
@@ -481,7 +552,7 @@ export default function DashboardView({
     { label: "Đọc sách", value: continueCount, color: "var(--pen-blue)" },
     { label: "Giáo án", value: plansCount, color: "var(--success)" },
     { label: "Câu hỏi", value: questionCount, color: "var(--warning)" },
-    { label: "Ý tưởng", value: totalIdeas, color: "var(--purple)" },
+    { label: "Ý tưởng", value: totalIdeas, color: "var(--secondary)" },
     { label: "Word", value: wordBooks, color: "var(--primary)" },
     { label: "Bảng trắng", value: whiteboards.length, color: "var(--primary-light)" },
   ];
@@ -588,6 +659,38 @@ export default function DashboardView({
         .db-item-m { font-size:11px; color:var(--text-muted); }
         .db-bar { height:7px; border-radius:99px; background:var(--surface-soft); border:1px solid var(--border-color); overflow:hidden; margin-top:6px; }
         .db-bar > i { display:block; height:100%; border-radius:99px; background:var(--color-action, var(--primary)); }
+        /* —— Khối "Đang đọc" + "Giáo án gần đây" (thiết kế lại) —— */
+        .db-count { font-size:10.5px; font-weight:800; line-height:1.7; padding:0 7px; border-radius:999px; color:var(--color-action-strong, var(--primary)); background:var(--color-action-soft, var(--primary-light)); }
+        .db-sec-all { display:inline-flex; align-items:center; gap:2px; padding:4px 10px; border-radius:999px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-muted); font-size:11px; font-weight:800; cursor:pointer; transition:border-color .14s ease, background .14s ease, color .14s ease; }
+        .db-sec-all:hover { color:var(--color-action-strong, var(--primary)); border-color:var(--color-action, var(--primary)); background:var(--color-action-soft, var(--primary-light)); }
+        .db-duo { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap:14px; align-content:start; align-items:start; }
+        .db-rows { display:flex; flex-direction:column; gap:8px; }
+        .db-row { --h:215; display:flex; align-items:center; gap:11px; padding:9px 10px; border:1px solid var(--border-color); border-radius:12px; background:var(--surface); cursor:pointer; transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+        .db-row:hover { border-color:hsl(var(--h) 60% 50% / 0.55); box-shadow:0 6px 16px hsl(var(--h) 60% 40% / 0.15); transform:translateY(-1px); }
+        .db-row:focus-visible { outline:2px solid var(--color-action, var(--primary)); outline-offset:2px; }
+        .db-row-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+        .db-row-line { display:flex; align-items:flex-start; gap:8px; }
+        .db-row .db-item-t { flex:1; min-width:0; -webkit-line-clamp:2; }
+        .db-pct { flex-shrink:0; font-size:12px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--color-action-strong, var(--primary)); }
+        .db-pct.is-done { color:var(--success, #16a34a); }
+        .db-chips { display:flex; align-items:center; gap:5px; flex-wrap:wrap; min-width:0; }
+        .db-progress { display:flex; align-items:center; gap:8px; }
+        .db-progress .db-bar { flex:1; min-width:0; margin-top:0; height:6px; }
+        .db-progress-n { flex-shrink:0; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--text-muted); white-space:nowrap; }
+        .db-chip { font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--surface-soft); border:1px solid var(--border-color); color:var(--text-muted); white-space:nowrap; }
+        .db-chip--sub { color:hsl(var(--h) 65% 40%); background:hsl(var(--h) 70% 50% / 0.12); border-color:hsl(var(--h) 70% 50% / 0.32); }
+        [data-theme="dark"] .db-chip--sub { color:hsl(var(--h) 80% 74%); }
+        .db-meta { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--text-muted); white-space:nowrap; }
+        .db-row .db-bar { margin-top:0; height:6px; }
+        .db-row .db-bar > i { background:linear-gradient(90deg, hsl(var(--h) 72% 60%), hsl(var(--h) 62% 44%)); transition:width .5s ease; }
+        .db-cover { position:relative; flex-shrink:0; width:42px; height:52px; border-radius:7px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg, hsl(var(--h) 72% 60%), hsl(var(--h) 62% 42%)); box-shadow:0 3px 9px hsl(var(--h) 60% 40% / 0.32); }
+        .db-cover-t { position:relative; z-index:2; font-size:12.5px; font-weight:800; color:#fff; letter-spacing:0.3px; text-shadow:0 1px 2px rgba(0,0,0,0.35); }
+        .db-cover-fill { position:absolute; left:0; right:0; bottom:0; z-index:1; background:linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.5)); transition:height .5s ease; }
+        .db-cover-fill::after { content:""; position:absolute; left:0; right:0; top:0; height:2px; background:rgba(255,255,255,0.75); }
+        .db-doc { flex-shrink:0; width:40px; height:40px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; color:hsl(var(--h) 65% 40%); background:hsl(var(--h) 70% 50% / 0.12); border:1px solid hsl(var(--h) 70% 50% / 0.3); }
+        [data-theme="dark"] .db-doc { color:hsl(var(--h) 80% 74%); }
+        .db-go { flex-shrink:0; width:30px; height:30px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; background:var(--surface-soft); border:1px solid var(--border-color); color:var(--text-muted); opacity:0.7; transition:background .15s ease, color .15s ease, border-color .15s ease, transform .15s ease, opacity .15s ease; }
+        .db-row:hover .db-go, .db-row:focus-visible .db-go { opacity:1; color:#fff; background:var(--color-action, var(--primary)); border-color:transparent; transform:translateX(2px); }
         .db-link { display:inline-flex; align-items:center; gap:4px; background:none; border:none; color:var(--color-action-strong, var(--primary)); font-size:12px; font-weight:800; cursor:pointer; padding:8px 4px 0; }
         .db-check { width:21px; height:21px; border-radius:7px; border:2px solid #cbd5e1; background:#fff; display:inline-flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; flex-shrink:0; }
         .db-check.on { background:#16a34a; border-color:#16a34a; }
@@ -709,52 +812,93 @@ export default function DashboardView({
       {/* Nội dung chính 2 cột + thanh kéo giữa */}
       <div className="db-main" style={{ "--db-side": `${sideW}px` }}>
         <div className="db-col">
-          {/* Đang đọc */}
-          {continueBooks.length > 0 && (
-            <div className="db-sec">
-              <div className="db-sec-head">
-                <h2 className="db-sec-title"><BookOpen size={16} /> Đang đọc{continueBooks.length > 3 && ` (${continueBooks.length})`}</h2>
-              </div>
-              {continueBooks.slice(0, 3).map(({ book, lastPage, totalPages, progress }) => (
-                <div key={book.filename} className="db-item" onClick={() => onNavigate && onNavigate("library")} role="button" tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && onNavigate && onNavigate("library")}>
-                  <span className="db-item-ic">{book.subject?.slice(0, 2) || "📖"}</span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span className="db-item-t">{book.title}</span><br />
-                    <span className="db-item-m">Trang {lastPage} / {totalPages} • {progress}%</span>
-                    <span className="db-bar"><i style={{ width: `${progress}%` }} /></span>
-                  </span>
-                  <ChevronRight size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+          {/* Đang đọc + Giáo án gần đây — xếp cạnh nhau khi cột đủ rộng */}
+          <div className="db-duo">
+            {/* Đang đọc — bấm vào là mở đúng trang đang dừng */}
+            {continueBooks.length > 0 && (
+              <section className="db-sec">
+                <div className="db-sec-head">
+                  <h2 className="db-sec-title"><BookOpen size={16} /> Đang đọc <span className="db-count">{continueBooks.length}</span></h2>
+                  <button className="db-sec-all" onClick={() => handleNavigate("library")}>Xem tất cả <ChevronRight size={13} /></button>
                 </div>
-              ))}
-              {continueBooks.length > 3 && (
-                <button className="db-link" onClick={() => handleNavigate("library")}>Xem tất cả ({continueBooks.length}) <ChevronRight size={14} /></button>
-              )}
-            </div>
-          )}
+                <div className="db-rows">
+                  {continueBooks.slice(0, 3).map(({ book, lastPdf, lastPage, totalPages, progress, at }) => {
+                    const hue = subjectHue(book.subject);
+                    const openBook = () => appEvents.emit(AppEvents.OPEN_SOURCE, { filename: book.filename, page: lastPdf || 1 });
+                    return (
+                      <div key={book.filename} className="db-row" style={{ "--h": String(hue) }} role="button" tabIndex={0}
+                        title={`Đọc tiếp “${book.title}” từ trang ${lastPage}`}
+                        onClick={openBook}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBook(); } }}>
+                        <span className="db-cover" aria-hidden="true">
+                          <span className="db-cover-t">{subjectInitials(book.subject || (book.grade ? `Lớp ${book.grade}` : book.title))}</span>
+                          <i className="db-cover-fill" style={{ height: `${progress}%` }} />
+                        </span>
+                        <span className="db-row-main">
+                          <span className="db-row-line">
+                            <span className="db-item-t">{book.title}</span>
+                            <span className={progress >= 100 ? "db-pct is-done" : "db-pct"}>{progress}%</span>
+                          </span>
+                          <span className="db-chips">
+                            {book.subject && <span className="db-chip db-chip--sub">{book.subject}</span>}
+                            {book.grade && <span className="db-chip">{withPrefix(book.grade, "Lớp")}</span>}
+                            {at ? <span className="db-meta"><Clock size={11} /> {relTime(at)}</span> : null}
+                          </span>
+                          <span className="db-progress">
+                            <span className="db-bar"><i style={{ width: `${progress}%` }} /></span>
+                            <span className="db-progress-n">{totalPages ? `Trang ${lastPage}/${totalPages}` : `Trang ${lastPage}`}</span>
+                          </span>
+                        </span>
+                        <span className="db-go" aria-hidden="true"><Play size={13} fill="currentColor" /></span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
-          {/* Giáo án gần đây */}
-          {lessonPlans.length > 0 && (
-            <div className="db-sec">
-              <div className="db-sec-head">
-                <h2 className="db-sec-title"><FileText size={16} /> Giáo án gần đây{lessonPlans.length > 3 && ` (${lessonPlans.length})`}</h2>
-              </div>
-              {lessonPlans.slice(0, 3).map((plan) => (
-                <div key={plan.id} className="db-item" onClick={() => onNavigate && onNavigate("lessonplans", { planId: plan.id })} role="button" tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && onNavigate && onNavigate("lessonplans", { planId: plan.id })}>
-                  <span className="db-item-ic"><FileText size={16} /></span>
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span className="db-item-t">{plan.title}</span><br />
-                    <span className="db-item-m">{plan.monHoc || plan.subject}{plan.lop || plan.grade ? ` • Lớp ${plan.lop || plan.grade}` : ""}</span>
-                  </span>
-                  <ChevronRight size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+            {/* Giáo án gần đây — sắp theo lần cập nhật mới nhất */}
+            {recentPlans.length > 0 && (
+              <section className="db-sec">
+                <div className="db-sec-head">
+                  <h2 className="db-sec-title"><FileText size={16} /> Giáo án gần đây <span className="db-count">{lessonPlans.length}</span></h2>
+                  <button className="db-sec-all" onClick={() => handleNavigate("lessonplans")}>Xem tất cả <ChevronRight size={13} /></button>
                 </div>
-              ))}
-              {lessonPlans.length > 3 && (
-                <button className="db-link" onClick={() => handleNavigate("lessonplans")}>Xem tất cả ({lessonPlans.length}) <ChevronRight size={14} /></button>
-              )}
-            </div>
-          )}
+                <div className="db-rows">
+                  {recentPlans.map((plan) => {
+                    const subject = String(plan.monHoc || plan.subject || "").trim();
+                    const grade = String(plan.lop || plan.grade || "").trim();
+                    const tuan = String(plan.tuan || "").trim();
+                    const at = Number(plan.updatedAt) || Number(plan.createdAt) || 0;
+                    const openPlan = () => handleNavigate("lessonplans", { planId: plan.id });
+                    return (
+                      <div key={plan.id} className="db-row" style={{ "--h": String(subjectHue(subject)) }} role="button" tabIndex={0}
+                        title={`Mở giáo án: ${String(plan.title || "").trim() || subject || "Giáo án"}`}
+                        onClick={openPlan}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPlan(); } }}>
+                        <span className="db-doc" aria-hidden="true"><FileText size={18} /></span>
+                        <span className="db-row-main">
+                          <span className="db-row-line">
+                            <span className="db-item-t">
+                              {String(plan.title || "").trim() || [subject, grade && withPrefix(grade, "Lớp")].filter(Boolean).join(" — ") || "Giáo án chưa đặt tên"}
+                            </span>
+                            {at ? <span className="db-meta"><Clock size={11} /> {relTime(at)}</span> : null}
+                          </span>
+                          <span className="db-chips">
+                            {subject && <span className="db-chip db-chip--sub">{subject}</span>}
+                            {grade && <span className="db-chip">{withPrefix(grade, "Lớp")}</span>}
+                            {tuan && <span className="db-chip">{withPrefix(tuan, "Tuần")}</span>}
+                            {plan.soTiet && <span className="db-chip">{withPrefix(plan.soTiet, "Tiết")}</span>}
+                          </span>
+                        </span>
+                        <span className="db-go" aria-hidden="true"><ChevronRight size={15} /></span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </div>
 
           {/* Phân bổ hoạt động */}
           {hasActivityData && (

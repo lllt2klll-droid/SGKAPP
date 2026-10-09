@@ -607,7 +607,19 @@ function importAIData(importData, options = {}) {
           const validator = key === STORAGE_KEYS.ANALYSIS_HISTORY ? isArray : isPlainObject;
           const existing = safeGetJSON(key, null, validator);
           if (existing !== null) {
-            const merged = Array.isArray(existing) && Array.isArray(value) ? [...value] : { ...existing, ...value };
+            // Merge THẬT (bản cũ ghi nhầm [...value] = thay thế toàn bộ):
+            // - mảng: giữ bản hiện tại + thêm bản import chưa có (khử trùng theo id)
+            // - object: gộp theo key (bản import thắng)
+            let merged;
+            if (Array.isArray(existing) && Array.isArray(value)) {
+              const seen = new Set(existing.map((it) => it && it.id).filter(Boolean));
+              const incoming = value.filter((it) => !(it && it.id && seen.has(it.id)));
+              merged = [...existing, ...incoming];
+            } else if (isPlainObject(existing) && isPlainObject(value)) {
+              merged = { ...existing, ...value };
+            } else {
+              merged = value;
+            }
             const res = safeSetJSON(key, merged);
             if (!res.ok) {
               if (res.quota) console.warn("[safeStorage] Quota importing", key, res.message);

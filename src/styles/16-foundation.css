@@ -397,6 +397,9 @@
   overflow: visible;
   line-height: 0;
 }
+.pdf-canvas-box > canvas {
+  max-width: none;
+}
 .overlay-veil {
   position: absolute;
   inset: 0;
@@ -545,5 +548,9 @@ body,
   .aia-wrap {
     display: none;
   }
+}
+
+[data-theme="dark"] .pdf-canvas-box {
+  background: var(--surface);
 }
 

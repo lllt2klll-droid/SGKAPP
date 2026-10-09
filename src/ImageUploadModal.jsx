@@ -126,12 +126,6 @@ const ImageUploadModal = ({
     }
   }, [imageItems.length]);
 
-  // Legacy single handler kept for compatibility
-  const handleFileSelect = useCallback((file) => {
-    if (!file) return;
-    handleFilesSelect([file]);
-  }, [handleFilesSelect]);
-
   // Handle drag events — dùng counter chống nhấp nháy + chỉ bật khi kéo file thật
   const handleDragEnter = useCallback((e) => {
     e.preventDefault(); e.stopPropagation();

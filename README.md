@@ -38,8 +38,8 @@ sgk-app/
 ├── public/                # icons, audio/ui/*.wav, khbd templates
 ├── src/
 │   ├── App.jsx            # APP SHELL: state toàn cục, nav, render view (4.167 dòng)
-│   ├── core/              # 10 module "single source of truth" (xem docs/ARCHITECTURE.md)
-│   ├── components/        # UI dùng chung (FileDropzone, bubbles, DataTable...)
+│   ├── core/              # 8 module "single source of truth" (xem docs/ARCHITECTURE.md)
+│   ├── components/        # UI dùng chung (FileDropzone, MobileBottomNav, ReaderMobileBar)
 │   ├── khbd/              # soạn giáo án: planModel, planAi, LessonPlanView, template...
 │   ├── scan/              # quét ảnh: ScanModal, scanCapture, scanStore, scanAIService
 │   ├── whiteboard/        # whiteboardStore, WhiteboardCanvas, imageStore (IDB blobs)

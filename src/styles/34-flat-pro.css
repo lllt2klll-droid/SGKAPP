@@ -120,7 +120,7 @@ button.layout-toggle,
 .btn-danger {
   background: var(--danger) !important;
   border: 1px solid var(--danger) !important;
-  color: #fff !important;
+  color: var(--btn-danger-text, #fff) !important;
   border-radius: 10px !important;
 }
 .btn-danger:hover:not(:disabled) {
@@ -233,7 +233,7 @@ button.layout-toggle,
 .filter-btn.active {
   background: var(--color-action, var(--primary)) !important;
   border-color: var(--color-action, var(--primary)) !important;
-  color: #fff !important;
+  color: var(--btn-primary-text, #fff) !important;
   box-shadow: none !important;
 }
 
@@ -258,7 +258,7 @@ button.layout-toggle,
 .seg-tab.on,
 .layout-toggle button.active {
   background: var(--color-action, var(--primary)) !important;
-  color: #fff !important;
+  color: var(--btn-primary-text, #fff) !important;
   box-shadow: none !important;
   border-color: transparent !important;
 }
@@ -523,7 +523,7 @@ button.layout-toggle,
 .hero-cta-btn {
   background: var(--color-action, var(--primary)) !important;
   border: 1px solid var(--color-action, var(--primary)) !important;
-  color: #fff !important;
+  color: var(--btn-primary-text, #fff) !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -533,7 +533,7 @@ button.layout-toggle,
   filter: brightness(0.94);
   box-shadow: var(--shadow-sm) !important;
   background: var(--color-action, var(--primary)) !important;
-  color: #fff !important;
+  color: var(--btn-primary-text, #fff) !important;
 }
 .hero-cta-secondary {
   background: var(--surface-soft) !important;

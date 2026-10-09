@@ -103,7 +103,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 15vh;
-  z-index: 10000;
+  z-index: var(--z-search-overlay);
   animation: fadeIn 0.15s ease;
 }
 

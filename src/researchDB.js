@@ -48,6 +48,13 @@ function notifyDataUpdated(detail) {
   try { appEvents.emit(AppEvents.DATA_UPDATED, d); } catch (e) { console.warn("[researchDB] appEvents emit failed", e); }
 }
 // ── safeStorage helpers (audit) ──
+function _dbg(...args) {
+  try {
+    if (globalThis.__SGK_TEST__ === true) return;
+    if (typeof process !== "undefined" && process?.env?.SGK_SILENCE_TEST_LOGS === "1") return;
+  } catch {}
+  console.debug(...args);
+}
 function _safeGetList(key){ return safeGetJSON(key, [], Array.isArray); }
 function _safeGetObj(key){ return safeGetJSON(key, {}, v=>v&&typeof v==="object" && !Array.isArray(v)); }
 function _updateItemSafe(key, id, patch){ const list=_safeGetList(key); return list.map(it=> it.id===id?{...it,...patch,id:it.id}:it); }
@@ -312,18 +319,18 @@ export async function clipsForBook(file) {
 // These functions can be used to migrate clips from localStorage to IndexedDB
 export async function migrateClipsToIndexedDB() {
   if (!indexedDBService.constructor.isAvailable()) {
-    console.debug('IndexedDB not available, skipping clips migration');
+    _dbg('IndexedDB not available, skipping clips migration');
     return false;
   }
   
   try {
     const localClips = _safeGetList(CLIP_KEY);
     if (localClips.length === 0) {
-      console.debug('No clips to migrate');
+      _dbg('No clips to migrate');
       return true;
     }
     
-    console.debug(`Migrating ${localClips.length} clips to IndexedDB...`);
+    _dbg(`Migrating ${localClips.length} clips to IndexedDB...`);
     for (const clip of localClips) {
       const ok = await indexedDBService.set(STORES.CLIPS, clip.id, clip);
       if (!ok) {
@@ -334,7 +341,7 @@ export async function migrateClipsToIndexedDB() {
     // Only clear localStorage after all IndexedDB writes succeed
     { const _r=safeSetJSON(CLIP_KEY, []); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", CLIP_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", CLIP_KEY, ":", _r.error); } }
     
-    console.debug('Clips migration completed');
+    _dbg('Clips migration completed');
     return true;
   } catch (err) {
     console.error('Clips migration failed:', err);
@@ -488,18 +495,18 @@ export async function deleteRef(id) {
 // ── IndexedDB migration helpers for refs ─────────────────────────────
 export async function migrateRefsToIndexedDB() {
   if (!indexedDBService.constructor.isAvailable()) {
-    console.debug('IndexedDB not available, skipping refs migration');
+    _dbg('IndexedDB not available, skipping refs migration');
     return false;
   }
   
   try {
     const localRefs = _safeGetList(REF_KEY);
     if (localRefs.length === 0) {
-      console.debug('No refs to migrate');
+      _dbg('No refs to migrate');
       return true;
     }
     
-    console.debug(`Migrating ${localRefs.length} refs to IndexedDB...`);
+    _dbg(`Migrating ${localRefs.length} refs to IndexedDB...`);
     for (const ref of localRefs) {
       const ok = await indexedDBService.set(STORES.REFS, ref.id, ref);
       if (!ok) {
@@ -510,7 +517,7 @@ export async function migrateRefsToIndexedDB() {
     // Only clear localStorage after all IndexedDB writes succeed
     { const _r=safeSetJSON(REF_KEY, []); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", REF_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", REF_KEY, ":", _r.error); } }
     
-    console.debug('Refs migration completed');
+    _dbg('Refs migration completed');
     return true;
   } catch (err) {
     console.error('Refs migration failed:', err);
@@ -608,18 +615,18 @@ export async function getEvidenceForSource(sourceType, sourceId) {
 // ── IndexedDB migration helpers for evidence ─────────────────────────
 export async function migrateEvidenceToIndexedDB() {
   if (!indexedDBService.constructor.isAvailable()) {
-    console.debug('IndexedDB not available, skipping evidence migration');
+    _dbg('IndexedDB not available, skipping evidence migration');
     return false;
   }
   
   try {
     const localEvidence = _safeGetList(EVIDENCE_KEY);
     if (localEvidence.length === 0) {
-      console.debug('No evidence to migrate');
+      _dbg('No evidence to migrate');
       return true;
     }
     
-    console.debug(`Migrating ${localEvidence.length} evidence items to IndexedDB...`);
+    _dbg(`Migrating ${localEvidence.length} evidence items to IndexedDB...`);
     for (const ev of localEvidence) {
       const ok = await indexedDBService.set(STORES.EVIDENCE, ev.id, ev);
       if (!ok) {
@@ -630,7 +637,7 @@ export async function migrateEvidenceToIndexedDB() {
     // Only clear localStorage after all IndexedDB writes succeed
     { const _r=safeSetJSON(EVIDENCE_KEY, []); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", EVIDENCE_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", EVIDENCE_KEY, ":", _r.error); } }
     
-    console.debug('Evidence migration completed');
+    _dbg('Evidence migration completed');
     return true;
   } catch (err) {
     console.error('Evidence migration failed:', err);
@@ -743,18 +750,18 @@ export async function conceptCategories() {
 // ── IndexedDB migration helpers for concepts ───────────────────────────
 export async function migrateConceptsToIndexedDB() {
   if (!indexedDBService.constructor.isAvailable()) {
-    console.debug('IndexedDB not available, skipping concepts migration');
+    _dbg('IndexedDB not available, skipping concepts migration');
     return false;
   }
   
   try {
     const localConcepts = _safeGetList(CONC_KEY);
     if (localConcepts.length === 0) {
-      console.debug('No concepts to migrate');
+      _dbg('No concepts to migrate');
       return true;
     }
     
-    console.debug(`Migrating ${localConcepts.length} concepts to IndexedDB...`);
+    _dbg(`Migrating ${localConcepts.length} concepts to IndexedDB...`);
     for (const concept of localConcepts) {
       const ok = await indexedDBService.set(STORES.CONCEPTS, concept.id, concept);
       if (!ok) {
@@ -765,7 +772,7 @@ export async function migrateConceptsToIndexedDB() {
     // Only clear localStorage after all IndexedDB writes succeed
     { const _r=safeSetJSON(CONC_KEY, []); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", CONC_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", CONC_KEY, ":", _r.error); } }
     
-    console.debug('Concepts migration completed');
+    _dbg('Concepts migration completed');
     return true;
   } catch (err) {
     console.error('Concepts migration failed:', err);

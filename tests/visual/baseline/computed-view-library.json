@@ -96,6 +96,39 @@
    "text": "✏️"
   }
  ],
+ ".btn-ghost": [
+  {
+   "display": "flex",
+   "position": "relative",
+   "width": "48px",
+   "height": "33.5938px",
+   "min-width": "40px",
+   "min-height": "32px",
+   "max-width": "100%",
+   "background": "rgba(0, 0, 0, 0) none repeat scroll 0px 0px / auto padding-box border-box",
+   "background-color": "rgba(0, 0, 0, 0)",
+   "background-image": "none",
+   "border": "1px solid rgba(0, 0, 0, 0)",
+   "border-width": "1px",
+   "border-color": "rgba(0, 0, 0, 0)",
+   "border-radius": "8px",
+   "box-shadow": "none",
+   "text-shadow": "none",
+   "color": "rgb(51, 65, 85)",
+   "font-size": "14px",
+   "font-weight": "600",
+   "letter-spacing": "normal",
+   "white-space": "nowrap",
+   "transform": "none",
+   "z-index": "auto",
+   "opacity": "1",
+   "padding": "8.8px 16px",
+   "margin": "0px 0px 0px 8px",
+   "gap": "7.2px",
+   "flex-direction": "row",
+   "text": ""
+  }
+ ],
  ".sort-select": [
   {
    "display": "block",
@@ -632,7 +665,7 @@
    "margin": "4.8px 0px 0px",
    "gap": "2.4px",
    "flex-direction": "column",
-   "text": "Kéo & th? file PDF vào đây\nhoặc nhấn để chọn sách mới • hỗ t"
+   "text": "Kéo & thả file PDF vào đây\nhoặc nhấn để chọn sách mới • hỗ t"
   }
  ],
  "input": [

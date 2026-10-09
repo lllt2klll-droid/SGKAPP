@@ -23,6 +23,15 @@ server.pid
 # Screenshot output
 shots/
 
+# Visual test scratch (debug scripts + audit screenshots)
+# Giữ lại: baseline/, capture.mjs, diff.mjs
+tests/visual/audit/
+tests/visual/probe*.mjs
+tests/visual/probe*.png
+tests/visual/_*.cjs
+tests/visual/audit-responsive.mjs
+tests/visual/audit-run.err
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

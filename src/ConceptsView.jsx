@@ -379,7 +379,12 @@ export default function ConceptsView({ books, onNavigate }) {
         </div>
       )}
 
-      {!filtered.length ? (
+      {loadingConcepts ? (
+        <div className="dash-empty">
+          <span className="spinner" />
+          <p>Đang tải khái niệm…</p>
+        </div>
+      ) : !filtered.length ? (
         <div className="dash-empty">
           <NotebookPen size={44} />
           <p>

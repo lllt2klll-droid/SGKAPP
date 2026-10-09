@@ -296,14 +296,14 @@ export function fillSampleMarks(book) {
 
 // ── Ngân hàng câu hỏi ─────────────────────────────────────────────
 const QUESTION_SAMPLES = [
-  { type: 'mc', subject: 'Toán', grade: 1, chapter: 'Phép cộng trong phạm vi 10', yccd: 'Thực hiện được phép cộng trong phạm vi 10', mucdo: 'Nhận biết', question: 'Kết quả của phép tính 3 + 2 là:', options: ['4', '5', '6', '7'], correctIndex: 1, answer: '' },
+  { type: 'mc', subject: 'Toán', grade: 1, chapter: 'Phép cộng trong phạm vi 10', yccd: 'Thực hiện được phép cộng trong phạm vi 10', mucdo: 'Biết', question: 'Kết quả của phép tính 3 + 2 là:', options: ['4', '5', '6', '7'], correctIndex: 1, answer: '' },
   { type: 'mc', subject: 'Toán', grade: 1, chapter: 'Phép cộng trong phạm vi 10', yccd: 'Vận dụng phép cộng vào tình huống thực tế', mucdo: 'Vận dụng', question: 'An có 4 quả cam, mẹ cho thêm 3 quả. An có tất cả bao nhiêu quả cam?', options: ['6 quả', '7 quả', '8 quả', '9 quả'], correctIndex: 1, answer: '' },
-  { type: 'mc', subject: 'Toán', grade: 2, chapter: 'Phép nhân, bảng nhân 2', yccd: 'Bước đầu nhận biết ý nghĩa phép nhân', mucdo: 'Thông hiểu', question: '2 × 3 bằng mấy?', options: ['4', '5', '6', '8'], correctIndex: 2, answer: '' },
+  { type: 'mc', subject: 'Toán', grade: 2, chapter: 'Phép nhân, bảng nhân 2', yccd: 'Bước đầu nhận biết ý nghĩa phép nhân', mucdo: 'Hiểu', question: '2 × 3 bằng mấy?', options: ['4', '5', '6', '8'], correctIndex: 2, answer: '' },
   { type: 'tl', subject: 'Toán', grade: 1, chapter: 'Phép cộng trong phạm vi 10', yccd: 'Vận dụng phép cộng', mucdo: 'Vận dụng', question: 'Viết một phép cộng có kết quả bằng 10 và giải thích cách em đã làm.', options: [], correctIndex: 0, answer: 'Nhiều đáp án đúng, VD: 6 + 4 = 10; em lấy 6 que tính gộp với 4 que tính được 1 chục que tính.' },
-  { type: 'mc', subject: 'Tiếng Việt', grade: 1, chapter: 'Luyện từ và câu', yccd: 'Nhận biết từ chỉ hoạt động', mucdo: 'Nhận biết', question: 'Từ nào dưới đây chỉ hoạt động?', options: ['trắng', 'chạy', 'bàn', 'vui'], correctIndex: 1, answer: '' },
-  { type: 'mc', subject: 'Tiếng Việt', grade: 3, chapter: 'Luyện từ và câu', yccd: 'Bước đầu nhận biết biện pháp nhân hóa', mucdo: 'Thông hiểu', question: 'Trong câu "Chị gió vui đùa cùng lá cây", sự vật nào được nhân hóa?', options: ['Chị gió', 'lá cây', 'vui đùa', 'cùng'], correctIndex: 0, answer: '' },
+  { type: 'mc', subject: 'Tiếng Việt', grade: 1, chapter: 'Luyện từ và câu', yccd: 'Nhận biết từ chỉ hoạt động', mucdo: 'Biết', question: 'Từ nào dưới đây chỉ hoạt động?', options: ['trắng', 'chạy', 'bàn', 'vui'], correctIndex: 1, answer: '' },
+  { type: 'mc', subject: 'Tiếng Việt', grade: 3, chapter: 'Luyện từ và câu', yccd: 'Bước đầu nhận biết biện pháp nhân hóa', mucdo: 'Hiểu', question: 'Trong câu "Chị gió vui đùa cùng lá cây", sự vật nào được nhân hóa?', options: ['Chị gió', 'lá cây', 'vui đùa', 'cùng'], correctIndex: 0, answer: '' },
   { type: 'tl', subject: 'Tiếng Việt', grade: 1, chapter: 'Viết đoạn văn', yccd: 'Viết được câu đơn giản', mucdo: 'Vận dụng', question: 'Viết một câu kể về gia đình em.', options: [], correctIndex: 0, answer: 'VD: Gia đình em gồm ba, mẹ, anh trai và em.' },
-  { type: 'mc', subject: 'Tự nhiên và Xã hội', grade: 1, chapter: 'Cơ thể em', yccd: 'Kể tên các giác quan của cơ thể', mucdo: 'Nhận biết', question: 'Mắt dùng để làm gì?', options: ['Nghe', 'Nhìn', 'Nếm', 'Ngửi'], correctIndex: 1, answer: '' },
+  { type: 'mc', subject: 'Tự nhiên và Xã hội', grade: 1, chapter: 'Cơ thể em', yccd: 'Kể tên các giác quan của cơ thể', mucdo: 'Biết', question: 'Mắt dùng để làm gì?', options: ['Nghe', 'Nhìn', 'Nếm', 'Ngửi'], correctIndex: 1, answer: '' },
 ];
 
 export function fillSampleQuestions() {

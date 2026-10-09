@@ -18,6 +18,11 @@ function __isTestSilence() {
   return false;
 }
 
+function __cleanupWarn(scope, err) {
+  if (__isTestSilence()) return;
+  console.warn(`[storage] ${scope} chưa dọn được:`, err?.message || err);
+}
+
 // ── Blob serialization for WB_IMAGES backup (TASK #6) ──
 function arrayBufferToBase64(buffer) {
   try {
@@ -270,6 +275,10 @@ export function setGeminiApiKey(key) {
       return true;
     } else {
       localStorage.removeItem(GEMINI_API_KEY_STORE);
+      // Xóa luôn key legacy, nếu không getGeminiApiKey() sẽ "hồi sinh" key cũ
+      try {
+        localStorage.removeItem("gemini_api_key");
+      } catch {}
       return true;
     }
   } catch (err) {
@@ -562,7 +571,7 @@ export async function removeBookData(filename) {
             JSON.stringify(items.filter((item) => item?.file !== filename)),
           );
         }
-      } catch {}
+      } catch (e) { __cleanupWarn(`removeBookData research(${key})`, e); }
     }
 
     // PHASE 3: Scan cleanup — sgk_scans_v1 (localStorage) and scan_assets (IndexedDB)
@@ -582,7 +591,7 @@ export async function removeBookData(filename) {
           }
         }
       }
-    } catch {}
+    } catch (e) { __cleanupWarn("removeBookData scans", e); }
 
     snapshotGet("sgk_custom_titles");
     const customTitles = localStorage.getItem("sgk_custom_titles");
@@ -593,7 +602,7 @@ export async function removeBookData(filename) {
           delete titles[filename];
           localStorage.setItem("sgk_custom_titles", JSON.stringify(titles));
         }
-      } catch {}
+      } catch (e) { __cleanupWarn("removeBookData customTitles", e); }
     }
 
     // PHASE 7+: Bookmarks cleanup — sgk_bookmarks {filename: pages[]} and sgk_bookmark_labels {"filename#page": label}
@@ -607,7 +616,7 @@ export async function removeBookData(filename) {
           localStorage.setItem("sgk_bookmarks", JSON.stringify(bm));
         }
       }
-    } catch {}
+    } catch (e) { __cleanupWarn("removeBookData bookmarks", e); }
     try {
       snapshotGet("sgk_bookmark_labels");
       const lblRaw = localStorage.getItem("sgk_bookmark_labels");
@@ -621,7 +630,7 @@ export async function removeBookData(filename) {
           if (changed) localStorage.setItem("sgk_bookmark_labels", JSON.stringify(lbls));
         }
       }
-    } catch {}
+    } catch (e) { __cleanupWarn("removeBookData bookmarkLabels", e); }
     // Vocab / quiz history cleanup — arrays with file field
     try {
       snapshotGet("sgk_vocab");
@@ -633,7 +642,7 @@ export async function removeBookData(filename) {
           if (filtered.length !== vocab.length) localStorage.setItem("sgk_vocab", JSON.stringify(filtered));
         }
       }
-    } catch {}
+    } catch (e) { __cleanupWarn("removeBookData vocab", e); }
     try {
       snapshotGet("sgk_quiz_history");
       const quizRaw = localStorage.getItem("sgk_quiz_history");
@@ -644,7 +653,7 @@ export async function removeBookData(filename) {
           if (filtered.length !== quiz.length) localStorage.setItem("sgk_quiz_history", JSON.stringify(filtered));
         }
       }
-    } catch {}
+    } catch (e) { __cleanupWarn("removeBookData quizHistory", e); }
     // Notes variants: studynotes_ and sgk_cmpnote_ and generic notes_ already handled via removeKeys loop, but ensure sgk_cmpnote_/studynotes_ per-book map keys are covered
     try {
       for (const prefix of ["studynotes_", "sgk_cmpnote_"]) {
@@ -655,7 +664,7 @@ export async function removeBookData(filename) {
         }
         keys.forEach(k => localStorage.removeItem(k));
       }
-    } catch {}
+    } catch (e) { __cleanupWarn("removeBookData per-book notes", e); }
 
     // (Kho KHBD cũ đã xóa — không còn cascade bookReference vào plan cũ.)
 
@@ -1005,14 +1014,14 @@ export async function migrateBookData(oldFilename, newFilename) {
           if (next.length !== arr.length) localStorage.setItem("sgk_history", JSON.stringify(next));
         }
       }
-    } catch {}
+    } catch (e) { __cleanupWarn(`migrateBookData history(${oldFilename})`, e); }
     try {
       const cntRaw = localStorage.getItem("sgk_counts");
       if (cntRaw) {
         const obj = JSON.parse(cntRaw);
         if (obj && obj[oldFilename] !== undefined) { delete obj[oldFilename]; localStorage.setItem("sgk_counts", JSON.stringify(obj)); }
       }
-    } catch {}
+    } catch (e) { __cleanupWarn(`migrateBookData counts(${oldFilename})`, e); }
     // cleanup old IDB keys after verification
     try {
       if (indexedDBService.constructor.isAvailable()) {

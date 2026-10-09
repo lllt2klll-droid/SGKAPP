@@ -591,7 +591,7 @@
   top: 0.6rem;
   right: 0.6rem;
   background: var(--red-action);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border-color: var(--red-action-deep);
   font-size: 0.7rem;
 }
@@ -728,7 +728,7 @@
 .layout-toggle .btn-icon.active {
   background: var(--color-action, var(--pen-blue));
   border-color: var(--color-action, var(--pen-blue));
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   box-shadow: none;
 }
 

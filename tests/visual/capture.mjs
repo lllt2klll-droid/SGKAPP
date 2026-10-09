@@ -123,7 +123,7 @@ for (const [slug, navName] of [["library", "Thư viện sách"], ["help", "Trợ
     await page.screenshot({ path: path.join(outdir, "settings-1366x768.png") });
     const dump = await page.evaluate(({ PROPS }) => {
       const out = {};
-      for (const sel of [".settings-center", ".modal-content", ".seg-tab", ".color-dot", ".form-control"]) {
+      for (const sel of [".st-overlay", ".st-modal", ".st-side", ".st-nav", ".st-card", ".st-seg", ".st-input", ".settings-center", ".form-control"]) {
         const el = document.querySelector(sel);
         if (!el) continue;
         const cs = getComputedStyle(el);

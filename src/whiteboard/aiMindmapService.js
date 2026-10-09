@@ -387,7 +387,9 @@ export async function generateMindmapPlan({
     let fab2 = [];
     try {
       fab2 = await aiValidatePlan({ apiKey: key, model, input, imagePart, plan: plan2 });
-    } catch {
+    } catch (e) {
+      // Người dùng dừng → không được nuốt thành cảnh báo
+      if (e?.code === "CANCELLED") throw e;
       // Validate lỗi lần 2 → chấp nhận plan đã sửa, cảnh báo
       return { plan: plan2, mode: "ai", warnings: [`Đã sửa các nhãn bịa (${fabricated.slice(0, 3).join(", ")}) nhưng không kiểm tra lại được.`], checked: false };
     }

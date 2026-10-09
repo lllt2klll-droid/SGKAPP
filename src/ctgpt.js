@@ -22,8 +22,18 @@ export const MACHS = {
   ],
 };
 
+// Dữ liệu CTGDPT trong file này chỉ có Toán và Tiếng Việt.
+// Với môn khác trả [] (khớp cách yccdFor() lọc) thay vì ép bộ mạch Tiếng Việt.
 export function machsForSubject(subject) {
-  return subject === 'Toán' ? MACHS.math : MACHS.viet;
+  const s = String(subject || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .trim();
+  if (s === 'toan') return MACHS.math;
+  if (s === 'tieng viet') return MACHS.viet;
+  return [];
 }
 
 // ── Yêu cầu cần đạt (tham khảo cô đọng theo lớp) ───────────────────

@@ -346,7 +346,12 @@ export default function ReferencesView({ books, onNavigate }) {
           <button className="btn btn-secondary btn-xs" onClick={()=>onNavigate("search")}>Tìm kiếm</button>
         </div>
       )}
-      {!refs.length ? (
+      {loadingRefs ? (
+        <div className="dash-empty">
+          <span className="spinner" />
+          <p>Đang tải danh mục tài liệu…</p>
+        </div>
+      ) : !refs.length ? (
         <div className="dash-empty">
           <Library size={44} />
           <p>

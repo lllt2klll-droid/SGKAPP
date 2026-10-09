@@ -1,0 +1,461 @@
+/* ── Mục Từ vựng (sổ tay): toolbar, tab, thống kê, form, chip ── */
+
+.vocab-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12, 0.75rem);
+}
+
+.vocab-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8, 0.5rem);
+  flex-wrap: wrap;
+}
+
+.vocab-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-mid);
+  font-size: var(--font-button, 0.86rem);
+  font-weight: var(--font-semibold, 600);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.vocab-tab:hover {
+  border-color: var(--primary);
+  color: var(--text-dark);
+}
+
+.vocab-tab.active {
+  background: var(--primary-light, rgba(96, 165, 250, 0.14));
+  border-color: var(--primary);
+  color: var(--text-dark);
+}
+
+.vocab-tabs-spacer {
+  flex: 1;
+}
+
+.vocab-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-muted);
+}
+
+/* ── Toolbar ─────────────────────────────────────────────── */
+.vocab-toolbar {
+  align-items: flex-start;
+  gap: var(--space-8, 0.5rem);
+  flex-wrap: wrap;
+}
+
+.vocab-toolbar .data-table-toolbar-left,
+.vocab-toolbar .data-table-toolbar-right {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.vocab-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.22rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-mid);
+  font-size: var(--font-caption, 0.76rem);
+  font-weight: var(--font-semibold, 600);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vocab-filter-chip:hover {
+  border-color: var(--primary);
+  color: var(--text-dark);
+}
+
+.vocab-filter-chip.on {
+  background: var(--primary-light, rgba(96, 165, 250, 0.14));
+  border-color: var(--primary);
+  color: var(--text-dark);
+}
+
+/* ── Progress / lỗi ──────────────────────────────────────── */
+.vocab-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.4rem 0.7rem;
+  border: 1px dashed var(--primary);
+  border-radius: 8px;
+  background: var(--primary-light, rgba(96, 165, 250, 0.14));
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-dark);
+}
+
+.vocab-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@keyframes vocab-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vocab-spin {
+  animation: vocab-spin 1s linear infinite;
+}
+
+/* ── Bảng ────────────────────────────────────────────────── */
+.vocab-select-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-strong, #334155);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.vocab-select-btn:hover {
+  border-color: var(--primary);
+  color: var(--text-dark);
+}
+
+.vocab-select-btn.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--btn-primary-text);
+}
+
+.vocab-word-cell {
+  font-weight: var(--font-bold, 700);
+  color: var(--text-dark);
+}
+
+.vocab-meaning-cell {
+  display: inline-block;
+  max-width: 100%;
+  cursor: text;
+}
+
+.vocab-meaning-edit {
+  font-size: var(--font-table, 0.85rem);
+  padding: 0.3rem 0.45rem;
+  min-width: 180px;
+}
+
+.vocab-missing-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.15rem 0.5rem;
+  border: 1px dashed var(--warning);
+  border-radius: 999px;
+  background: var(--warning-light, rgba(251, 191, 36, 0.14));
+  color: var(--text-dark);
+  font-size: var(--font-caption, 0.72rem);
+  cursor: pointer;
+}
+
+.vocab-missing-cell:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.vocab-tag-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.vocab-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.45rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface-soft, #172033);
+  color: var(--text-mid);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.vocab-tag-chip:hover {
+  border-color: var(--secondary);
+  color: var(--text-dark);
+}
+
+.vocab-tag-chip.on {
+  background: var(--secondary-light, rgba(167, 139, 250, 0.14));
+  border-color: var(--secondary);
+  color: var(--text-dark);
+}
+
+.vocab-empty-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-16, 1rem);
+}
+
+/* ── Tab Thống kê ────────────────────────────────────────── */
+.vocab-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24, 1.5rem);
+}
+
+.vocab-stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-12, 0.75rem);
+}
+
+.vocab-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+}
+
+.vocab-stat-card.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.vocab-stat-card.clickable:hover {
+  border-color: var(--warning);
+  transform: translateY(-1px);
+}
+
+.vocab-stat-value {
+  font-size: 1.5rem;
+  font-weight: var(--font-extrabold, 800);
+  color: var(--text-dark);
+  line-height: var(--leading-tight, 1.25);
+}
+
+.vocab-stat-label {
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-muted);
+}
+
+.vocab-stat-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8, 0.5rem);
+}
+
+.vocab-stat-section h4 {
+  margin: 0;
+  font-size: var(--font-h3, 1rem);
+  color: var(--text-dark);
+}
+
+.vocab-stat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8, 0.5rem);
+  flex-wrap: wrap;
+}
+
+.vocab-range {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.vocab-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vocab-bar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 34%) 1fr auto;
+  align-items: center;
+  gap: var(--space-12, 0.75rem);
+  padding: 0.25rem 0.35rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+button.vocab-bar-row {
+  cursor: pointer;
+}
+
+button.vocab-bar-row:hover {
+  background: var(--primary-light, rgba(96, 165, 250, 0.14));
+}
+
+.vocab-bar-label {
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vocab-bar-track {
+  display: block;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--surface-soft, #172033);
+  overflow: hidden;
+}
+
+.vocab-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+.vocab-bar-fill.alt {
+  background: var(--secondary);
+}
+
+.vocab-bar-value {
+  min-width: 28px;
+  text-align: right;
+  font-size: var(--font-caption, 0.76rem);
+  font-weight: var(--font-bold, 700);
+  color: var(--text-dark);
+}
+
+.vocab-days {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 140px;
+  padding: var(--space-8, 0.5rem) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.vocab-day-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  gap: 4px;
+}
+
+.vocab-day-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  max-width: 34px;
+  min-height: 4px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, var(--primary), var(--secondary));
+  transition: height 0.3s ease;
+}
+
+.vocab-day-bar span {
+  font-size: 0.62rem;
+  font-weight: var(--font-bold, 700);
+  color: var(--text-dark);
+  padding-top: 2px;
+}
+
+.vocab-day-label {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.vocab-stat-actions {
+  display: flex;
+  gap: var(--space-8, 0.5rem);
+  flex-wrap: wrap;
+}
+
+/* ── Form thêm / sửa ─────────────────────────────────────── */
+.vocab-form {
+  width: min(560px, calc(100vw - 2rem));
+}
+
+.vocab-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8, 0.5rem);
+  padding: var(--space-16, 1rem);
+}
+
+.vocab-form-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-8, 0.5rem);
+}
+
+.vocab-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.vocab-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8, 0.5rem);
+  margin-top: var(--space-8, 0.5rem);
+}
+
+/* ── Bảng thuật ngữ (GlossaryPanel) ──────────────────────── */
+.gl-result-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .vocab-toolbar .data-table-toolbar-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .vocab-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .vocab-days {
+    height: 110px;
+  }
+
+  .vocab-bar-row {
+    grid-template-columns: minmax(90px, 40%) 1fr auto;
+  }
+}

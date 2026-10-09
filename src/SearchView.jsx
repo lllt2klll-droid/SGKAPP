@@ -30,7 +30,7 @@ import SampleButton from "./SampleButton";
 import { SAMPLE_SEARCH_QUERY } from "./sampleData";
 import DataTable from "./DataTable";
 import { safeGetJSON } from "./safeStorage";
-import { getSearchConfig } from "./settingsStore.js";
+import { getSearchConfig, applySearchConfig } from "./settingsStore.js";
 import { searchNotes, getNoteKindLabel } from "./noteSearch.js";
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from "./searchRecent.js";
 
@@ -68,22 +68,9 @@ export default function SearchView({ books, onOpenBook }) {
     window.addEventListener("sgk:settings-updated", h);
     return () => window.removeEventListener("sgk:settings-updated", h);
   }, []);
-  const matchText = (haystack, needle) => {
-    let q = String(needle || ""), hay = String(haystack || "");
-    if (!q) return false;
-    if (!searchCfg.caseSensitive) { q = q.toLowerCase(); hay = hay.toLowerCase(); }
-    if (searchCfg.fuzzyMatch) {
-      const norm = (s) => String(s).replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      q = norm(q); hay = norm(hay);
-    }
-    if (!q) return false;
-    if (searchCfg.wholeWord) {
-      const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      try { return new RegExp(`(^|\\W)${esc}(\\W|$)`, searchCfg.caseSensitive ? "" : "i").test(hay); }
-      catch { return hay.split(/\s+/).includes(q); }
-    }
-    return hay.includes(q);
-  };
+  // Matching dùng chung helper (nguồn duy nhất với GlobalSearch) — không tự
+  // giữ một bản copy logic caseSensitive/wholeWord/fuzzy nữa.
+  const matchText = (haystack, needle) => applySearchConfig(needle, haystack, searchCfg);
   // Phase 8: removed fake storage loop — SearchView listens only to INDEX_READY via appEvents
   const [building, setBuilding] = useState(null); // { file, done, total, kind }
   const [busyFiles, setBusyFiles] = useState({});

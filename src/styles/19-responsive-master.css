@@ -1564,7 +1564,7 @@ textarea {
 }
 .ui-s-22befd {
   background: var(--success);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
 }
 
 /* KHBD Compact Input - gon gang, giu nguyen file xuat */

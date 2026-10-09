@@ -1099,7 +1099,6 @@ export default function WhiteboardView() {
     const onKey = (e) => {
       const t = document.activeElement;
       const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable || t.tagName === "SELECT");
-      const isWB = document.querySelector(".whiteboard-root")?.contains(document.activeElement) || document.querySelector(".whiteboard-root:hover");
       // Global WB shortcuts scope: chỉ khi whiteboard đang hiển thị — liên kết với Settings
       if (matchesShortcut(e, getShortcut("whiteboard.delete")) || e.key === "Delete" || e.key === "Backspace") {
         if (!typing) { e.preventDefault(); deleteSelection(); playWb("close"); }

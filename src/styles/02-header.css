@@ -103,9 +103,13 @@
 
 /* AI Status Indicator */
 .ai-status-indicator {
+  position: relative;
   width: 36px;
   height: 36px;
+  padding: 0;
   border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -121,8 +125,31 @@
   color: var(--pen-blue);
 }
 
+.ai-status-indicator.missing {
+  background: var(--warning-soft, rgba(245, 158, 11, 0.14));
+  border-color: var(--warning, #f59e0b);
+  color: var(--warning-deep, #b45309);
+}
+
+.ai-status-indicator.missing::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning, #f59e0b);
+  border: 1.5px solid var(--surface, #fff);
+}
+
 .ai-status-indicator:hover {
   transform: scale(1.05);
+}
+
+.ai-status-indicator:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 /* Header More Menu */

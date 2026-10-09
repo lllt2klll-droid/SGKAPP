@@ -16,12 +16,12 @@
   "pageerrors": []
  },
  "view-library": {
-  "selectors": 12
+  "selectors": 13
  },
  "view-help": {
   "selectors": 11
  },
  "settings": {
-  "selectors": 2
+  "selectors": 7
  }
 }

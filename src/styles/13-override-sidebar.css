@@ -202,7 +202,7 @@
 }
 .nav-item.active .nav-item-badge {
   background: var(--pen-blue);
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border-color: var(--pen-blue);
 }
 /* A2 • badge Thùng rác ở footer nav → đỏ để thấy có mục đang chờ xóa */
@@ -214,7 +214,7 @@
 }
 .nav-item-utility.active .nav-item-badge {
   background: var(--danger, #dc2626);
-  color: #fff;
+  color: var(--btn-danger-text, #fff);
   border-color: var(--danger, #dc2626);
 }
 .nav-item-badge-dot {
@@ -932,7 +932,7 @@
 }
 .book-card-fav.on {
   background: var(--warning);
-  color: #fff;
+  color: #1f2937;
   border-color: var(--warning-deep);
 }
 .book-card-grade {
@@ -1009,7 +1009,7 @@
   min-height: 36px;
   border-radius: 10px;
   background: var(--color-action, var(--red-action));
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
   border: 1px solid var(--color-action, var(--red-action-deep));
   box-shadow: none;
 }
@@ -1279,14 +1279,14 @@
   gap: 0.75rem !important;
   border-radius: 12px !important;
   background: var(--color-action, var(--primary)) !important;
-  color: #fff !important;
+  color: var(--btn-primary-text, #fff) !important;
   border: 1px solid var(--color-action, var(--primary)) !important;
   box-shadow: none !important;
   min-height: 44px;
 }
 .nav-item-large:hover {
   background: var(--color-action-hover, var(--primary-dark)) !important;
-  color: #fff !important;
+  color: var(--btn-primary-text, #fff) !important;
   border-color: var(--color-action-hover, var(--primary-dark)) !important;
   transform: none !important;
   box-shadow: var(--shadow-sm) !important;
@@ -1304,7 +1304,7 @@
 .nav-item-large .nav-item-icon {
   width: 22px;
   height: 22px;
-  color: #fff;
+  color: var(--btn-primary-text, #fff);
 }
 .nav-item-large .nav-item-text {
   font-size: 0.90rem;
@@ -1312,7 +1312,7 @@
 }
 .nav-item-large .nav-item-badge {
   background: #fff !important;
-  color: var(--primary) !important;
+  color: #154fcd !important;
   border-color: #fff !important;
   font-weight: 900;
 }
