@@ -21,6 +21,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "docx": "^9.7.1",
+    "dompurify": "^3.4.16",
     "express": "^4.19.2",
     "jszip": "^3.10.2",
     "lucide-react": "^0.428.0",
@@ -29,6 +30,7 @@
     "pdfjs-dist": "^3.4.120",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "sanitize-html": "^2.18.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

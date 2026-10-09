@@ -5,6 +5,7 @@ import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
+import sanitizeHtml from "sanitize-html";
 import {
   validateRemoteUrl,
   safeFetch,
@@ -76,6 +77,44 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// ── Content-Security-Policy ───────────────────────────────────────────
+// Lớp phòng thủ cuối cho XSS: kể cả khi sanitizer bị bypass hay DOMPurify
+// bỏ sót thì payload vẫn KHÔNG CHẠY ĐƯỢC — script-src 'self' chặn cả <script>
+// lẫn event handler nội tuyến (onerror/onload) và javascript: URL.
+// Ghi chú: script pre-paint trong index.html đã tách ra /theme-init.js để
+// không cần 'unsafe-inline'.
+const CSP_APP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "script-src 'self'",
+  // 'unsafe-inline' cho style: sách Word/HTML dùng style attribute inline;
+  // rủi ro CSS thấp hơn nhiều so với rủi ro làm hỏng hiển thị sách
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' data: blob:",
+  "connect-src 'self'",
+  "worker-src 'self' blob:",
+  "frame-src 'self' blob: data:",
+  "manifest-src 'self'",
+].join("; ");
+app.use((_req, res, next) => {
+  res.setHeader("Content-Security-Policy", CSP_APP);
+  next();
+});
+// Sách HTML mở trực tiếp trong tab: nghiêm ngặt hơn — không script dưới mọi hình thức
+const CSP_HTML_BOOK = [
+  "default-src 'none'",
+  "style-src 'unsafe-inline'",
+  "img-src data: blob: https: http:",
+  "font-src data: https:",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+].join("; ");
 
 app.use(
   cors({
@@ -724,14 +763,42 @@ const docxMemoryUpload = multer({
 });
 
 function sanitizeImportedHtml(html) {
-  let out = String(html || "");
-  // Bỏ script/iframe/object/embed + event handlers + javascript: URLs — giữ lại toàn bộ định dạng còn lại
-  out = out.replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, "");
-  out = out.replace(/<\s*(iframe|object|embed|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, "");
-  out = out.replace(/<\s*(iframe|object|embed|form|input|button|select|textarea)[^>]*\/?>/gi, "");
-  out = out.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
-  out = out.replace(/(href|src|xlink:href)\s*=\s*("javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, '$1="#"');
-  return out.trim();
+  if (!html) return "";
+  // Thay regex tự viết bằng sanitize-html (allowlist): regex cũ bypass được qua
+  // <img/onerror=...> (thiếu khoảng trắng trước on*) và <script src=...> không
+  // có tag đóng. Giữ nguyên định dạng sách (bảng, style/class, ảnh data:).
+  return sanitizeHtml(String(html), {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+      "img", "figure", "figcaption", "center", "font", "style", "span",
+      "section", "article", "details", "summary", "hr", "sup", "sub", "mark",
+      "h1", "h2", "h3", "h4", "h5", "h6",
+    ]),
+    allowedAttributes: {
+      "*": ["style", "class", "id", "align", "title", "dir", "lang", "width", "height", "bgcolor", "color", "face"],
+      a: ["href", "name", "target", "rel"],
+      img: ["src", "alt", "srcset", "width", "height", "style", "loading"],
+      td: ["colspan", "rowspan", "style", "class", "align", "valign", "width", "height", "bgcolor"],
+      th: ["colspan", "rowspan", "style", "class", "align", "valign", "width", "height", "bgcolor"],
+      ol: ["start", "type"],
+      ul: ["type"],
+      li: ["value"],
+      table: ["border", "cellpadding", "cellspacing", "width", "style", "class"],
+    },
+    // Không cho javascript:/vbscript:/data: ở href; riêng <img> giữ data: (ảnh nhúng Word)
+    allowedSchemes: ["http", "https", "mailto", "tel"],
+    allowedSchemesByTag: { img: ["http", "https", "data"] },
+    allowProtocolRelative: false,
+    // <style> cần cho sách HTML giữ nguyên giao diện; CSS không chạy được JS
+    // trên trình duyệt hiện đại (không còn expression()/behavior:) và CSP phía
+    // server chặn script — chấp nhận có chủ đích thay vì mất style của sách.
+    allowVulnerableTags: ["style"],
+    transformTags: {
+      a: (tagName, attribs) => {
+        if (attribs.target === "_blank") attribs.rel = "nofollow noopener noreferrer";
+        return { tagName, attribs };
+      },
+    },
+  });
 }
 
 // Sanitize HTML lưu thành sách (create-text / PUT): BookReader render bằng
@@ -1148,6 +1215,8 @@ app.get("/api/books/:filename", (req, res) => {
       if (!res.headersSent) return res.status(500).json({ error: "Không thể đọc file." });
       return res.end();
     }
+    // Ghi đè CSP chung: sách mở trực tiếp trong tab không được chạy bất kỳ script nào
+    res.setHeader("Content-Security-Policy", CSP_HTML_BOOK);
     const htmlBuf = Buffer.from(htmlOut, "utf8");
     res.setHeader("Content-Length", htmlBuf.length);
     return res.end(htmlBuf);

@@ -15,6 +15,7 @@ import PageRangePicker from "./PageRangePicker";
 import { loadSettings, updateSettings } from "./settingsStore";
 import { getShortcut, matchesShortcut } from "./keyboardShortcuts.js";
 import { uiMessage } from "./core/errors.js";
+import DOMPurify from "dompurify";
 import { calcRenderScale } from "./reader/pdfRenderer.js";
 import {
   ArrowLeft,
@@ -175,43 +176,17 @@ function cleanExtractedText(text) {
 function sanitizeNoteHtml(html) {
   if (!html) return "";
   try {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    tmp
-      .querySelectorAll("script, style, iframe, object, embed, link, meta")
-      .forEach((el) => el.remove());
-    const allowed = new Set([
-      "B",
-      "STRONG",
-      "I",
-      "EM",
-      "U",
-      "S",
-      "STRIKE",
-      "BR",
-    ]);
-    const walk = (node) => {
-      for (const child of [...node.childNodes]) {
-        if (child.nodeType === 1) {
-          if (!allowed.has(child.tagName)) {
-            // unwrap disallowed element but keep its children/text
-            while (child.firstChild) node.insertBefore(child.firstChild, child);
-            child.remove();
-          } else {
-            [...child.attributes].forEach((a) => child.removeAttribute(a.name));
-            walk(child);
-          }
-        } else if (child.nodeType === 8) {
-          child.remove();
-        }
-      }
-    };
-    walk(tmp);
-    let out = tmp.innerHTML.trim();
+    // DOMPurify parse trên document inert nên script/onerror KHÔNG thể chạy
+    // trong lúc sanitize (cách cũ gán innerHTML lên div rồi mới dọn là đã trễ).
+    // Allowlist y hệt bản cũ: chỉ b/strong/i/em/u/s/strike/br, không attribute.
+    let out = DOMPurify.sanitize(String(html), {
+      ALLOWED_TAGS: ["b", "strong", "i", "em", "u", "s", "strike", "br"],
+      ALLOWED_ATTR: [],
+    }).trim();
     if (/^(<br\s*\/?>)+$/i.test(out)) out = "";
     return out;
   } catch {
-    return html.replace(/<[^>]*>/g, "").slice(0, 4000);
+    return String(html).replace(/<[^>]*>/g, "").slice(0, 4000);
   }
 }
 function plainTextFromHtml(html) {
@@ -4592,7 +4567,9 @@ export default function BookReader({
             c=esc.split(/\n\s*\n/).map(p=>`<p>${p.split("\n").join("<br>")}</p>`).join("");
           }
         }
-        setHtmlBookContent(c||"<p style='color:#94a3b8; text-align:center; padding:48px 0;'>Chưa có nội dung</p>");
+        // Sanitize MỘT LẦN tại điểm tải: mọi nơi dùng htmlBookContent
+        // (render trang, extract TOC, export docx) đều nhận bản đã sạch
+        setHtmlBookContent(DOMPurify.sanitize(c) || "<p style='color:#94a3b8; text-align:center; padding:48px 0;'>Chưa có nội dung</p>");
       })
       .catch(e=>{ if(!cancelled) setHtmlBookError(uiMessage(e, "Không tải được nội dung. Vui lòng thử lại.")); })
       .finally(()=>{ if(!cancelled) setHtmlBookLoading(false); });
