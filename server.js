@@ -1115,6 +1115,136 @@ app.get("/api/books", (req, res) => {
   }
 });
 
+// ── Thùng rác server-side ─────────────────────────────────────────────
+// DELETE mặc định KHÔNG unlink: chuyển file vào thư mục này (cùng ổ đĩa với
+// books/) để còn phục hồi — thư viện ~1,5GB không có backup nên xóa nhầm/
+// purge nhầm là mất sạch. File tự được dọn sau BOOK_TRASH_DAYS ngày (kiểm tra
+// khi server khởi động). Xóa thật vĩnh viễn: ?purge=1.
+const BOOK_TRASH_DIR = path.resolve(path.join(path.dirname(BOOKS_DIR), ".sgk-book-trash"));
+const BOOK_TRASH_DAYS = 30;
+
+function bookTrashTarget(filename) {
+  fs.mkdirSync(BOOK_TRASH_DIR, { recursive: true });
+  const base = path.basename(filename);
+  let dest = path.join(BOOK_TRASH_DIR, base);
+  if (fs.existsSync(dest)) {
+    const ext = path.extname(base);
+    const stem = base.slice(0, base.length - ext.length);
+    for (let n = 1; fs.existsSync(dest); n += 1) {
+      dest = path.join(BOOK_TRASH_DIR, `${stem}-${n}${ext}`);
+    }
+  }
+  return dest;
+}
+
+// rename trong cùng ổ đĩa; fallback copy+unlink nếu BOOKS_DIR ở ổ khác (EXDEV)
+function moveFile(src, dest) {
+  try {
+    fs.renameSync(src, dest);
+  } catch (err) {
+    if (err && err.code === "EXDEV") {
+      fs.copyFileSync(src, dest);
+      fs.unlinkSync(src);
+    } else throw err;
+  }
+}
+
+function purgeExpiredBookTrash() {
+  try {
+    if (!fs.existsSync(BOOK_TRASH_DIR)) return 0;
+    const cutoff = Date.now() - BOOK_TRASH_DAYS * 86400000;
+    let removed = 0;
+    for (const f of fs.readdirSync(BOOK_TRASH_DIR)) {
+      const p = path.join(BOOK_TRASH_DIR, f);
+      try {
+        const st = fs.statSync(p);
+        if (st.isFile() && st.mtimeMs < cutoff) {
+          fs.unlinkSync(p);
+          removed += 1;
+        }
+      } catch {
+        /* file vừa bị ai đó phục hồi/dọn → bỏ qua */
+      }
+    }
+    if (removed > 0) console.log(`[thung rac] da don ${removed} file het han ${BOOK_TRASH_DAYS} ngay`);
+    return removed;
+  } catch {
+    return 0;
+  }
+}
+purgeExpiredBookTrash();
+
+// Danh sách thùng rác server
+app.get("/api/trash/books", (_req, res) => {
+  try {
+    if (!fs.existsSync(BOOK_TRASH_DIR)) return res.json({ items: [], days: BOOK_TRASH_DAYS });
+    const items = fs
+      .readdirSync(BOOK_TRASH_DIR)
+      .map((f) => {
+        try {
+          const st = fs.statSync(path.join(BOOK_TRASH_DIR, f));
+          if (!st.isFile()) return null;
+          return {
+            filename: f,
+            size: st.size,
+            deletedAt: st.mtime.toISOString(),
+            expiresInDays: Math.max(0, Math.ceil((st.mtimeMs + BOOK_TRASH_DAYS * 86400000 - Date.now()) / 86400000)),
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
+    res.json({ items, days: BOOK_TRASH_DAYS });
+  } catch {
+    res.status(500).json({ error: "Không đọc được thùng rác server." });
+  }
+});
+
+// Phục hồi 1 file về thư viện
+app.post("/api/trash/books/restore", (req, res) => {
+  const raw = String(req.body?.filename || "");
+  if (!raw || raw.includes("\0")) return res.status(400).json({ error: "Thiếu tên file." });
+  const base = path.basename(raw);
+  const src = path.join(BOOK_TRASH_DIR, base);
+  const relative = path.relative(BOOK_TRASH_DIR, src);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return res.status(400).json({ error: "Yêu cầu không hợp lệ." });
+  if (!fs.existsSync(src)) return res.status(404).json({ error: "Không tìm thấy file trong thùng rác server." });
+  if (!SUPPORTED_EXTS.includes(getExt(base))) return res.status(400).json({ error: "Không phải file sách được hỗ trợ." });
+  try {
+    const finalName = buildUniqueBookFilename(base); // đã tạo placeholder 0 byte
+    moveFile(src, path.join(BOOKS_DIR, finalName));
+    return res.json({ ok: true, filename: finalName, message: `Đã phục hồi "${finalName}" về thư viện.` });
+  } catch (error) {
+    console.error("Restore book error:", error);
+    return res.status(500).json({ error: "Không thể phục hồi file." });
+  }
+});
+
+// Dọn toàn bộ thùng rác server (xóa thật)
+app.delete("/api/trash/books", (_req, res) => {
+  try {
+    if (!fs.existsSync(BOOK_TRASH_DIR)) return res.json({ ok: true, removed: 0 });
+    let removed = 0;
+    for (const f of fs.readdirSync(BOOK_TRASH_DIR)) {
+      try {
+        const p = path.join(BOOK_TRASH_DIR, f);
+        if (fs.statSync(p).isFile()) {
+          fs.unlinkSync(p);
+          removed += 1;
+        }
+      } catch {
+        /* bỏ qua file không xóa được */
+      }
+    }
+    return res.json({ ok: true, removed, message: `Đã xóa vĩnh viễn ${removed} file.` });
+  } catch (error) {
+    console.error("Empty trash error:", error);
+    return res.status(500).json({ error: "Không thể dọn thùng rác." });
+  }
+});
+
 app.delete("/api/books/:filename", (req, res) => {
   if (isMaliciousFilenameParam(req.params.filename)) return res.status(403).json({ error: "Yêu cầu không hợp lệ" });
   let filename = req.params.filename;
@@ -1141,10 +1271,20 @@ app.delete("/api/books/:filename", (req, res) => {
   }
 
   try {
-    fs.unlinkSync(filePath);
+    // Mặc định: đưa vào thùng rác server (phục hồi được, dọn sau 30 ngày).
+    // ?purge=1: xóa vĩnh viễn thật sự (không thể phục hồi).
+    const purge = req.query.purge === "1" || req.query.purge === "true";
+    if (purge) {
+      fs.unlinkSync(filePath);
+      return res.json({ ok: true, purged: true, message: `Đã xóa vĩnh viễn sách "${filename}".` });
+    }
+    const dest = bookTrashTarget(filename);
+    moveFile(filePath, dest);
     return res.json({
       ok: true,
-      message: `Đã xóa sách "${filename}" khỏi thư viện.`,
+      trashed: true,
+      trashFile: path.basename(dest),
+      message: `Đã đưa "${filename}" vào thùng rác server (phục hồi trong ${BOOK_TRASH_DAYS} ngày).`,
     });
   } catch (error) {
     console.error("Delete book error:", error);
