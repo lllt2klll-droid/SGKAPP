@@ -1,7 +1,7 @@
 // ── Mission Store ── local-first, timezone-safe, anti-exploit
-import { MISSION_TEMPLATES, DIFFICULTY, XP_BY_DIFFICULTY, LEVELS, levelForXp, ACHIEVEMENTS } from './missionRegistry.js';
-import { makeId, readJSON, saveJSON } from './storage.js';
-import { safeGetJSON, safeSetJSON, safeGetString, safeRemove } from './safeStorage.js';
+import { MISSION_TEMPLATES, XP_BY_DIFFICULTY, levelForXp, ACHIEVEMENTS } from './missionRegistry.js';
+import { makeId } from './storage.js';
+import { safeGetJSON, safeSetJSON, safeGetString } from './safeStorage.js';
 export { levelForXp };
 
 const KEYS = {

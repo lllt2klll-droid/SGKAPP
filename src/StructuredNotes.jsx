@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { citationFor } from "./researchDB";
 import { exportWord, nl2br, escapeHtml } from "./exportDoc";
-import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, listKeysByPrefix } from "./safeStorage";
+import { safeGetJSON, safeSetJSON, listKeysByPrefix } from "./safeStorage";
 
 const FIELDS = [
   {

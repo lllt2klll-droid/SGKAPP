@@ -5,14 +5,14 @@ import { loadSettings, updateSettings } from "./settingsStore";
 import { readJSON, saveJSON, removeKey } from "./storage";
 import { useFileDrag } from "./components/fileDropzoneUtils.js";
 import {
-  X, Save, Eye, Trash2, Copy, Check, FileText, AlertCircle, Sparkles,
+  X, Save, Eye, Trash2, Copy, Check, FileText, AlertCircle,
   Bold, Italic, Underline, Strikethrough, Palette, Highlighter,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   List, ListOrdered, Indent, Outdent, Link2, Image as ImageIcon,
-  Table2, Minus, Quote, Code, Heading1, Heading2, Heading3,
+  Table2, Minus, Quote, Code,
   Undo2, Redo2, Eraser, Type, Subscript, Superscript,
-  ZoomIn, ZoomOut, Ruler, FilePlus, Printer, Search, Replace,
-  Layers, BookOpen, Maximize2, Minimize2, Paintbrush, ChevronDown,
+  ZoomIn, ZoomOut, Ruler, Printer, Search,
+  Layers, BookOpen, Maximize2, Minimize2,
   Download, FileUp,
 } from "lucide-react";
 
@@ -1092,9 +1092,6 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
                 {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Đang lưu...</> : isEdit ? <><Save size={14} /> Lưu thay đổi (Ctrl+S)</> : <><Save size={14} /> Tạo sách</>}
               </button>
             </div>
-
-            {/* hidden initial sync */}
-            <style>{`/* placeholder style injected */`}</style>
           </>
         )}
       </div>

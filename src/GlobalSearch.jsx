@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Search, X, BookOpen, Lightbulb, FileText, Puzzle, Database, ListChecks, Library, NotebookPen, Scissors, ClipboardCheck, School, Palette, Layers, Bookmark, StickyNote, Tag, Clock, Trash2 } from "lucide-react";
+import { Search, X, BookOpen, Lightbulb, FileText, Puzzle, Database, ListChecks, Library, NotebookPen, Scissors, ClipboardCheck, Palette, Layers, StickyNote, Tag, Clock, Trash2 } from "lucide-react";
 import { findTocBook } from "./tocData.js";
 import { getShortcut, matchesShortcut, splitCombo } from "./keyboardShortcuts.js";
-import { safeGetJSON, safeGetString } from "./safeStorage";
+import { safeGetJSON } from "./safeStorage";
 import { searchNotes, getNoteKindLabel } from "./noteSearch.js";
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from "./searchRecent.js";
 import { groupResultsForDisplay } from "./searchDisplayOrder.js";

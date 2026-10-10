@@ -10,10 +10,8 @@ import {
   Check,
   X,
   RefreshCw,
-  Eye,
 } from "lucide-react";
 import DataTable from "./DataTable";
-import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove } from "./safeStorage";
 import {
   getRefs,
   upsertBookRef,

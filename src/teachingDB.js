@@ -1,8 +1,8 @@
 ﻿// ── Teaching data layer: lesson plans (khung GDPT 2018), activities
 // library, worksheets, question bank. Everything is local + offline. ──
-import { saveJSON, getList, addItem, updateItem, makeId, now } from "./storage.js";
-import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, safeSetString } from "./safeStorage.js";
-import { appEvents, AppEvents, DataDomains } from "./core/appEvents.js";
+import { makeId, now } from "./storage.js";
+import { safeGetJSON, safeSetJSON } from "./safeStorage.js";
+import { appEvents, AppEvents } from "./core/appEvents.js";
 function notifyDataUpdated(detail){
   const d = detail||{source:"teachingDB"};
   try{ appEvents.emit(AppEvents.DATA_UPDATED, d); }catch(e){ console.warn("[teachingDB] appEvents emit failed", e); }
@@ -19,7 +19,6 @@ function _saveSafe(key, value){
   }
   return true;
 }
-function _safeRemove(key){ const r=safeRemove(key); if(!r.ok) console.warn("[teachingDB] remove failed", key, r.error); return r; }
 function _addItemSafe(key, item, opts={}){ const list=_getListSafe(key); const unshift=opts.unshift!==false; const cap=opts.cap||0; const next=unshift?[item,...list]:[...list,item]; return cap>0?next.slice(0,cap):next; }
 function _updateItemSafe(key, id, patch){ const list=_getListSafe(key); return list.map(it=> it.id===id?{...it,...patch,id:it.id}:it); }
 import {

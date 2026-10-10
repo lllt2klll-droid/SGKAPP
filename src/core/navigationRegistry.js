@@ -27,7 +27,6 @@ import {
   Lightbulb,
   ClipboardCheck,
   BarChart3,
-  GraduationCap,
   HelpCircle,
   Settings,
   DatabaseBackup,

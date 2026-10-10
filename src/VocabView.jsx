@@ -17,7 +17,6 @@ import {
   Loader2,
   Pencil,
   Tag,
-  RotateCcw,
 } from "lucide-react";
 import DataTable from "./DataTable";
 import aiService, { getFriendlyErrorMessage } from "./aiService";

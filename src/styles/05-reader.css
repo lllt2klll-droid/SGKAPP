@@ -717,7 +717,7 @@
    ============================================================ */
 
 /* MOBILE (<768px) — Navigation becomes drawer, single column layouts */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   /* App Shell - Mobile */
   .app-shell {
     flex-direction: column;
@@ -790,9 +790,11 @@
     padding: 1rem;
   }
 
-  /* Reader - Mobile */
+  /* Reader - Mobile: TOC là drawer (31-mobile-tablet.css + 33-bookreader-mobile.css
+     điều khiển) — KHÔNG display:none ở đây vì JSX render có điều kiện theo
+     tocCollapsed, ẩn ở đây sẽ giết mục lục trên điện thoại. */
   .reader-toc-panel {
-    display: none; /* Use drawer instead */
+    display: flex;
   }
 
   .reader-ai-panel {

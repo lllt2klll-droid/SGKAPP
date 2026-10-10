@@ -8,7 +8,7 @@ import React, {
 import { getApiBase } from "./apiConfig";
 import { appEvents, AppEvents } from "./core/appEvents.js";
 import { pdfjsLib } from "./pdfjs-config";
-import { teacherCopy, TEACHER_SYSTEM_PROMPT } from "./appPersona";
+import { TEACHER_SYSTEM_PROMPT } from "./appPersona";
 import aiService, { getFriendlyErrorMessage, AIError } from "./aiService";
 import MarkdownText from "./MarkdownText";
 import PageRangePicker from "./PageRangePicker";
@@ -42,7 +42,6 @@ import {
   X,
   Maximize2,
   Trash2,
-  StickyNote,
   RotateCcw,
   GraduationCap,
   BookmarkPlus,
@@ -56,7 +55,6 @@ import {
   Layers,
   Star,
   Clock,
-  Sun,
   ScanText,
   Database,
   Minus,
@@ -79,7 +77,7 @@ import {
   chapterForPage,
 } from "./researchDB";
 import { findTocBook, upsertTocBook, makeTocKey, makeFileTocKey } from "./tocData";
-import { exportTocToExcel, exportTocSimple, parseTocExcel } from "./tocExcel";
+import { exportTocSimple, parseTocExcel } from "./tocExcel";
 import {
   TOC_AI_MAX_IMAGES,
   validateTocAiFiles,
@@ -201,28 +199,56 @@ function plainTextFromHtml(html) {
   }
 }
 
+function tryParseJSONBookReader(s) {
+  try { return { ok: true, value: JSON.parse(s) }; } catch {}
+  try { return { ok: true, value: JSON.parse(String(s).replace(/,\s*([}\]])/g, "$1")) }; } catch {}
+  return { ok: false, value: null };
+}
+
 function parseJSONSafe(text) {
   if (!text) return null;
   let t = text.trim();
   t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  // 1) Parse toàn chuỗi trước (đúng cho mảng thuần [...] mà prompt TOC yêu cầu)
+  let r = tryParseJSONBookReader(t);
+  if (r.ok) {
+    let result = r.value;
+    for (let i = 0; i < 3 && typeof result === "string"; i++) {
+      const inner = result.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      if (!inner) break;
+      const r2 = tryParseJSONBookReader(inner);
+      if (!r2.ok) break;
+      result = r2.value;
+    }
+    return typeof result === "string" ? null : result;
+  }
+  // 2) Fallback: cắt khối JSON khi AI chèn chữ xung quanh.
+  // Ưu tiên khối bắt đầu TRƯỚC (ngoài cùng): mảng [...] bắt đầu trước {...} con bên trong.
   const objStart = t.indexOf("{");
   const objEnd = t.lastIndexOf("}");
   const arrStart = t.indexOf("[");
   const arrEnd = t.lastIndexOf("]");
-  let cand = null;
-  if (objStart >= 0 && objEnd > objStart) cand = t.slice(objStart, objEnd + 1);
-  else if (arrStart >= 0 && arrEnd > arrStart) cand = t.slice(arrStart, arrEnd + 1);
-  else cand = t;
-  try {
-    return JSON.parse(cand);
-  } catch {
-    try {
-      const fixed = cand.replace(/,\s*([}\]])/g, "$1");
-      return JSON.parse(fixed);
-    } catch {
-      return null;
-    }
+  const objOk = objStart >= 0 && objEnd > objStart;
+  const arrOk = arrStart >= 0 && arrEnd > arrStart;
+  let cand = t;
+  if (objOk && arrOk) {
+    cand = arrStart < objStart ? t.slice(arrStart, arrEnd + 1) : t.slice(objStart, objEnd + 1);
+  } else if (arrOk) {
+    cand = t.slice(arrStart, arrEnd + 1);
+  } else if (objOk) {
+    cand = t.slice(objStart, objEnd + 1);
   }
+  r = tryParseJSONBookReader(cand);
+  if (!r.ok) return null;
+  let result = r.value;
+  for (let i = 0; i < 3 && typeof result === "string"; i++) {
+    const inner = result.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    if (!inner) break;
+    const r2 = tryParseJSONBookReader(inner);
+    if (!r2.ok) break;
+    result = r2.value;
+  }
+  return typeof result === "string" ? null : result;
 }
 
 const API_BASE = getApiBase();

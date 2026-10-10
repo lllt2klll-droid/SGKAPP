@@ -6,7 +6,6 @@ import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove, lis
 import { appEvents, AppEvents, DataDomains } from "../core/appEvents.js";
 import indexedDBService, { STORES } from "../indexedDB.js";
 import { purgeUnreferencedImageBlobs } from "./imageStore.js";
-import { STORAGE_KEYS } from "../core/storageKeys.js";
 function _emitWB(action, id){ try{ appEvents.emit(AppEvents.WHITEBOARD_UPDATED, { action, id, domain: DataDomains.WHITEBOARD }); appEvents.emit(AppEvents.DATA_UPDATED, { domain: DataDomains.WHITEBOARD, action, id }); }catch{} }
 
 export const WB_INDEX_KEY = "sgk_wb_index"; // [{id,name,createdAt,updatedAt}]

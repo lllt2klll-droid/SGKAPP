@@ -12,11 +12,8 @@ import {
   Database,
   ListChecks,
   ClipboardCheck,
-  ArrowRight,
-  Plus,
   Check,
   X,
-  Sparkles,
   Search,
   Grid3x3,
   MoreHorizontal,
@@ -29,13 +26,12 @@ import {
 } from "lucide-react";
 import { getTasks, toggleTaskComplete } from "./personalDB";
 import { getIdeas } from "./personalDB";
-import { getQuestions } from "./teachingDB";
 import { getPlans as getKhbdPlans } from "./khbd/planModel";
 import MissionWidget from "./MissionWidget";
 import ScanHistory from "./scan/ScanHistory";
 import { getScans } from "./scan/scanStore";
 import { loadSettings } from "./settingsStore";
-import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage";
+import { safeGetJSON, safeGetString, safeSetString } from "./safeStorage";
 import { appEvents, AppEvents } from "./core/appEvents.js";
 import { bookProgress } from "./readingProgress.js";
 

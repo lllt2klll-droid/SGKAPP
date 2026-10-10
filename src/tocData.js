@@ -6064,7 +6064,7 @@ export const tocBooks = [
 ];
 
 import { STORAGE_KEYS } from "./core/storageKeys.js";
-import { safeGetJSON, safeSetJSON, safeGetString } from "./safeStorage.js";
+import { safeGetJSON, safeSetJSON } from "./safeStorage.js";
 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 export const TOC_PDF_OFFSET = 1;

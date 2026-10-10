@@ -170,25 +170,16 @@
   .rtb-title { max-width: 34vw; }
   .rtb-back-text, .rtb-ai-label, .reader-zoom-display { display: none; }
   .reader-main { flex-direction: column; }
-  .reader-toc-panel {
-    position: fixed; top: 0; left: 0; width: min(86vw, 320px); max-width: min(86vw, 320px);
-    height: 100dvh; z-index: 2000; display: flex;
-    transform: translateX(-105%); transition: transform 0.25s ease;
-    border-right: 1px solid var(--border-color);
-  }
-  .reader-toc-panel.mobile-open { transform: translateX(0); }
+  /* TOC phone là drawer fixed do 33-bookreader-mobile.css sở hữu toàn phần
+     (.reader-main .reader-toc-panel, specificity cao hơn nên luôn thắng).
+     KHÔNG đặt translateX(-105%) ở đây: JSX không set class .mobile-open
+     (render có điều kiện theo tocCollapsed) nên transform sẽ kẹt ẩn vĩnh viễn. */
   .reader-book-panel { width: 100%; margin: 0; }
   .reader-book-viewport { padding: 0.6rem; }
-  .reader-ai-panel {
-    position: fixed; left: 0; right: 0; bottom: 0; width: 100%;
-    max-height: 52vh; height: auto; z-index: 1000;
-    border-left: none; border-top: 1px solid var(--border-color);
-    border-radius: 16px 16px 0 0;
-    transform: translateY(105%); transition: transform 0.25s ease;
-  }
-  .reader-ai-panel.mobile-open { transform: translateY(0); }
+  /* AI phone là bottom-sheet .ai-panel do 33 sở hữu (.reader-ai-panel là tên
+     layout cũ, không còn element nào dùng → không rule ở đây). */
   .reader-root, .pdf-panel { border-radius: 10px; }
-  .reader-advanced-drawer { top: auto; bottom: 0; right: 0; left: 0; width: 100%; height: 70dvh; border-left: none; border-top: 1px solid var(--border-color); border-radius: 16px 16px 0 0; transform: translateY(105%); }
+  .reader-advanced-drawer { top: auto; bottom: 0; right: 0; left: 0; width: 100%; height: 78dvh; max-height: 78dvh; border-left: none; border-top: 1px solid var(--border-color); border-radius: 16px 16px 0 0; transform: translateY(105%); }
   .reader-advanced-drawer.open { transform: translateY(0); }
   .command-palette { width: calc(100vw - 20px); max-width: calc(100vw - 20px); }
 

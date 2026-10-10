@@ -6,7 +6,6 @@ import { analyzeText, indexCoverage } from "./textutils";
 import { chapterAt } from "./researchDB";
 import { exportWord, exportCsv, escapeHtml } from "./exportDoc";
 import DataTable from "./DataTable";
-import { safeGetJSON, safeSetJSON } from "./safeStorage";
 
 const DIFF_LABELS = {
   1: "Rất dễ",

@@ -33,19 +33,22 @@ export function parseJSONSafe(text) {
   let r = tryParseJSON(t);
   let result = r.ok ? r.value : null;
 
-  // 2) Fallback: cắt khối {...} / [...] khi AI chèn chữ xung quanh
+  // 2) Fallback: cắt khối {...} / [...] khi AI chèn chữ xung quanh.
+  // Ưu tiên khối bắt đầu TRƯỚC (ngoài cùng): mảng [...] bắt đầu trước {...} con.
   if (!r.ok) {
     const objStart = t.indexOf("{");
     const objEnd = t.lastIndexOf("}");
     const arrStart = t.indexOf("[");
     const arrEnd = t.lastIndexOf("]");
-    let cand = null;
-    if (objStart >= 0 && objEnd > objStart) {
-      cand = t.slice(objStart, objEnd + 1);
-    } else if (arrStart >= 0 && arrEnd > arrStart) {
+    const objOk = objStart >= 0 && objEnd > objStart;
+    const arrOk = arrStart >= 0 && arrEnd > arrStart;
+    let cand = t;
+    if (objOk && arrOk) {
+      cand = arrStart < objStart ? t.slice(arrStart, arrEnd + 1) : t.slice(objStart, objEnd + 1);
+    } else if (arrOk) {
       cand = t.slice(arrStart, arrEnd + 1);
-    } else {
-      cand = t;
+    } else if (objOk) {
+      cand = t.slice(objStart, objEnd + 1);
     }
     r = tryParseJSON(cand);
     if (!r.ok) return null;

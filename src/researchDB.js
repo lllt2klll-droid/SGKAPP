@@ -1,7 +1,7 @@
 // ── Research data layer: page marks (CTGDPT 2018 tags), clip collections,
 // reference bibliography, personal concept notebook, citation helpers. ──
-import { readJSON, saveJSON, saveBatch, getList, addItem, updateItem, removeItem, makeId, now } from './storage.js';
-import { safeGetJSON, safeSetJSON, safeGetString, safeRemove } from './safeStorage.js';
+import { removeItem, makeId, now } from './storage.js';
+import { safeGetJSON, safeSetJSON } from './safeStorage.js';
 import { findTocBook } from './tocData.js';
 import indexedDBService, { STORES } from './indexedDB.js';
 import { emitClipCreated, emitConceptCreated, emitEvidenceCreated, emitNoteCreated, emitReferenceCreated } from './missionEvents.js';
@@ -42,7 +42,7 @@ async function getMergedIndexedList({
   }
 }
 
-import { appEvents, AppEvents, DataDomains } from "./core/appEvents.js";
+import { appEvents, AppEvents } from "./core/appEvents.js";
 function notifyDataUpdated(detail) {
   const d = detail || { source: "researchDB" };
   try { appEvents.emit(AppEvents.DATA_UPDATED, d); } catch (e) { console.warn("[researchDB] appEvents emit failed", e); }
@@ -59,11 +59,6 @@ function _safeGetList(key){ return safeGetJSON(key, [], Array.isArray); }
 function _safeGetObj(key){ return safeGetJSON(key, {}, v=>v&&typeof v==="object" && !Array.isArray(v)); }
 function _updateItemSafe(key, id, patch){ const list=_safeGetList(key); return list.map(it=> it.id===id?{...it,...patch,id:it.id}:it); }
 function _addItemSafe(key, item){ const list=_safeGetList(key); return [item,...list]; }
-function _safeSave(key, value){
-  const res=safeSetJSON(key, value);
-  if(!res.ok){ if(res.quota) console.warn("[safeStorage] QuotaExceededError on", key, "-", res.message); else console.warn("[safeStorage] save failed for", key, ":", res.error, res.message); return false; }
-  return true;
-}
 // Helper to handle saveJSON errors consistently — safeStorage audit
 function safeSave(key, value, operation = 'save') {
   const res = safeSetJSON(key, value);

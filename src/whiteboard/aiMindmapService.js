@@ -42,10 +42,12 @@ export function parsePlanJSON(text) {
   if (!r.ok) {
     const objStart = t.indexOf("{"), objEnd = t.lastIndexOf("}");
     const arrStart = t.indexOf("["), arrEnd = t.lastIndexOf("]");
-    let cand = null;
-    if (objStart >= 0 && objEnd > objStart) cand = t.slice(objStart, objEnd + 1);
-    else if (arrStart >= 0 && arrEnd > arrStart) cand = t.slice(arrStart, arrEnd + 1);
-    else cand = t;
+    const objOk = objStart >= 0 && objEnd > objStart;
+    const arrOk = arrStart >= 0 && arrEnd > arrStart;
+    let cand = t;
+    if (objOk && arrOk) cand = arrStart < objStart ? t.slice(arrStart, arrEnd + 1) : t.slice(objStart, objEnd + 1);
+    else if (objOk) cand = t.slice(objStart, objEnd + 1);
+    else if (arrOk) cand = t.slice(arrStart, arrEnd + 1);
     r = tryParseJSON(cand);
     if (!r.ok) return null;
     result = r.value;

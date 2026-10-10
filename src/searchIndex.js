@@ -8,7 +8,6 @@ import indexedDBService, { STORES, getOCR, setOCR } from "./indexedDB.js";
 import { safeRemove } from "./safeStorage.js";
 import { getApiBase } from "./apiConfig.js";
 import { cleanExtractedText } from "./textutils.js";
-import { ocrKey as ocrKeyHelper } from "./core/storageKeys.js";
 
 const IDX_PREFIX = "sgk_idx_";
 const IDX_META_PREFIX = "sgk_idxmeta_";

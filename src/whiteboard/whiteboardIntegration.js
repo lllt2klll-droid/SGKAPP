@@ -2,7 +2,6 @@
 // Không module nào lạc quẻ: SGK, Soạn Dạy, Ngân Hàng, Nghiên Cứu, Dashboard, Search, Backup, Missions đều nói chuyện qua hub này.
 
 import { queuePendingPayload } from "./whiteboardStore.js";
-import { blankObject } from "./whiteboardStore.js";
 import { generateMindmap } from "./mindmapEngine.js";
 import { chapterForPage as _chapterForPage, citationFor as _citationFor } from "../researchDB.js";
 import { safeGetJSON } from "../safeStorage.js";

@@ -1,7 +1,7 @@
 // ── Manual Data Synchronization Service ─────────────────────────────────
 // PHASE 6: This is currently LOCAL_SIMULATION — no remote backend.
 // Do NOT present as real cloud sync. Reports success locally.
-import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, listKeys } from "./safeStorage.js";
+import { safeGetJSON, safeSetJSON, safeRemove, listKeys } from "./safeStorage.js";
 import { STORAGE_KEYS } from "./core/storageKeys.js";
 import { appEvents, AppEvents } from "./core/appEvents.js";
 import { importLegacyPlan } from "./khbd/planModel.js";

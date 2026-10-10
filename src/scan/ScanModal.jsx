@@ -924,7 +924,6 @@ export default function ScanModal({ scan, onClose, onSaved }) {
             <span style={{ background: "var(--surface)", border: "1px solid var(--border-color)", padding: "2px 6px", borderRadius: 6 }}>🔍 {analysis?.topic || "—"}</span>
           </div>
         )}
-        <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} .aia-spin-svg{animation:spin 0.9s linear infinite}`}</style>
       </div>
     </div>
 
@@ -951,7 +950,6 @@ export default function ScanModal({ scan, onClose, onSaved }) {
               borderRadius: 16,
             }}
           >
-            <style>{`.modal-overlay .modal-content.scanm-crop-shell{width:min(1120px,96vw) !important;max-width:min(1120px,96vw) !important;margin:0 auto !important;padding:0 !important;}`}</style>
             <CropPreview
               dataUrl={scan.dataUrl}
               initialCrop={scan.crop}

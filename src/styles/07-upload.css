@@ -181,7 +181,7 @@
 }
 
 /* Mobile: Hide sidebar by default, show only when explicitly needed */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .sidebar {
     display: none;
   }
@@ -652,7 +652,7 @@
   max-height: calc(100dvh - 100px);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .modal-content {
     width: calc(100vw - 24px);
     max-height: calc(100dvh - 24px);

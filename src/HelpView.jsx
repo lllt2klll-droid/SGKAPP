@@ -13,7 +13,6 @@ import {
   BarChart3,
   NotebookPen,
   Tags,
-  TrendingUp,
   AppWindow,
   DatabaseBackup,
   RefreshCw,

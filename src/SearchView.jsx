@@ -10,9 +10,7 @@ import {
   CircleDashed,
   Wrench,
   Layers,
-  Bookmark,
   StickyNote,
-  NotebookPen,
   Clock,
   X,
 } from "lucide-react";

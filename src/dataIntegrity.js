@@ -8,7 +8,6 @@ const isBackupKey = isBackupKeyCore || isBackupKeyLegacy;
 const isCacheKey = isCacheKeyCore || isCacheKeyLegacy;
 import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, safeGetWithStatus, listKeys } from './safeStorage.js';
 import { STORAGE_KEYS } from './core/storageKeys.js';
-import { getQuestions } from './teachingDB.js';
 
 /**
  * Check for orphan data (data referencing deleted books)

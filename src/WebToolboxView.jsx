@@ -10,7 +10,6 @@ import {
   Github,
   Link2,
   Search,
-  LayoutGrid,
   X,
   Save,
   ArrowUpDown,
@@ -18,7 +17,7 @@ import {
   AppWindow,
 } from "lucide-react";
 
-import { safeGetJSON, safeSetJSON, safeGetString } from "./safeStorage";
+import { safeGetJSON, safeSetJSON } from "./safeStorage";
 
 const LS_KEY = "sgk_web_tools";
 const LS_ORDER = "sgk_web_tools_order_v1";

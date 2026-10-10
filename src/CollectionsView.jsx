@@ -14,7 +14,6 @@ import {
   Lightbulb,
 } from "lucide-react";
 import DataTable from "./DataTable";
-import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove } from "./safeStorage";
 import {
   getCollections,
   getClips,
@@ -28,7 +27,6 @@ import {
   getRefForBook,
   chapterAt,
 } from "./researchDB";
-import { pdfToBook, bookToPdf } from "./tocData.js";
 import { createIdea } from "./personalDB";
 import { exportWord, exportTxt, escapeHtml, nl2br } from "./exportDoc";
 import SampleButton from "./SampleButton";

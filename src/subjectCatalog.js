@@ -1,7 +1,7 @@
 // ── Subject Catalog — master list for grades 1-5, persistent across book changes ──
 // Giữ nguyên mục lục các môn hiện tại dù có thay đổi sách (khác sách nhưng cũng cùng lớp và tập đó)
 // Master list is static code, plus any custom subjects discovered from filenames are persisted in localStorage.
-import { safeGetJSON, safeSetJSON, safeGetString, safeRemove } from "./safeStorage.js";
+import { safeGetJSON, safeSetJSON } from "./safeStorage.js";
 import { STORAGE_KEYS } from "./core/storageKeys.js";
 
 export const PRIMARY_SUBJECTS = [

@@ -63,16 +63,8 @@ import {
   Check,
   Sparkles,
   Upload,
-  Eye,
-  EyeOff,
-  KeyRound,
-  ShieldCheck,
-  Library,
   Clock,
   Star,
-  BarChart3,
-  GraduationCap,
-  HelpCircle,
   Sun,
   Moon,
   Monitor,
@@ -81,36 +73,16 @@ import {
   ArrowUpDown,
   Trash2,
   BookOpenCheck,
-  TrendingUp,
-  CheckCheck,
   Bookmark,
   BookmarkCheck,
-  Award as AwardIcon,
-  FileSearch,
-  Columns2,
-  Tags,
-  ClipboardList,
-  Scissors,
-  FileText,
-  Puzzle,
-  ListChecks,
-  Database,
   DatabaseBackup,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  LayoutDashboard,
-  Lightbulb,
-  ClipboardCheck,
-  School,
   Pencil,
   RotateCcw,
   Edit3,
-  Wrench,
-  AppWindow,
-  Globe,
-  Palette,
   Maximize,
   Minimize,
 } from "lucide-react";
@@ -139,7 +111,7 @@ const WebToolboxView = lazyWithRetry(() => import("./WebToolboxView"));
 const WhiteboardView = lazyWithRetry(() => import("./whiteboard/WhiteboardView.jsx"));
 import { getQuestions } from "./teachingDB";
 import { getPlans as getKhbdV2Plans } from "./khbd/planModel";
-import { getClips, getRefs, getConcepts, countMarks } from "./researchDB";
+import { getClips, countMarks } from "./researchDB";
 import { saveJSON, exportBackup } from "./storage";
 import { moveToTrash, takeFromTrash, listTrash, listTrashByType, TRASH_TYPE, TRASH_TTL_DAYS } from "./trashStore";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage";

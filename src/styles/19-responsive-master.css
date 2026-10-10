@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* FORCE STANDARD BREAKPOINTS - Override legacy breakpoints */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   /* Global - Force single column layouts */
   .app-shell,
   .app-layout {
@@ -64,10 +64,8 @@
     display: none;
   }
 
-  /* Reader - Force vertical layout */
-  .reader-toc-panel {
-    display: none;
-  }
+  /* Reader - Force vertical layout (TOC là drawer do 31/33 điều khiển —
+     KHÔNG display:none: JSX render có điều kiện, ẩn ở đây giết mục lục). */
 
   .reader-ai-panel {
     width: 100%;
@@ -261,15 +259,16 @@
   }
 }
 
-/* EMERGENCY OVERFLOW FIXES */
+/* EMERGENCY OVERFLOW FIXES — NOTE: không dùng *{max-width:100%} vì bẻ
+   intrinsic-size của table (min-width:600-720px), canvas, pill nowrap...
+   Media đã giới hạn ở 15-responsive-fixpack.css (img/canvas/svg/video). */
 * {
-  max-width: 100%;
   box-sizing: border-box;
 }
 
 html,
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
   width: 100%;
   min-width: 0;
   max-width: 100vw;
@@ -283,7 +282,10 @@ body {
 .reader-main {
   min-width: 0;
   max-width: 100%;
-  overflow-x: hidden;
+  /* clip (thay vì hidden) để position:sticky của header/toolbar/thead
+     vẫn bám đúng + dropdown/popover tràn biên không bị cắt thành
+     scroll-container. Browser cũ không hiểu clip → fallback visible. */
+  overflow-x: clip;
   width: 100%;
 }
 
@@ -308,7 +310,7 @@ body {
    ============================================================ */
 
 /* Mobile BookReader - Force vertical stack */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .reader-root {
     min-height: 100vh;
     height: 100vh;
@@ -318,43 +320,15 @@ body {
     flex-direction: column;
   }
 
-  .reader-toc-panel {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh;
-    z-index: 2000;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-  }
-
-  .reader-toc-panel.mobile-open {
-    transform: translateX(0);
-  }
-
+  /* Phone reader drawer/bottom-sheet do 31-mobile-tablet.css + 33-bookreader-mobile.css
+     sở hữu (selector thật: .reader-toc-panel + .ai-panel, render có điều kiện
+     theo tocCollapsed/aiCollapsed — KHÔNG dùng class .mobile-open, JSX không
+     bao giờ set class đó nên mọi rule .mobile-open đều chết).
+     NOTE: không đặt translateX(-100%)/translateY(105%) ở đây: nếu 33 chưa kịp
+     load, panel sẽ kẹt ẩn vĩnh viễn vì không có gì gỡ transform. */
   .reader-book-panel {
     width: 100%;
     margin: 0;
-  }
-
-  .reader-ai-panel {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: auto;
-    max-height: 50vh;
-    border-left: none;
-    border-top: 1px solid var(--border-color);
-    z-index: 1000;
-    transform: translateY(100%);
-    transition: transform 0.3s ease;
-  }
-
-  .reader-ai-panel.mobile-open {
-    transform: translateY(0);
   }
 
   .viewer-toolbar--compact {
@@ -464,7 +438,7 @@ body {
    ============================================================ */
 
 /* Mobile LessonPlans - Force single column */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .lp-workspace {
     flex-direction: column;
   }
@@ -555,7 +529,7 @@ body {
    ============================================================ */
 
 /* Mobile - Force single column */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .activities-grid,
   .ideas-grid,
   .questionbank-grid,
@@ -619,7 +593,7 @@ body {
    ============================================================ */
 
 /* Mobile - Force single column */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .compare-panels {
     grid-template-columns: 1fr;
   }
@@ -669,7 +643,7 @@ body {
    ============================================================ */
 
 /* Mobile - Force single column */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .collections-grid,
   .references-grid,
   .concepts-grid,
@@ -718,7 +692,7 @@ body {
    ============================================================ */
 
 /* Mobile - Force single column */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .missions-stats-row {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -805,7 +779,7 @@ body {
   max-height: calc(100dvh - 100px);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .modal-content {
     width: calc(100vw - 24px);
     max-height: calc(100dvh - 24px);
@@ -908,7 +882,7 @@ textarea {
 /* MOBILE 767px GỘP — 5 khối TABLES+FORMS+BUTTONS+BUBBLES+BUBBLE-NAV cũ gộp thành 1.
    Thứ tự rule giữ nguyên như trước khi gộp nên cascade/kết quả không đổi.
    Quy tắc: thêm rule mobile mới vào đúng nhóm dưới đây, không mở khối @media 767px mới. */
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   /* TABLES */
   .responsive-table-wrapper,
   .table-wrapper,

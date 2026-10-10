@@ -3,15 +3,15 @@ import {
   MousePointer2, Hand, Pencil, Eraser, Type, Shapes, ArrowUpRight, Image as ImageIcon,
   StickyNote, Network, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, Grid3X3, Copy, Trash2,
   Group, Ungroup, AlignLeft, AlignCenter, AlignRight, Save, Download, Upload, Plus, FilePlus,
-  LayoutTemplate, Sparkles, MoreHorizontal, X, Check, Search, Expand, Shrink,
-  PaintBucket, Square, Minus, Palette, Bold, Italic, AlignJustify, BookOpen,
+  LayoutTemplate, Sparkles, X, Check, Search, Expand, Shrink,
+  PaintBucket, Square, Bold, Italic, AlignJustify, BookOpen,
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, SlidersHorizontal, Wand2, Eye, EyeOff, Magnet
 } from "lucide-react";
 import WhiteboardCanvas from "./WhiteboardCanvas.jsx";
 import {
   uid, blankBoard, blankObject, listBoards, loadBoard, persistBoard, createBoard,
   deleteBoard as deleteBoardStore, renameBoard as renameBoardStore, duplicateBoard as dupBoardStore,
-  parseBoardJSON, normalizeBoard, ensureFits, WB_PENDING_KEY
+  parseBoardJSON, ensureFits, WB_PENDING_KEY
 } from "./whiteboardStore.js";
 import { generateMindmap, buildTemplate, TEMPLATES, autoLayout, aiPlanToGraph } from "./mindmapEngine.js";
 import { exportSVG, exportJSON, exportRaster, exportPDF, boardBounds } from "./exportManager.js";

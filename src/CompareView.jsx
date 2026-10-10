@@ -1,10 +1,12 @@
 // ── So sánh song song: 2 trang / 2 bài / 2 cuốn sách ───────────────
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   ArrowLeftRight,
   BookOpen,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   ZoomIn,
   ZoomOut,
   FileText,
@@ -16,10 +18,15 @@ import {
   Unlink,
   ChevronUp,
   ChevronDown,
+  Plus,
+  Equal,
+  Rows2,
+  Columns2,
+  X,
+  LibraryBig,
 } from "lucide-react";
 import { getApiBase } from "./apiConfig";
 import { pdfjsLib } from "./pdfjs-config";
-import { readJSON, saveJSON } from "./storage";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage";
 import { citationFor } from "./researchDB";
 import { exportWord, printToPdf, escapeHtml, nl2br } from "./exportDoc";
@@ -30,14 +37,82 @@ import { clampPage } from "./reader/pageNavigation";
 
 const API_BASE = getApiBase();
 
+// Key ghi chú theo cặp sách, không phụ thuộc thứ tự A/B để swap không mất note.
+// encodeURIComponent để filename chứa "__" không gây trùng key giữa các cặp khác nhau.
+function cmpNoteKeyFor(a, b) {
+  if (a && b) return `sgk_cmpnote_${[a, b].sort().map(encodeURIComponent).join("__")}`;
+  return `sgk_cmpnote_${encodeURIComponent(a || b)}`;
+}
+
+// Gom sách theo "Lớp X · Môn" để dropdown dễ chọn với người dùng phổ thông.
+// Sách thiếu thông tin vào nhóm "Chưa phân loại".
+function groupBooks(list) {
+  const map = new Map();
+  for (const b of list) {
+    const gRaw = b.grade ?? b.lop;
+    const gNum = Number(gRaw);
+    const s = (b.subject || "").trim();
+    const label = Number.isFinite(gNum) && String(gRaw).trim() !== ""
+      ? `Lớp ${gNum}${s ? " · " + s : ""}`
+      : (s || "Chưa phân loại");
+    const gradeSort = Number.isFinite(gNum) ? gNum : 999;
+    if (!map.has(label)) map.set(label, { label, gradeSort, items: [] });
+    map.get(label).items.push(b);
+  }
+  const groups = [...map.values()];
+  groups.sort((a, b) => a.gradeSort - b.gradeSort || a.label.localeCompare(b.label, "vi"));
+  groups.forEach((g) => g.items.sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "vi")));
+  return groups;
+}
+
+const NOTE_TEMPLATE = `Điểm GIỐNG nhau:\n- \nĐiểm KHÁC nhau:\n- \nNhận xét / đề xuất:\n- `;
+
+// Ô gõ số trang rồi Enter để nhảy tới — cho người dùng phổ thông khỏi bấm
+// từng trang. Tự đồng bộ khi trang đổi từ bên kia (chế độ Song song).
+function PageInput({ page, disabled, onJump }) {
+  const [draft, setDraft] = useState(String(page));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setDraft(String(page)); }, [page, focused]);
+  const commit = () => {
+    const n = parseInt(draft, 10);
+    if (Number.isFinite(n)) onJump(n);
+    else setDraft(String(page));
+  };
+  return (
+    <input
+      className="cmp-page-input"
+      value={draft}
+      disabled={disabled}
+      inputMode="numeric"
+      aria-label="Gõ số trang rồi Enter để nhảy tới trang đó"
+      title="Gõ số trang rồi Enter để nhảy tới trang đó"
+      onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, "").slice(0, 5))}
+      onFocus={() => setFocused(true)}
+      onBlur={() => { setFocused(false); setDraft(String(page)); }}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") { commit(); e.currentTarget.blur(); }
+        else if (e.key === "Escape") { setDraft(String(page)); e.currentTarget.blur(); }
+      }}
+    />
+  );
+}
+
 function CompareSide({
   label,
+  sideName,
   book,
-  books,
+  bookGroups,
+  hasBooks,
   onPickBook,
   doc,
   page,
-  setPage,
+  onPrev,
+  onNext,
+  onFirst,
+  onLast,
+  onJump,
+  linked,
   numPages,
   canvasRef,
   error,
@@ -51,59 +126,100 @@ function CompareSide({
       <div className="cmp-head">
         <span
           className={`cmp-tag ${label === "A" ? "cmp-tag-a" : "cmp-tag-b"}`}
+          title={label === "A" ? "Sách bên trái" : "Sách bên phải"}
         >
           {label}
         </span>
         <select
-          className="sort-select"
+          className="sort-select cmp-book-select"
           value={book ? book.filename : ""}
           onChange={(e) => onPickBook(e.target.value)}
-          aria-label={`Chọn cuốn sách bên ${label}`}
+          aria-label={`Chọn sách cho bên ${sideName}`}
         >
-          <option value="">— Chọn cuốn sách bên {label} —</option>
-          {books.map((b) => (
-            <option key={b.filename} value={b.filename}>
-              {b.title}
-            </option>
+          <option value="">— Sách bên {sideName} —</option>
+          {bookGroups.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.items.map((b) => (
+                <option key={b.filename} value={b.filename}>
+                  {b.title}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <div className="cmp-nav">
           <button
             className="btn-icon"
-            onClick={() => setPage((p) => clampPage(p - 1, numPages))}
+            onClick={onFirst}
             disabled={!doc || displayPage <= 1}
-            title="Trang trước (←)"
+            title="Về trang đầu"
+            aria-label="Về trang đầu"
+          >
+            <ChevronsLeft size={17} />
+          </button>
+          <button
+            className="btn-icon"
+            onClick={onPrev}
+            disabled={!doc || displayPage <= 1}
+            title={linked ? "Trang trước (← khi bật Song song)" : "Trang trước"}
+            aria-label="Trang trước"
           >
             <ChevronLeft size={17} />
           </button>
-          <span className="cmp-pagenum">
-            tr. <b>{doc ? displayPage : "—"}</b> /{" "}
+          <span className="cmp-pagenum" title={doc ? `Đang xem trang ${displayPage} / ${numPages}` : "Chưa chọn sách"}>
+            tr. <PageInput page={displayPage} disabled={!doc} onJump={onJump} /> /{" "}
             {doc ? numPages : "—"}
           </span>
           <button
             className="btn-icon"
-            onClick={() => setPage((p) => clampPage(p + 1, numPages))}
+            onClick={onNext}
             disabled={!doc || displayPage >= numPages}
-            title="Trang sau (→)"
+            title={linked ? "Trang sau (→ khi bật Song song)" : "Trang sau"}
+            aria-label="Trang sau"
           >
             <ChevronRight size={17} />
+          </button>
+          <button
+            className="btn-icon"
+            onClick={onLast}
+            disabled={!doc || displayPage >= numPages}
+            title="Tới trang cuối"
+            aria-label="Tới trang cuối"
+          >
+            <ChevronsRight size={17} />
           </button>
         </div>
       </div>
       {error && <div className="cmp-error">{error}</div>}
-      <div className="cmp-canvas-wrap" ref={wrapRef}>
-        {loading ? (
-          <div className="cmp-loading">
-            <div className="spinner spinner-sm" />
-            <p>Đang tải trang...</p>
-          </div>
-        ) : empty ? (
+      <div className="cmp-canvas-wrap cmp-canvas-relative" ref={wrapRef}>
+        {empty ? (
           <div className="cmp-empty">
-            <BookOpen size={30} />
-            <p>Chọn cuốn sách bên {label} để xem trang so sánh.</p>
+            {!hasBooks ? (
+              <>
+                <LibraryBig size={30} />
+                <p>Thư viện chưa có sách nào.<br />Hãy thêm sách PDF ở trang Thư viện trước.</p>
+              </>
+            ) : (
+              <>
+                <BookOpen size={30} />
+                <p>
+                  Bước 1: chọn <b>sách bên {sideName}</b> ở menu phía trên 👆
+                  <br />
+                  Bước 2: lật trang, ghi nhận xét rồi xuất biên bản Word/PDF.
+                </p>
+              </>
+            )}
           </div>
         ) : (
-          <canvas ref={canvasRef} />
+          <>
+            <canvas ref={canvasRef} style={loading ? { opacity: 0.35, pointerEvents: "none" } : undefined} />
+            {loading && (
+              <div className="cmp-loading cmp-loading-overlay" aria-live="polite">
+                <div className="spinner spinner-sm" />
+                <p>Đang tải trang...</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -111,7 +227,7 @@ function CompareSide({
 }
 
 export default function CompareView({
-  books,
+  books = [],
   initialFileA = "",
   initialFileB = "",
 }) {
@@ -128,22 +244,79 @@ export default function CompareView({
   const [errB, setErrB] = useState("");
   const [note, setNote] = useState("");
   const [noteOpen, setNoteOpen] = useState(false);
-  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const [syncAnimating, setSyncAnimating] = useState(false);
+  const [boxA, setBoxA] = useState({ w: 0, h: 0 });
+  const [boxB, setBoxB] = useState({ w: 0, h: 0 });
   const [loadingA, setLoadingA] = useState(false);
   const [loadingB, setLoadingB] = useState(false);
   const canvasARef = useRef(null);
   const canvasBRef = useRef(null);
   const wraps = useRef({});
-  const renderGenRef = useRef(0);
-  const boxRef = useRef(box);
-  boxRef.current = box;
-  const loadGenRef = useRef(0);
+  // Mỗi bên dùng token render/load riêng — trước đây dùng chung 1 counter
+  // nên mở 2 sách cùng lúc thì bên render/load sau sẽ hủy bỏ bên trước
+  // (bên A kẹt ở "Đang tải trang..." hoặc trang trắng).
+  const renderGenARef = useRef(0);
+  const renderGenBRef = useRef(0);
+  const boxARef = useRef(boxA);
+  boxARef.current = boxA;
+  const boxBRef = useRef(boxB);
+  boxBRef.current = boxB;
+  const loadGenARef = useRef(0);
+  const loadGenBRef = useRef(0);
   const docsCacheRef = useRef(new Map());
+  // Refs luôn mới nhất để điều hướng không bị stale closure khi bấm nhanh
+  const pageARef = useRef(pageA);
+  pageARef.current = pageA;
+  const pageBRef = useRef(pageB);
+  pageBRef.current = pageB;
+  const docARef = useRef(docA);
+  docARef.current = docA;
+  const docBRef = useRef(docB);
+  docBRef.current = docB;
+  const linkedRef = useRef(linked);
+  linkedRef.current = linked;
   const stageRef = useRef(null);
+  // Timer tập trung để unmount giữa chừng (đổi view khi animation/timeout
+  // đang chạy) không còn setState lên component đã gỡ.
+  const timersRef = useRef([]);
+  useEffect(() => () => { timersRef.current.forEach(clearTimeout); timersRef.current = []; }, []);
+  const later = useCallback((fn, ms) => {
+    const id = setTimeout(fn, ms);
+    timersRef.current.push(id);
+    return id;
+  }, []);
+  // Snapshot state mới nhất cho các handler ổn định (keyboard, swap, pick)
+  // để effect phím tắt chỉ đăng ký 1 lần, không gỡ/lắp lại mỗi lần lật trang.
+  const stateRef = useRef(null);
+  stateRef.current = { fileA, fileB, pageA, pageB, errA, errB, docA, docB };
   const [splitRatio, setSplitRatio] = useState(()=>{
     try{ const raw = safeGetString("sgk_compare_ratio", ""); const v=parseInt(raw||"",10); if(Number.isFinite(v)&&v>=25&&v<=75) return v; }catch (e) { console.warn("[CompareView] safeGetString failed for sgk_compare_ratio", e); }
     return 50;
   });
+  // Xem dọc (chồng 2 sách lên nhau) thân thiện với điện thoại/máy tính bảng.
+  // Mặc định xem dọc khi màn hình hẹp, nhớ lựa chọn cho lần sau.
+  const [stacked, setStacked] = useState(() => {
+    try {
+      const raw = safeGetString("sgk_compare_stacked", "");
+      if (raw === "1") return true;
+      if (raw === "0") return false;
+    } catch (e) { console.warn("[CompareView] safeGetString failed for sgk_compare_stacked", e); }
+    return typeof window !== "undefined" && window.innerWidth < 900;
+  });
+  // Thanh Mẹo cho người mới — tắt 1 lần là nhớ, không hiện lại.
+  const [hintOff, setHintOff] = useState(() => {
+    try { return safeGetString("sgk_compare_hint", "") === "off"; }
+    catch (e) { console.warn("[CompareView] safeGetString failed for sgk_compare_hint", e); return false; }
+  });
+  const dismissHint = useCallback(() => {
+    setHintOff(true);
+    try {
+      const res = safeSetString("sgk_compare_hint", "off");
+      if (!res.ok) console.warn("[CompareView] safeSetString failed for sgk_compare_hint:", res.error);
+    } catch (e) { console.warn("[CompareView] safeSetString exception sgk_compare_hint:", e); }
+  }, []);
   useEffect(()=>{
     try{
       const res = safeSetString("sgk_compare_ratio", String(splitRatio));
@@ -153,8 +326,16 @@ export default function CompareView({
       }
     }catch (e) { console.warn("[CompareView] safeSetString exception sgk_compare_ratio:", e); }
   }, [splitRatio]);
+  useEffect(()=>{
+    try{
+      const res = safeSetString("sgk_compare_stacked", stacked ? "1" : "0");
+      if (!res.ok) console.warn("[CompareView] safeSetString failed for sgk_compare_stacked:", res.error);
+    }catch (e) { console.warn("[CompareView] safeSetString exception sgk_compare_stacked:", e); }
+  }, [stacked]);
+  const dragCleanupRef = useRef(null);
+  useEffect(() => () => { dragCleanupRef.current?.(); dragCleanupRef.current = null; }, []);
   const onSplitDragStart = useCallback((e)=>{
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     const stage = stageRef.current;
     if(!stage) return;
     const rect = stage.getBoundingClientRect();
@@ -163,9 +344,11 @@ export default function CompareView({
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     const onMove = (ev)=>{
+      // chặn cuộn trang trên mobile khi đang kéo (listener đã đăng ký passive:false)
+      if (ev.cancelable) ev.preventDefault();
       const curX = ev.clientX ?? ev.touches?.[0]?.clientX ?? 0;
       const delta = curX - startX;
-      const deltaPct = (delta / rect.width) * 100;
+      const deltaPct = rect.width ? (delta / rect.width) * 100 : 0;
       const nr = Math.max(25, Math.min(75, startR + deltaPct));
       setSplitRatio(Math.round(nr));
     };
@@ -176,30 +359,85 @@ export default function CompareView({
       window.removeEventListener("mouseup", onUp);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onUp);
+      if (dragCleanupRef.current === onUp) dragCleanupRef.current = null;
     };
+    dragCleanupRef.current?.();
+    dragCleanupRef.current = onUp;
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     window.addEventListener("touchmove", onMove, { passive:false });
     window.addEventListener("touchend", onUp);
   }, [splitRatio]);
+  const resetSplit = useCallback(() => setSplitRatio(50), []);
 
-  const bookA = books.find((b) => b.filename === fileA) || null;
-  const bookB = books.find((b) => b.filename === fileB) || null;
+  const bookList = Array.isArray(books) ? books : [];
+  const bookGroups = useMemo(() => groupBooks(bookList), [bookList]);
+  const bookA = bookList.find((b) => b.filename === fileA) || null;
+  const bookB = bookList.find((b) => b.filename === fileB) || null;
 
   // noteKey order-independent: same pair regardless of A/B order so swap doesn't lose note
-  const noteKey = fileA && fileB ? `sgk_cmpnote_${[fileA, fileB].sort().join("__")}` : fileA || fileB ? `sgk_cmpnote_${fileA || fileB}` : null;
+  const noteKey = fileA || fileB ? cmpNoteKeyFor(fileA, fileB) : null;
+
+  // Nhớ cặp sách đang so sánh — mở lại trang là tiếp tục ngay, khỏi chọn lại.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !bookList.length) return;
+    if (initialFileA || initialFileB) { restoredRef.current = true; return; }
+    restoredRef.current = true;
+    try {
+      const raw = safeGetString("sgk_compare_last", "");
+      if (!raw) return;
+      const o = JSON.parse(raw);
+      if (!o || typeof o !== "object") return;
+      if (o.a && bookList.some((b) => b.filename === o.a)) setFileA(o.a);
+      if (o.b && bookList.some((b) => b.filename === o.b)) setFileB(o.b);
+    } catch (e) { console.warn("[CompareView] restore last pair failed", e); }
+  }, [bookList, initialFileA, initialFileB]);
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    try {
+      safeSetString("sgk_compare_last", JSON.stringify({ a: fileA || "", b: fileB || "" }));
+    } catch (e) { console.warn("[CompareView] save last pair failed", e); }
+  }, [fileA, fileB]);
+
+  // Sách bị xóa/đổi tên khi đang mở so sánh → dọn bên đó thay vì treo doc cũ.
+  // Chỉ dọn khi thư viện đã có dữ liệu (tránh xóa oan lúc books đang tải).
+  useEffect(() => {
+    if (!bookList.length) return;
+    const s = stateRef.current;
+    if (s.fileA && !bookList.some((b) => b.filename === s.fileA)) {
+      setFileA(""); setDocA(null); setPageA(1); setErrA("");
+    }
+    if (s.fileB && !bookList.some((b) => b.filename === s.fileB)) {
+      setFileB(""); setDocB(null); setPageB(1); setErrB("");
+    }
+  }, [bookList]);
+
+  // Đồng bộ khi props initial đổi từ bên ngoài (hiện App chưa dùng, giữ cho API ổn định)
+  useEffect(() => {
+    if (initialFileA && initialFileA !== stateRef.current.fileA) {
+      setFileA(initialFileA); setPageA(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFileA]);
+  useEffect(() => {
+    if (initialFileB && initialFileB !== stateRef.current.fileB) {
+      setFileB(initialFileB); setPageB(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFileB]);
 
   const destroyDoc = useCallback((pdf) => {
     if (!pdf) return;
     try { pdf.destroy(); } catch (e) { console.warn("[CompareView] pdf.destroy failed", e); }
   }, []);
 
-  const loadDoc = useCallback(async (file, setDoc, setErr, setPage, setLoading) => {
-    const gen = ++loadGenRef.current;
+  const loadDoc = useCallback(async (file, setDoc, setErr, setPage, setLoading, genRef) => {
+    const gen = ++genRef.current;
     // destroy previous doc for this side via cache check done by caller effect
     if (!file || typeof file !== 'string') {
       setDoc(null);
-      setErr("Tên file không hợp lệ.");
+      setErr("");
       setPage(1);
       setLoading(false);
       return;
@@ -207,7 +445,7 @@ export default function CompareView({
     // reuse cached doc if same file already loaded (fast swap)
     const cached = docsCacheRef.current.get(file);
     if (cached && cached.numPages) {
-      if (gen !== loadGenRef.current) return;
+      if (gen !== genRef.current) return;
       setDoc(cached);
       setErr("");
       setPage((p) => clampPage(p, cached.numPages));
@@ -220,17 +458,31 @@ export default function CompareView({
       const pdfUrl = `${API_BASE}/api/books/${encodeURIComponent(file)}`;
       const loadingTask = pdfjsLib.getDocument({ url: pdfUrl, isEvalSupported: false });
       const pdf = await loadingTask.promise;
-      if (gen !== loadGenRef.current) {
+      if (gen !== genRef.current) {
         destroyDoc(pdf);
+        return;
+      }
+      // Bên kia có thể vừa tải xong cùng file này (so sánh 2 trang cùng 1 sách):
+      // dùng chung doc trong cache thay vì giữ 2 bản trùng (rò bộ nhớ).
+      const raced = docsCacheRef.current.get(file);
+      if (raced && raced.numPages && raced !== pdf) {
+        destroyDoc(pdf);
+        setDoc(raced);
+        setErr("");
+        setPage((p) => clampPage(p, raced.numPages));
+        setLoading(false);
         return;
       }
       docsCacheRef.current.set(file, pdf);
       setDoc(pdf);
-      setPage(1);
+      // Giữ trang hiện tại (clamp theo sách mới) thay vì ép về 1:
+      // nút Mẫu đặt trang 46 trước khi load xong; còn khi user tự chọn sách
+      // thì pickA/pickB đã reset về 1 rồi nên không sợ rò trang sách cũ.
+      setPage((p) => clampPage(p, pdf.numPages));
       setLoading(false);
     } catch (e) {
       console.error(e);
-      if (gen !== loadGenRef.current) return;
+      if (gen !== genRef.current) return;
       setDoc(null);
       setErr("Không mở được sách này. File có thể bị hỏng hoặc server đang bận.");
       setLoading(false);
@@ -246,21 +498,11 @@ export default function CompareView({
   }, [destroyDoc]);
 
   useEffect(() => {
-    const prev = docA;
-    loadDoc(fileA, setDocA, setErrA, setPageA, setLoadingA);
-    return () => {
-      // don't destroy immediately — keep in cache for fast swap; destroy only if file changed to different and cache evicts
-      // but if fileA cleared, destroy previous
-      if (!fileA && prev) destroyDoc(prev);
-    };
-  }, [fileA, loadDoc, destroyDoc]); // docA intentionally not in deps to avoid loop
+    loadDoc(fileA, setDocA, setErrA, setPageA, setLoadingA, loadGenARef);
+  }, [fileA, loadDoc]);
   useEffect(() => {
-    const prev = docB;
-    loadDoc(fileB, setDocB, setErrB, setPageB, setLoadingB);
-    return () => {
-      if (!fileB && prev) destroyDoc(prev);
-    };
-  }, [fileB, loadDoc, destroyDoc]);
+    loadDoc(fileB, setDocB, setErrB, setPageB, setLoadingB, loadGenBRef);
+  }, [fileB, loadDoc]);
 
   // Link B to A while linked: align B every time A's page changes — clamp to B's range
   useEffect(() => {
@@ -271,86 +513,116 @@ export default function CompareView({
     }
   }, [linked, docA, docB, pageA, pageB]);
 
-  const toggleLinked = () => {
-    const next = !linked;
+  const toggleLinked = useCallback(() => {
+    const next = !linkedRef.current;
     setLinked(next);
-    if (next && docA && docB) {
-      const clamped = clampPage(pageA, docB.numPages);
-      setPageB(clamped);
+    if (next && docARef.current && docBRef.current) {
+      setPageB(clampPage(pageARef.current, docBRef.current.numPages));
       setSyncAnimating(true);
-      setTimeout(() => setSyncAnimating(false), 300);
+      later(() => setSyncAnimating(false), 300);
     }
-  };
+  }, [later]);
 
-  // Navigate one side; in linked mode both move to the same page number clamped to each doc
-  const navA = useCallback((p) => {
-    const v = typeof p === "function" ? p(pageA) : p;
-    const clampedA = docA ? clampPage(v, docA.numPages) : clampPage(v, 0);
-    setPageA(clampedA);
-    if (linked && docB) {
-      const clampedB = clampPage(clampedA, docB.numPages);
-      setPageB(clampedB);
-    } else if (linked) {
-      setPageB(clampedA);
+  // Navigate one side; in linked mode both move to the same page number clamped to each doc.
+  // Dùng ref để không bị stale khi bấm liên tục.
+  const goA = useCallback((dir) => {
+    const cur = pageARef.current;
+    const totalA = docARef.current ? docARef.current.numPages : 0;
+    const nextA = clampPage(cur + dir, totalA);
+    setPageA(nextA);
+    if (linkedRef.current) {
+      const totalB = docBRef.current ? docBRef.current.numPages : 0;
+      setPageB(totalB ? clampPage(nextA, totalB) : nextA);
     }
-  }, [pageA, docA, docB, linked]);
+  }, []);
 
-  const navB = useCallback((p) => {
-    const v = typeof p === "function" ? p(pageB) : p;
-    const clampedB = docB ? clampPage(v, docB.numPages) : clampPage(v, 0);
-    setPageB(clampedB);
-    if (linked && docA) {
-      const clampedA = clampPage(clampedB, docA.numPages);
-      setPageA(clampedA);
-    } else if (linked) {
-      setPageA(clampedB);
+  const goB = useCallback((dir) => {
+    const cur = pageBRef.current;
+    const totalB = docBRef.current ? docBRef.current.numPages : 0;
+    const nextB = clampPage(cur + dir, totalB);
+    setPageB(nextB);
+    if (linkedRef.current) {
+      const totalA = docARef.current ? docARef.current.numPages : 0;
+      setPageA(totalA ? clampPage(nextB, totalA) : nextB);
     }
-  }, [pageB, docA, docB, linked]);
+  }, []);
 
-  const swapSides = () => {
+  // Nhảy tới số trang tuyệt đối (ô gõ trang, nút đầu/cuối).
+  // Chế độ Song song: bên còn lại đi theo cùng số trang như khi bấm nút.
+  const goToA = useCallback((p) => {
+    const totalA = docARef.current ? docARef.current.numPages : 0;
+    if (!totalA) return;
+    const nextA = clampPage(p, totalA);
+    setPageA(nextA);
+    if (linkedRef.current) {
+      const totalB = docBRef.current ? docBRef.current.numPages : 0;
+      setPageB(totalB ? clampPage(nextA, totalB) : nextA);
+    }
+  }, []);
+
+  const goToB = useCallback((p) => {
+    const totalB = docBRef.current ? docBRef.current.numPages : 0;
+    if (!totalB) return;
+    const nextB = clampPage(p, totalB);
+    setPageB(nextB);
+    if (linkedRef.current) {
+      const totalA = docARef.current ? docARef.current.numPages : 0;
+      setPageA(totalA ? clampPage(nextB, totalA) : nextB);
+    }
+  }, []);
+
+  // Cho 2 bên về cùng số trang (khi đang Trang độc lập rồi muốn khớp lại).
+  const syncPages = useCallback(() => {
+    const s = stateRef.current;
+    if (!s.docA || !s.docB) return;
+    setPageB(clampPage(s.pageA, s.docB.numPages));
+    setSyncAnimating(true);
+    later(() => setSyncAnimating(false), 300);
+  }, [later]);
+
+  const swapSides = useCallback(() => {
     // swap files, pages, errors atomically; docs will be reused from cache so no reload flicker
-    const fA = fileA, fB = fileB, pA = pageA, pB = pageB, eA = errA, eB = errB, dA = docA, dB = docB;
+    const s = stateRef.current;
+    const dA = s.docA, dB = s.docB;
     // swap docs immediately to avoid blank during file effect reload
     setDocA(dB);
     setDocB(dA);
-    setFileA(fB);
-    setFileB(fA);
-    setPageA(clampPage(pB, dB ? dB.numPages : 0));
-    setPageB(clampPage(pA, dA ? dA.numPages : 0));
-    setErrA(eB);
-    setErrB(eA);
+    setFileA(s.fileB);
+    setFileB(s.fileA);
+    setPageA(clampPage(s.pageB, dB ? dB.numPages : 0));
+    setPageB(clampPage(s.pageA, dA ? dA.numPages : 0));
+    setErrA(s.errB);
+    setErrB(s.errA);
     // Add animation feedback
-    const stage = document.querySelector('.cmp-stage');
+    const stage = stageRef.current;
     if (stage) {
       stage.style.opacity = '0.5';
-      setTimeout(() => {
-        stage.style.opacity = '1';
-      }, 200);
+      later(() => { stage.style.opacity = '1'; }, 200);
     }
-  };
+  }, [later]);
 
-  // Measure the two canvas boxes so each page can auto-fit its box
+  const zoomBy = useCallback((d) => {
+    setZoom((z) => Math.min(2, Math.max(0.5, +(z + d).toFixed(1))));
+  }, []);
+
+  // Measure each canvas box separately so the split ratio actually affects fit.
+  // Trước đây dùng chung 1 box = min(2 bên) nên kéo tỉ lệ không có tác dụng.
   useEffect(() => {
     const a = wraps.current.A,
       b = wraps.current.B;
     const els = [a, b].filter(Boolean);
     if (!els.length) return;
     const measure = () => {
-      const wa = a.clientWidth || 0;
-      const wb = b.clientWidth || 0;
-      const ha = a.clientHeight || 0;
-      const hb = b.clientHeight || 0;
-      // avoid 0 width when one side hidden/empty: fallback to the non-zero width
-      let w = 0;
-      if (wa > 0 && wb > 0) w = Math.min(wa, wb);
-      else w = Math.max(wa, wb);
-      let h = 0;
-      if (ha > 0 && hb > 0) h = Math.max(ha, hb);
-      else h = Math.max(ha, hb) || 520;
-      // clamp to sane bounds so fit never 0
-      w = Math.max(120, w);
-      h = Math.max(200, h);
-      setBox((bx) => (bx.w === w && bx.h === h ? bx : { w, h }));
+      if (a) {
+        const w = Math.max(120, a.clientWidth || 0);
+        const h = Math.max(200, a.clientHeight || 0);
+        setBoxA((bx) => (bx.w === w && bx.h === h ? bx : { w, h }));
+      }
+      if (b) {
+        const w = Math.max(120, b.clientWidth || 0);
+        const h = Math.max(200, b.clientHeight || 0);
+        setBoxB((bx) => (bx.w === w && bx.h === h ? bx : { w, h }));
+      }
     };
     const ro = new ResizeObserver(measure);
     els.forEach((el) => ro.observe(el));
@@ -416,8 +688,21 @@ export default function CompareView({
     } catch (e) { console.warn("[CompareView] safeSetJSON exception " + noteKey + ":", e); }
   };
 
-  const [copied, setCopied] = useState(false);
-  const [syncAnimating, setSyncAnimating] = useState(false);
+  const copyTextFallback = (text) => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  };
 
   const copyReport = async () => {
     if (!bookA || !bookB) return;
@@ -433,18 +718,32 @@ export default function CompareView({
     lines.push(
       `TRÍCH DẪN:\nA: ${citationFor(bookA, displayA)}\nB: ${citationFor(bookB, displayB)}`,
     );
+    const text = lines.join("\n");
     try {
-      await navigator.clipboard.writeText(lines.join("\n"));
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else if (!copyTextFallback(text)) {
+        throw new Error("clipboard unavailable");
+      }
+      setCopyFailed(false);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      later(() => setCopied(false), 2000);
     } catch (e) {
       console.warn("[CompareView] clipboard write failed", e);
+      if (!copyTextFallback(text)) {
+        setCopyFailed(true);
+        later(() => setCopyFailed(false), 3000);
+      } else {
+        setCopied(true);
+        later(() => setCopied(false), 2000);
+      }
     }
   };
 
   // Render a PDF page fitted into its box: fit = contain(box, page at scale 1),
-  // then zoom is a multiplier on top of the fitted size (100% = vừa khung)
-  const renderSide = useCallback((doc, pdfPage, canvasEl, setLoading) => {
+  // then zoom is a multiplier on top of the fitted size (100% = vừa khung).
+  // genRef + boxRef truyền riêng từng bên để 2 bên render song song không hủy nhau.
+  const renderSide = useCallback((doc, pdfPage, canvasEl, setLoading, genRef, boxRef) => {
     if (!doc || !canvasEl) return;
     if (!Number.isFinite(pdfPage) || pdfPage < 1 || pdfPage > doc.numPages) {
       // clamp and retry once
@@ -457,11 +756,11 @@ export default function CompareView({
       return;
     }
     setLoading(true);
-    const token = ++renderGenRef.current;
+    const token = ++genRef.current;
     (async () => {
       try {
         const page = await doc.getPage(clampPage(pdfPage, doc.numPages));
-        if (token !== renderGenRef.current) return;
+        if (token !== genRef.current) return;
         const base = page.getViewport({ scale: 1 });
         const { w, h } = boxRef.current;
         const fit = w && h && base.width && base.height ? Math.min(w / base.width, h / base.height) : 1;
@@ -475,9 +774,10 @@ export default function CompareView({
         canvasEl.style.width = `${vp.width / dpr}px`;
         canvasEl.style.height = `${vp.height / dpr}px`;
         await page.render({ canvasContext: ctx, viewport: vp }).promise;
-        if (token !== renderGenRef.current) return;
+        if (token !== genRef.current) return;
         setLoading(false);
       } catch (err) {
+        if (token !== genRef.current) return;
         console.error("Failed to render PDF page:", err);
         setLoading(false);
       }
@@ -485,43 +785,68 @@ export default function CompareView({
   }, [zoom]);
 
   useEffect(() => {
-    const gen = renderGenRef;
-    if (docA && canvasARef.current) renderSide(docA, pageA, canvasARef.current, setLoadingA);
+    if (docA && canvasARef.current) renderSide(docA, pageA, canvasARef.current, setLoadingA, renderGenARef, boxARef);
     else if (canvasARef.current) {
       const c = canvasARef.current.getContext("2d");
       if (c) c.clearRect(0, 0, canvasARef.current.width, canvasARef.current.height);
     }
-    if (docB && canvasBRef.current) renderSide(docB, pageB, canvasBRef.current, setLoadingB);
+    return () => {
+      renderGenARef.current++;
+    };
+  }, [docA, pageA, zoom, boxA, renderSide]);
+
+  useEffect(() => {
+    if (docB && canvasBRef.current) renderSide(docB, pageB, canvasBRef.current, setLoadingB, renderGenBRef, boxBRef);
     else if (canvasBRef.current) {
       const c = canvasBRef.current.getContext("2d");
       if (c) c.clearRect(0, 0, canvasBRef.current.width, canvasBRef.current.height);
     }
     return () => {
-      gen.current++;
+      renderGenBRef.current++;
     };
-  }, [docA, docB, pageA, pageB, zoom, box, renderSide]);
+  }, [docB, pageB, zoom, boxB, renderSide]);
 
   // clamp pages when docs load / numPages changes
   useEffect(() => { if (docA) setPageA((p) => clampPage(p, docA.numPages)); }, [docA]);
   useEffect(() => { if (docB) setPageB((p) => clampPage(p, docB.numPages)); }, [docB]);
 
-  // keyboard: Ctrl+L toggle linked, Ctrl+S swap
+  // keyboard: Ctrl+L toggle linked, Ctrl+S swap, ←/→ lật trang, ↑/↓ zoom.
+  // Bỏ qua khi đang gõ trong ô nhập. Chỉ đăng ký 1 lần nhờ handler ổn định.
   useEffect(() => {
+    const inField = (t) => !!t?.closest?.("input, textarea, select, [contenteditable='true'], [contenteditable='']");
     const onKey = (e) => {
+      if (inField(e.target)) return;
       const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
-      const k = e.key.toLowerCase();
-      if (k === "l") {
+      if (mod) {
+        const k = e.key.toLowerCase();
+        if (k === "l") {
+          e.preventDefault();
+          toggleLinked();
+        } else if (k === "s") {
+          e.preventDefault();
+          const s = stateRef.current;
+          if (s.fileA || s.fileB) swapSides();
+        }
+        return;
+      }
+      if (e.altKey) return;
+      const s = stateRef.current;
+      const hasDoc = !!(s.docA || s.docB);
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        // Lật song song qua bên A (tự đồng bộ B khi linked); khi độc lập
+        // phím tắt không biết lật bên nào nên nhường cho nút từng bên.
+        if (!linkedRef.current || !hasDoc) return;
         e.preventDefault();
-        toggleLinked();
-      } else if (k === "s") {
+        goA(e.key === "ArrowRight" ? 1 : -1);
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        if (!hasDoc) return;
         e.preventDefault();
-        if (bookA || bookB) swapSides();
+        zoomBy(e.key === "ArrowUp" ? 0.1 : -0.1);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [bookA, bookB, linked, docA, docB, pageA, pageB]);
+  }, [toggleLinked, swapSides, goA, zoomBy]);
 
   const exportReport = () => {
     if (!bookA || !bookB) return;
@@ -538,7 +863,7 @@ export default function CompareView({
     ];
     let html = "<table>";
     rows.forEach((r, i) => {
-      html += `<tr>${r.map((c) => (i === 0 ? `<th>${c}</th>` : `<td>${c}</td>`)).join("")}</tr>`;
+      html += `<tr>${r.map((c) => (i === 0 ? `<th>${escapeHtml(c)}</th>` : `<td>${escapeHtml(c)}</td>`)).join("")}</tr>`;
     });
     html += "</table>";
     if (note.trim()) html += `<h2>Ghi chú so sánh</h2>${nl2br(note)}`;
@@ -558,20 +883,20 @@ export default function CompareView({
     );
   };
 
-  const pickA = (v) => {
-    if (v && v === fileB) {
-      alert("Bên B đang xem cuốn này. Chọn cuốn khác cho bên A.");
-      return;
-    }
+  // Cho phép 2 bên mở cùng 1 sách để so sánh 2 trang/bài trong cùng cuốn.
+  const pickA = useCallback((v) => {
+    setPageA(1);
     setFileA(v);
-  };
-  const pickB = (v) => {
-    if (v && v === fileA) {
-      alert("Bên A đang xem cuốn này. Chọn cuốn khác cho bên B.");
-      return;
-    }
+  }, []);
+  const pickB = useCallback((v) => {
+    setPageB(1);
     setFileB(v);
-  };
+  }, []);
+
+  const insertNoteTemplate = useCallback(() => {
+    setNoteOpen(true);
+    setNote((prev) => (prev.trim() ? prev.replace(/\s+$/, "") + "\n\n" + NOTE_TEMPLATE : NOTE_TEMPLATE));
+  }, []);
 
   const noteSnippet = note.trim()
     ? note.replace(/\s+/g, " ").trim().slice(0, 96) +
@@ -599,14 +924,26 @@ export default function CompareView({
             title={
               !bookA && !bookB
                 ? "Chọn 2 sách rồi thử lại"
-                : "Đổi vị trí hai bên A ⇄ B (Ctrl+S)"
+                : "Đổi vị trí hai bên trái ⇄ phải (Ctrl+S)"
             }
           >
             <ArrowRightLeft size={13} /> Đổi bên
           </button>
+          <button
+            className="btn btn-secondary btn-xs"
+            onClick={syncPages}
+            disabled={!docA || !docB}
+            title={
+              !docA || !docB
+                ? "Mở 2 sách rồi thử lại"
+                : "Cho bên phải về cùng số trang với bên trái"
+            }
+          >
+            <Equal size={13} /> Về cùng trang
+          </button>
           <SampleButton
             onRun={() => {
-              const s = fillSampleCompare(books);
+              const s = fillSampleCompare(bookList);
               if (!s) {
                 alert("Cần ít nhất 2 cuốn sách trong thư viện để so sánh.");
                 return;
@@ -616,7 +953,8 @@ export default function CompareView({
               setPageA(clampPage(s.pageA, 9999));
               setPageB(clampPage(s.pageB, 9999));
               setNote(s.note);
-              const k = `sgk_cmpnote_${[s.fileA, s.fileB].sort().join("__")}`;
+              setNoteOpen(true);
+              const k = cmpNoteKeyFor(s.fileA, s.fileB);
               try {
                 const res = safeSetJSON(k, s.note);
                 if (!res.ok) {
@@ -628,22 +966,37 @@ export default function CompareView({
                 "Đã mở mẫu so sánh 2 trang cùng một nội dung và ghi sẵn ghi chú. Bạn có thể chỉnh sửa ghi chú rồi xuất biên bản.",
               );
             }}
-            disabled={books.length < 2}
+            disabled={bookList.length < 2}
           />
         </div>
         <div className="cmp-toolbar-group">
           <button
+            className="btn btn-secondary btn-xs"
+            onClick={() => setStacked((s) => !s)}
+            title={stacked ? "Chuyển sang xem 2 sách cạnh nhau (trái–phải)" : "Chuyển sang xem 2 sách chồng lên nhau (trên–dưới), dễ dùng trên điện thoại"}
+          >
+            {stacked ? <Columns2 size={13} /> : <Rows2 size={13} />}{" "}
+            {stacked ? "Xem ngang" : "Xem dọc"}
+          </button>
+          <button
             className="btn-icon"
-            onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(1)))}
+            onClick={() => zoomBy(-0.1)}
             disabled={zoom <= 0.5}
             title="Thu nhỏ (↓)"
           >
             <ZoomOut size={16} />
           </button>
-          <span className="cmp-pagenum">{Math.round(zoom * 100)}%</span>
+          <button
+            className="cmp-pagenum cmp-zoom-reset"
+            onClick={() => setZoom(1)}
+            disabled={zoom === 1}
+            title="Bấm để về cỡ vừa khung (100%)"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
           <button
             className="btn-icon"
-            onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(1)))}
+            onClick={() => zoomBy(0.1)}
             disabled={zoom >= 2}
             title="Phóng to (↑)"
           >
@@ -656,11 +1009,13 @@ export default function CompareView({
             title={
               !bookA || !bookB
                 ? "Chọn 2 sách rồi thử lại"
-                : "Sao chép biên bản so sánh vào khay nhớ tạm"
+                : copyFailed
+                  ? "Không chép được — trình duyệt chặn khay nhớ tạm"
+                  : "Sao chép biên bản so sánh vào khay nhớ tạm"
             }
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}{" "}
-            {copied ? "Đã chép" : "Biên bản"}
+            {copied ? "Đã chép" : copyFailed ? "Chép thất bại" : "Biên bản"}
           </button>
           <button
             className="btn btn-secondary btn-xs"
@@ -669,30 +1024,54 @@ export default function CompareView({
             title={
               !bookA || !bookB
                 ? "Chọn 2 sách rồi thử lại"
-                : "Xuất biên bản so sánh"
+                : "Tải biên bản so sánh (kèm ghi chú) về file Word"
             }
           >
-            <FileText size={13} /> Word
+            <FileText size={13} /> Tải Word
           </button>
           <button
             className="btn btn-secondary btn-xs"
             onClick={doPrint}
             disabled={!bookA || !bookB}
+            title={
+              !bookA || !bookB
+                ? "Chọn 2 sách rồi thử lại"
+                : "Mở bản in để in ra giấy hoặc lưu thành PDF"
+            }
           >
-            <Printer size={13} /> PDF
+            <Printer size={13} /> In / PDF
           </button>
         </div>
       </div>
 
-      <div ref={stageRef} className={`cmp-stage ${syncAnimating ? "cmp-sync-anim" : ""}`} style={{ gridTemplateColumns: `${splitRatio}% 52px ${100 - splitRatio}%` }}>
+      {!hintOff && (
+        <div className="cmp-hint" role="note">
+          <span>
+            💡 <b>Mẹo:</b> bật <b>«Song song»</b> để lật 2 bên cùng lúc • gõ <b>số trang rồi Enter</b> để
+            nhảy tới trang • <b>ghi chú tự lưu</b> theo từng cặp sách • app <b>nhớ cặp sách</b> đang mở.
+          </span>
+          <button className="btn-icon" onClick={dismissHint} title="Ẩn mẹo này" aria-label="Ẩn mẹo này">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      <div ref={stageRef} className={`cmp-stage ${syncAnimating ? "cmp-sync-anim" : ""} ${stacked ? "cmp-stage-stacked" : ""}`} style={stacked ? undefined : { gridTemplateColumns: `minmax(0, ${splitRatio}fr) 52px minmax(0, ${100 - splitRatio}fr)` }}>
         <CompareSide
           label="A"
+          sideName="trái (A)"
           book={bookA}
-          books={books}
+          bookGroups={bookGroups}
+          hasBooks={bookList.length > 0}
           onPickBook={pickA}
           doc={docA}
           page={pageA}
-          setPage={navA}
+          onPrev={() => goA(-1)}
+          onNext={() => goA(1)}
+          onFirst={() => goToA(1)}
+          onLast={() => goToA(Number.MAX_SAFE_INTEGER)}
+          onJump={goToA}
+          linked={linked}
           numPages={docA?.numPages || 0}
           canvasRef={canvasARef}
           error={errA}
@@ -713,37 +1092,48 @@ export default function CompareView({
             className="cmp-swap-btn"
             onClick={swapSides}
             disabled={!bookA && !bookB}
-            title="Đổi vị trí hai bên A ⇄ B (Ctrl+S)"
+            title={stacked ? "Đổi vị trí hai bên trên ⇄ dưới (Ctrl+S)" : "Đổi vị trí hai bên trái ⇄ phải (Ctrl+S)"}
           >
             <ArrowRightLeft size={16} />
           </button>
           <span className="cmp-pagenum">VS</span>
+          {!stacked && (
           <div
             className="cmp-split-resizer"
             onMouseDown={onSplitDragStart}
             onTouchStart={onSplitDragStart}
-            onDoubleClick={()=>{
-              setSplitRatio(50);
-              try{
-                const res = safeSetString("sgk_compare_ratio","50");
-                if (!res.ok) {
-                  if (res.quota) console.warn("[safeStorage] QuotaExceededError on sgk_compare_ratio: không thể lưu do bộ nhớ đầy");
-                  else console.warn("[CompareView] safeSetString failed for sgk_compare_ratio:", res.error);
-                }
-              }catch (e) { console.warn("[CompareView] safeSetString exception sgk_compare_ratio:", e); }
+            onDoubleClick={resetSplit}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") { e.preventDefault(); setSplitRatio((r) => Math.max(25, r - 2)); }
+              else if (e.key === "ArrowRight") { e.preventDefault(); setSplitRatio((r) => Math.min(75, r + 2)); }
+              else if (e.key === "Home") { e.preventDefault(); resetSplit(); }
             }}
             title="Kéo để đổi tỉ lệ 2 bên, double-click để cân bằng"
-            aria-hidden="true"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Điều chỉnh tỉ lệ 2 bên"
+            aria-valuemin={25}
+            aria-valuemax={75}
+            aria-valuenow={splitRatio}
+            tabIndex={0}
           />
+          )}
         </div>
         <CompareSide
           label="B"
+          sideName="phải (B)"
           book={bookB}
-          books={books}
+          bookGroups={bookGroups}
+          hasBooks={bookList.length > 0}
           onPickBook={pickB}
           doc={docB}
           page={pageB}
-          setPage={navB}
+          onPrev={() => goB(-1)}
+          onNext={() => goB(1)}
+          onFirst={() => goToB(1)}
+          onLast={() => goToB(Number.MAX_SAFE_INTEGER)}
+          onJump={goToB}
+          linked={linked}
           numPages={docB?.numPages || 0}
           canvasRef={canvasBRef}
           error={errB}
@@ -792,9 +1182,15 @@ export default function CompareView({
               },
               {
                 id: "trang",
-                tieuChi: "Trang so sánh",
+                tieuChi: "Trang đang xem",
                 sachA: bookA ? String(docA ? clampPage(pageA, docA.numPages) : pageA) : "—",
                 sachB: bookB ? String(docB ? clampPage(pageB, docB.numPages) : pageB) : "—",
+              },
+              {
+                id: "tongsotrang",
+                tieuChi: "Tổng số trang",
+                sachA: docA ? String(docA.numPages) : "—",
+                sachB: docB ? String(docB.numPages) : "—",
               },
               {
                 id: "trich",
@@ -830,6 +1226,13 @@ export default function CompareView({
             <div className="cmp-note-actions">
               <button className="btn btn-secondary btn-xs" onClick={saveNote}>
                 💾 Lưu ghi chú
+              </button>
+              <button
+                className="btn btn-secondary btn-xs"
+                onClick={insertNoteTemplate}
+                title="Chèn khung mẫu Giống nhau / Khác nhau / Đề xuất vào ghi chú"
+              >
+                <Plus size={13} /> Chèn mẫu nhận xét
               </button>
               <button
                 className="btn btn-secondary btn-xs"

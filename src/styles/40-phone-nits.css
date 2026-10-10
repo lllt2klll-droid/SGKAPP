@@ -1,0 +1,225 @@
+/* ============================================================
+   40-phone-nits.css — VÁ LỖI LẶT VẶT ĐIỆN THOẠI (audit 10/2026)
+   - File này CHỈ chứa rule trong @media, KHÔNG có rule trần,
+     nên desktop (>=1280px) giữ nguyên 100%.
+   - Load SAU CÙNG (main.jsx, sau 39-responsive-fix.css và
+     28-theme-fix.css) nên thắng mọi cascade trước đó.
+   - Quy ước breakpoint chuẩn (00-tokens.css): phone <=767.98px,
+     tablet/chạm <=1180.98px.
+   ============================================================ */
+
+/* ============================================================
+   M. SAFE-AREA (tai thỏ / home-bar)
+   - index.html đã có viewport-fit=cover nên env() mới có tác dụng.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* Header phone: lề trái/phải tôn trọng tai thỏ khi xoay ngang */
+  .global-header-content {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+  /* Drawer sidebar: footer không chạm home-indicator */
+  .sidebar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* Thanh nav dưới: lề trái/phải tôn trọng notch */
+  .mobile-bottom-nav {
+    padding-left: max(0.4rem, env(safe-area-inset-left));
+    padding-right: max(0.4rem, env(safe-area-inset-right));
+  }
+  /* Modal phone: không sát home-bar */
+  .modal-overlay {
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  /* Bottom-sheet AI trong reader: panel Thật là .ai-panel (BookReader.jsx),
+     không phải .reader-ai-panel (tên cũ đã chết) */
+  .reader-main .ai-panel {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ============================================================
+   N. SIDEBAR DRAWER PHONE
+   N1: App.jsx set inline style width (sidebarWidth) thắng CSS drawer
+       width:min(84vw,300px) -> ép lại bằng !important.
+   N2: Ẩn tay cầm resize trong drawer (vuốt nhầm là resize).
+   N3: Drawer đóng vẫn focus/tab được -> thêm visibility.
+   N4: Ẩn dấu "/" thừa khi breadcrumb-section đã display:none.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  .sidebar,
+  .sidebar.collapsed {
+    width: min(84vw, 300px) !important;
+    max-width: min(84vw, 300px) !important;
+    flex-basis: min(84vw, 300px) !important;
+    visibility: hidden;
+  }
+  .sidebar.mobile-open,
+  .sidebar.collapsed.mobile-open {
+    visibility: visible;
+  }
+  /* Tay cầm resize (App.jsx .panel-resizer-right) vô dụng trong drawer */
+  .sidebar .panel-resizer,
+  .sidebar .panel-resizer-right {
+    display: none !important;
+    pointer-events: none !important;
+  }
+  /* Nút thu gọn sidebar không có ý nghĩa khi đã là drawer */
+  .sidebar .btn-sidebar-toggle {
+    display: none !important;
+  }
+  /* breadcrumb-section/subsection đã ẩn -> ẩn luôn separator "/" */
+  .breadcrumb-section,
+  .breadcrumb-subsection {
+    display: none !important;
+  }
+  /* breadcrumb-section/subsection đã ẩn -> mọi separator "/" đều thừa
+     (App.jsx: section, [sep+subsection]?, sep, current). Ẩn tất cả. */
+  .breadcrumb-separator {
+    display: none !important;
+  }
+}
+
+/* ============================================================
+   O. FORM / CHECKBOX / SELECT TRÊN CẢM ỨNG
+   O1: 19-responsive-master.css đặt input{width:100%} ngoài mọi @media
+       làm mọi checkbox/radio thành dải full-width. 39-J mới vá
+       phạm vi .khbd-root -> mở rộng ra toàn app.
+   O2: 31-mobile-tablet.css ép select về 0.84rem (<16px) gây iOS
+       auto-zoom khi chạm -> ép lại 16px trên phone.
+   ============================================================ */
+@media (max-width: 1180.98px) {
+  label > input[type="checkbox"],
+  label > input[type="radio"] {
+    width: auto !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    flex-shrink: 0;
+  }
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]) {
+    min-height: 40px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: auto !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* Mọi ô nhập/select trên phone >=16px để iOS không tự zoom */
+  select.form-input,
+  select.form-control,
+  select.sort-select {
+    font-size: 16px !important;
+  }
+}
+
+/* ============================================================
+   P. READER PHONE (BookReader.jsx dùng .ai-panel thật)
+   P1: panel-resizer-left của AI vẫn mount + onTouchStart -> vuốt nhầm
+       đổi aiWidth. 33 mới ẩn .panel-resizer chung -> ẩn nốt bản -left.
+   P2: .rmb-page thiếu min-height 44px (mới chỉ có padding).
+   P3: .rmb-label 0.6rem (~9.6px) dưới ngưỡng 11px của 39-I.
+   P4: Số trang toc-item-page cao ~20px, khó chạm.
+   P5: Nút đóng modal trong reader dùng .util-bubble-close (32px).
+   P6: rtb-page-pill / rtb-zoom-pct / chat-ai-icon-btn không phải .btn-icon
+       nên lọt lưới rule 40px của 33/39.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  /* Tay cầm resize AI + TOC: vô hiệu hẳn trên phone */
+  .reader-main .ai-panel .panel-resizer,
+  .reader-main .ai-panel .panel-resizer-left,
+  .reader-main .panel-resizer,
+  .reader-toc-panel .panel-resizer,
+  .reader-toc-panel .panel-resizer-right {
+    display: none !important;
+    pointer-events: none !important;
+  }
+
+  /* Nút số trang ở thanh điều khiển dưới đủ 44px */
+  .rmb-page {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .rmb-label {
+    font-size: max(11px, 0.6rem) !important;
+  }
+
+  /* Số trang trong mục lục: vùng bấm tối thiểu 40px */
+  .toc-item-page {
+    min-width: 40px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Nút đóng modal/popup trong reader đủ 40px */
+  .reader-root .modal-close,
+  .reader-root .util-bubble-close {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* Cụm pill/zoom còn 28-30px -> nâng lên 40px */
+  .rtb-page-pill,
+  .rtb-zoom-pct {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .rtb-nav-btn,
+  .rtb-zoom-btn,
+  .rtb-icon-btn,
+  .chat-ai-icon-btn,
+  .reader-tool-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* ============================================================
+   Q. OCR DRAWER DẢI 701-767px (phone xoay ngang)
+   - 14-datatable.css fix ở @700px, 31 ở @767px -> dải giữa lọt khe.
+   ============================================================ */
+@media (min-width: 701px) and (max-width: 767.98px) {
+  .ocr-drawer {
+    top: auto;
+    bottom: 0;
+    height: 68vh;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
+  }
+}
+
+/* ============================================================
+   R. Z-INDEX PHONE THEO THANG 00-tokens.css
+   (bottom-nav 70 < sidebar-overlay 80 < sidebar 95 < header 100
+    < drawer 500 < modal 3000)
+   - 33-bookreader-mobile.css đang dùng số cứng 90/113/114/118/119
+     (không có trong thang): scrim kẹp giữa header/dropdown, panel
+     tụt khỏi tầng drawer/modal. Remap về var() nhưng GIỮ nguyên
+     thứ tự tương đối: bar < scrim < ai-sheet < toc-sheet.
+   - .global-header giữ 60 (< sidebar 95) để drawer phủ lên header.
+   - .sidebar 95 = var(--z-sidebar), overlay 80: đã đúng, không đụng.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  .reader-mobile-bar {
+    z-index: var(--z-bottom-nav);
+  }
+  .reader-ai-scrim,
+  .reader-toc-scrim {
+    z-index: var(--z-sidebar-overlay);
+  }
+  .reader-main .ai-panel {
+    z-index: var(--z-drawer);
+  }
+  .reader-main .reader-toc-panel {
+    z-index: calc(var(--z-drawer) + 1);
+  }
+}

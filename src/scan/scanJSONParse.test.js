@@ -29,4 +29,27 @@ describe('parseJSONSafe', () => {
     assert.equal(parseJSONSafe('xin chào, đây không phải json'), null);
     assert.equal(parseJSONSafe(''), null);
   });
+
+  it('parse mảng thuần [...] (prompt TOC/quiz yêu cầu mảng)', () => {
+    const r = parseJSONSafe('[{"title":"Hat: Vao rung hoa","page":6},{"title":"Doc nhac","page":10}]');
+    assert.ok(Array.isArray(r));
+    assert.equal(r.length, 2);
+    assert.equal(r[0].page, 6);
+  });
+
+  it('mảng bọc fence và chữ bao quanh vẫn parse được', () => {
+    const arr = '[{"title":"A","page":6},{"title":"B","page":8}]';
+    const fenced = parseJSONSafe('```json\n' + arr + '\n```');
+    assert.ok(Array.isArray(fenced));
+    assert.equal(fenced.length, 2);
+    const wrapped = parseJSONSafe('Day la muc luc:\n' + arr + '\nhet');
+    assert.ok(Array.isArray(wrapped));
+    assert.equal(wrapped.length, 2);
+  });
+
+  it('object {"items":[...]} vẫn parse nguyên object', () => {
+    const r = parseJSONSafe('{"items":[{"title":"A","page":6}]}');
+    assert.equal(typeof r, 'object');
+    assert.ok(Array.isArray(r.items));
+  });
 });

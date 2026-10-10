@@ -65,8 +65,9 @@ export function buildTocAiPrompt({ bookTitle = "", subject = "", grade = "", ima
     "Quy tắc bắt buộc:",
     '1. Mỗi mục dạng {"title": "...", "page": <số>}. "page" là SỐ TRANG GHI NGAY TRONG ẢNH — giữ nguyên y hệt, KHÔNG cộng/trừ/đoán thêm.',
     '2. "title" giữ nguyên văn bản tiếng Việt trong ảnh; BỎ dấu chấm nối (leader dots) và số trang ở cuối dòng (vd: "Bài 1 .......... 15" → "Bài 1").',
-    "3. Không bịa mục không có trong ảnh, không bỏ sót mục; mục lặp lại giữa các ảnh thì chỉ giữ 1 lần.",
-    "4. Sắp xếp mảng theo \"page\" tăng dần.",
+    "3. BỎ QUA dòng tiêu đề nhóm/chủ đề/chương KHÔNG có số trang (vd bảng Chủ đề | Nội dung | Trang: chỉ lấy dòng có số ở cột Trang, không tự gán số cho dòng tiêu đề).",
+    "4. Không bịa mục không có trong ảnh, không bỏ sót mục có số trang; mục lặp lại giữa các ảnh thì chỉ giữ 1 lần.",
+    "5. Sắp xếp mảng theo \"page\" tăng dần.",
     '5. Chỉ trả JSON mảng thuần, không markdown, không giải thích: [{"title":"...","page":12}, ...]',
   ].filter(Boolean).join("\n");
 

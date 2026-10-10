@@ -3,8 +3,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Send,
   X,
-  Sparkles,
-  Loader2,
   Bot,
   Trash2,
   Settings,
@@ -14,8 +12,7 @@ import {
   RefreshCw,
   NotebookPen,
 } from "lucide-react";
-import { escapeHtml } from "./exportDoc";
-import { TEACHER_SYSTEM_PROMPT, APP_PERSONA } from "./appPersona";
+import { TEACHER_SYSTEM_PROMPT } from "./appPersona";
 import aiService, { getFriendlyErrorMessage } from "./aiService";
 import { loadSettings } from "./settingsStore";
 import { soundManager } from "./audio/soundManager.js";

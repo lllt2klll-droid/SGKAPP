@@ -20,7 +20,6 @@ import {
   Info,
   FileText,
   RotateCcw,
-  Archive,
 } from "lucide-react";
 import {
   exportBackup,
@@ -51,12 +50,12 @@ import { parseTocExcel, generateTocTemplateExcel, exportTocToExcel } from "./toc
 import DataTable from "./DataTable";
 import FileDropzone from "./components/FileDropzone.jsx";
 import aiDataStorage from "./aiDataStorage";
-import { checkOrphanData, cleanupOrphanData, getStorageStats } from "./dataIntegrity.js";
+import { checkOrphanData, getStorageStats } from "./dataIntegrity.js";
 import { runStorageHealth, repairStorageHealth } from "./core/storageHealth.js";
 import { calcRenderScale, calcViewportSize } from "./reader/pdfRenderer.js";
 import { APP_COPYRIGHT, teacherCopy } from "./appPersona.js";
 import { YCCD, MACHS } from "./ctgpt.js";
-import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, safeSetString, listKeys } from "./safeStorage";
+import { safeGetJSON, safeGetString, safeRemove, safeSetString, listKeys } from "./safeStorage";
 import { uiMessage } from "./core/errors.js";
 
 export default function DataToolsView() {

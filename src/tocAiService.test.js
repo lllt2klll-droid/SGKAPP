@@ -88,6 +88,23 @@ test("cleanTocAiItems: số trang dạng '12.5'/'12-15'/'trang 12' lấy nhóm s
   assert.deepEqual(items.map((i) => i.page), [12, 30, 40]);
 });
 
+test("buildTocAiPrompt: dặn bỏ qua dòng tiêu đề nhóm không có số trang (bảng Chủ đề|Nội dung|Trang)", () => {
+  const { userText } = buildTocAiPrompt({ bookTitle: "Âm nhạc 1", imageCount: 1, totalPages: 60 });
+  assert.match(userText, /BỎ QUA dòng tiêu đề/);
+});
+
+test("cleanTocAiItems: bảng mục lục Âm nhạc — dòng Chủ đề không số trang bị bỏ, dòng con giữ đủ", () => {
+  const { items } = cleanTocAiItems([
+    { title: "1 ÂM THANH KÌ DIỆU", page: "" }, // tiêu đề nhóm, không số trang
+    { title: "Hát: Vào rừng hoa", page: 6 },
+    { title: "Thương thức âm nhạc: Âm thanh kì diệu", page: 8 },
+    { title: "2 VIỆT NAM YÊU THƯƠNG", page: null },
+    { title: "Hát: Tổ quốc ta", page: 12 },
+  ]);
+  assert.deepEqual(items.map((i) => i.page), [6, 8, 12]);
+  assert.ok(items.every((i) => !/ÂM THANH KÌ DIỆU|YÊU THƯƠNG/.test(i.title)));
+});
+
 test("roundtrip: AI items → exportTocSimple (2 cột Tên/Trang) → parseTocExcel đọc lại đúng", async () => {
   const { exportTocSimple, parseTocExcel } = await import("./tocExcel.js");
   const items = [{ title: "Bài 1", page: 15 }, { title: "Bài 2", page: 20 }];

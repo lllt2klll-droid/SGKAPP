@@ -21,7 +21,6 @@ import { exportWord, exportCsv, escapeHtml } from "./exportDoc";
 import SampleButton from "./SampleButton";
 import { fillSampleMarks } from "./sampleData";
 import DataTable from "./DataTable";
-import { safeGetJSON, safeSetJSON } from "./safeStorage";
 
 export default function MatrixView({ books, onOpenBook }) {
   const [file, setFile] = useState("");

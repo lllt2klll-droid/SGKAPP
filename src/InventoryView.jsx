@@ -12,7 +12,6 @@ import { inventoryPage, indexCoverage } from "./textutils";
 import { chapterAt } from "./researchDB";
 import { exportWord, exportCsv, escapeHtml } from "./exportDoc";
 import DataTable from "./DataTable";
-import { safeGetJSON, safeSetJSON } from "./safeStorage";
 
 export default function InventoryView({ books, onOpenBook }) {
   const [file, setFile] = useState("");

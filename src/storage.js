@@ -5,7 +5,7 @@
 
 import indexedDBService, { STORES, clearBookData } from "./indexedDB.js";
 import { clearAllIndexedDBData } from "./indexedDB.js";
-import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove } from "./safeStorage.js";
+import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage.js";
 import { appEvents, AppEvents } from "./core/appEvents.js";
 import { BACKUP_KEYS as _BACKUP_KEYS_CORE, STORAGE_KEYS as _STORAGE_KEYS_CORE, isBackupKey as _isBackupKeyCore, isCacheKey as _isCacheKeyCore } from "./core/storageKeys.js";
 
@@ -1071,7 +1071,6 @@ export async function migrateBookData(oldFilename, newFilename) {
     // rollback IDB: delete new keys or restore dest snapshot
     try {
       for (const { store, key } of createdIDB) {
-        const snapKey = `${store}:${key}`.replace("ocr:","ocr:").replace("search:","search:");
         // Check generic idbDestSnapshot
         let destKey = null;
         if (store === STORES.OCR) destKey = `ocr:${key}`;

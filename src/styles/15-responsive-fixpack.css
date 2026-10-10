@@ -301,7 +301,7 @@ video {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 767px) and (min-width: 576px) {
+@media (max-width: 767.98px) and (min-width: 576px) {
   .quick-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -378,7 +378,7 @@ video {
   min-width: 0;
   box-sizing: border-box;
 }
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .tag-grid-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -457,7 +457,7 @@ button {
   box-sizing: border-box;
   flex-wrap: wrap;
 }
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .btn {
     min-height: 44px;
   }
@@ -600,7 +600,7 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .reader-root {
     min-height: 420px;
     max-height: calc(100dvh - 12px);
@@ -671,7 +671,7 @@ button {
   max-width: calc(100vw - 16px);
   box-sizing: border-box;
 }
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .assistant-bubble,
   .utility-bubble {
     right: 12px !important;
