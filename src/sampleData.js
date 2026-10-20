@@ -5,10 +5,11 @@ import { getVocab, addVocabEntry, addQuizRecord } from './userdata.js';
 import {
   getCollections, addCollection, getClips, addClip,
   getRefs, addManualRef, upsertBookRef,
-  getConcepts, addConcept, savePageMark, getPageMark, chapterForPage,
+  savePageMark, getPageMark, chapterForPage,
 } from './researchDB.js';
 import { machsForSubject, yccdFor, MUC_DO } from './ctgpt.js';
 import { addQuestion, addActivity } from './teachingDB.js';
+import { getIdeas, createIdea } from './personalDB.js';
 import { makeId } from './storage.js';
 import { savePlan as saveKhbdV2Plan, importLegacyPlan as toKhbdV2Plan } from './khbd/planModel.js';
 
@@ -51,45 +52,6 @@ export function fillSampleQuiz(books) {
   addQuizRecord({ ...base, score: 4, total: 5, at: Date.now() - 86400000 });
   addQuizRecord({ ...base, score: 5, total: 5, at: Date.now() - 3600000 });
   return 2;
-}
-
-// ── Sổ khái niệm nghiên cứu ───────────────────────────────────────
-const CONCEPT_SAMPLES = [
-  { term: 'Phép cộng', category: 'Kiến thức môn', definition: 'Phép tính gộp các nhóm đồ vật (số hạng) thành một nhóm duy nhất gọi là tổng. Ở lớp 1, học sinh thực hiện phép cộng trong phạm vi 10 bằng trực quan (que tính, ngón tay, hình vẽ).', file: '', page: null },
-  { term: 'Từ chỉ hoạt động', category: 'Kiến thức môn', definition: 'Từ dùng để gọi tên việc làm, hành động của con người, con vật hay sự vật. VD: đọc, viết, chạy nhảy, nở hoa, chảy nước.', file: '', page: null },
-  { term: 'Trò chơi học tập', category: 'Phương pháp dạy học', definition: 'Hoạt động tổ chức dạy học qua trò chơi có luật, có tính thi đua; giúp học sinh tiểu học hứng thú, ghi nhớ lâu và rèn nhanh nhẹn.', file: '', page: null },
-  { term: 'Đánh giá thường xuyên', category: 'Đánh giá', definition: 'Đánh giá trong quá trình dạy học bằng nhận xét, đối chiếu với yêu cầu cần đạt; không dùng điểm số để tạo áp lực với học sinh lớp 1.', file: '', page: null },
-  { term: 'Giao tiếp toán học', category: 'Năng lực', definition: 'Năng lực diễn đạt ý tưởng toán học bằng lời nói, hình vẽ, sơ đồ; nghe hiểu và trao đổi với bạn khi làm việc nhóm.', file: '', page: null },
-  { term: 'Chăm chỉ', category: 'Phẩm chất', definition: 'Tích cực hoàn thành nhiệm vụ học tập, giữ gìn sách vở và đồ dùng, có thói quen học tập đều đặn hằng ngày.', file: '', page: null },
-];
-
-export async function fillSampleConcepts() {
-  const existing = await getConcepts();
-
-  const existingTerms = new Set(
-    existing.map(c => c.term)
-  );
-
-  let added = 0;
-
-  for (const sample of CONCEPT_SAMPLES) {
-    if (existingTerms.has(sample.term)) {
-      continue;
-    }
-
-    await addConcept({
-      term: sample.term,
-      category: sample.category,
-      definition: sample.definition,
-      file: sample.file,
-      page: sample.page,
-    });
-
-    existingTerms.add(sample.term);
-    added++;
-  }
-
-  return added;
 }
 
 // ── Danh mục tài liệu tham khảo ───────────────────────────────────
@@ -326,6 +288,128 @@ const ACTIVITY_SAMPLES = [
 export function fillSampleActivities() {
   ACTIVITY_SAMPLES.forEach(a => addActivity(a));
   return ACTIVITY_SAMPLES.length;
+}
+
+// ── Kho ý tưởng dạy học chi tiết (IdeasView schema v2) ────────────────
+const IDEA_SAMPLES = [
+  {
+    title: 'Trò chơi “Ai nhanh hơn” — luyện phản xạ phép cộng trong phạm vi 10',
+    summary: 'Chia lớp thành 2 đội, giáo viên đọc phép tính, đội nào giơ đáp án đúng và nhanh hơn sẽ ghi điểm.',
+    subject: 'Toán', grade: '1', type: 'troChoi', phase: 'luyenTap', format: 'nhomLon', difficulty: 'de',
+    status: 'sanSang', duration: 7, prepTime: '5 phút', favorite: true, rating: 5,
+    objectives: 'Củng cố phép cộng trong phạm vi 10; rèn phản xạ tính nhẩm nhanh và tinh thần đồng đội.',
+    materials: 'Thẻ số 0–10 cho mỗi đội; bảng ghi điểm; chuông/trống nhỏ.',
+    tags: ['Trò chơi', 'Tính nhẩm', 'Luyện tập'],
+    steps: [
+      { title: 'Chia đội & phổ biến luật', content: 'Chia lớp thành 2 đội đều nhau. Mỗi đội cử 1 bạn giơ thẻ đáp án. Giáo viên đọc phép tính, đội nào giơ đúng và nhanh hơn được 1 điểm.', minutes: 2 },
+      { title: 'Tổ chức chơi', content: 'Giáo viên lần lượt đọc 8–10 phép tính (4 + 1, 2 + 3, 5 + 2…). Cả lớp đếm ngược “3 – 2 – 1” rồi hai đội giơ thẻ.', minutes: 4 },
+      { title: 'Tổng kết & trao thưởng', content: 'Cộng điểm, tuyên dương đội thắng. Mời 1–2 học sinh nêu lại cách nhẩm nhanh.', minutes: 1 },
+    ],
+    variations: 'Với lớp đã vững, đổi luật: nêu kết quả rồi yêu cầu tìm phép tính (đảo ngược). Có thể dùng bảng con thay thẻ số.',
+    assessment: 'Quan sát tốc độ và độ chính xác của từng học sinh; ghi nhận em còn lúng túng để hỗ trợ tiết sau.',
+    classroomTips: 'Xếp hai đội quay mặt vào bảng để không nhìn bài nhau. Giữ nhịp độ nhanh, tránh để đội thua mất hứng.',
+    competencies: 'Giao tiếp – hợp tác; giải quyết vấn đề; tính toán.',
+  },
+  {
+    title: 'Đóng vai “Đi chợ cùng mẹ” — vận dụng phép cộng vào tình huống thực tế',
+    summary: 'Học sinh sắm vai người mua hàng, dùng phép cộng để tính số lượng đồ mua được.',
+    subject: 'Toán', grade: '1', type: 'dongVai', phase: 'vanDung', format: 'capDoi', difficulty: 'trungBinh',
+    status: 'daThu', duration: 15, prepTime: '15 phút', favorite: false, rating: 4,
+    objectives: 'Vận dụng phép cộng trong phạm vi 10 vào tình huống mua bán gần gũi; phát triển ngôn ngữ toán học.',
+    materials: 'Tranh cảnh chợ; thẻ hình quả trứng, quả cam; tiền giấy đồ chơi.',
+    tags: ['Đóng vai', 'Thực tế', 'Vận dụng'],
+    steps: [
+      { title: 'Giới thiệu tình huống', content: 'Giáo viên chiếu tranh chợ, kể: “Mẹ mua 4 quả trứng, mua thêm 3 quả nữa”.', minutes: 3 },
+      { title: 'Sắm vai nhóm đôi', content: 'Hai bạn đóng vai mẹ và em nhỏ, dùng thẻ hình mô phỏng việc mua hàng và nói ra phép cộng.', minutes: 8 },
+      { title: 'Trình diễn & chốt', content: '2–3 cặp trình diễn trước lớp; cả lớp nhận xét và viết phép tính 4 + 3 = 7.', minutes: 4 },
+    ],
+    variations: 'Đổi số lượng theo trình độ lớp. Có thể cho “gian hàng” với nhiều món để học sinh tự chọn tình huống.',
+    assessment: 'Đánh giá qua câu nói của học sinh khi sắm vai: có nêu đúng phép tính và kết quả không.',
+    classroomTips: 'Chuẩn bị thẻ hình đủ cho mỗi cặp. Khuyến khích dùng câu đầy đủ: “Mẹ mua tất cả … quả”.',
+    competencies: 'Giao tiếp; vận dụng toán học vào thực tiễn.',
+  },
+  {
+    title: 'Thí nghiệm “Vật chìm – vật nổi” khám phá khoa học quanh em',
+    summary: 'Học sinh dự đoán và kiểm chứng vật nổi hay chìm trong nước, ghi kết quả vào bảng nhóm.',
+    subject: 'Tự nhiên và Xã hội', grade: '2', type: 'thiNghiem', phase: 'khamPha', format: 'nhomNho', difficulty: 'trungBinh',
+    status: 'canCaiThien', duration: 25, prepTime: '20 phút', favorite: true, rating: 4,
+    objectives: 'Bước đầu nhận biết vật nổi/chìm; rèn kỹ năng quan sát, dự đoán và ghi chép khoa học.',
+    materials: 'Chậu nước; các vật nhỏ (nút áo, viên sỏi, lá cây, gỗ, nhựa, kim loại); khăn lau; bảng dự đoán.',
+    tags: ['Thí nghiệm', 'Khám phá', 'Khoa học'],
+    steps: [
+      { title: 'Dự đoán', content: 'Mỗi nhóm nhận bảng có 6 vật, thảo luận và đánh dấu dự đoán nổi/chìm trước khi thử.', minutes: 6 },
+      { title: 'Thử nghiệm', content: 'Lần lượt thả từng vật vào chậu nước, quan sát và ghi kết quả thực tế bên cạnh dự đoán.', minutes: 12 },
+      { title: 'So sánh & kết luận', content: 'Các nhóm so sánh dự đoán với kết quả, nêu nhận xét: vật nhẹ thường nổi, vật nặng – kim loại thường chìm.', minutes: 7 },
+    ],
+    variations: 'Cho học sinh tự mang vật từ nhà. Có thể mở rộng: vật nào nổi khi bóp méo thay đổi hình dạng.',
+    assessment: 'Kiểm tra bảng ghi của nhóm; hỏi vì sao em đoán vật đó nổi/chìm.',
+    classroomTips: 'Lót khăn dưới chậu để tránh ướt bàn. Nhắc nhở không uống nước thí nghiệm.',
+    competencies: 'Khoa học; giải quyết vấn đề; hợp tác.',
+  },
+  {
+    title: 'Học theo trạm: ôn tập 4 kỹ năng Tiếng Việt luyện tập nhóm',
+    summary: 'Lớp chia thành 4 trạm Đọc – Viết – Nói – Nghe, học sinh luân phiên hoàn thành nhiệm vụ mỗi trạm.',
+    subject: 'Tiếng Việt', grade: '3', type: 'tram', phase: 'luyenTap', format: 'tram', difficulty: 'kho',
+    status: 'sanSang', duration: 35, prepTime: '30 phút', favorite: false, rating: 5,
+    objectives: 'Ôn luyện đồng thời 4 kỹ năng; rèn tự chủ và quản lý thời gian cho học sinh.',
+    materials: '4 góc trạm với phiếu nhiệm vụ; đồng hồ/bộ đếm thời gian; sổ ghi kết quả.',
+    tags: ['Trạm', 'Ôn tập', 'Tự chủ'],
+    steps: [
+      { title: 'Chuẩn bị trạm', content: 'Bố trí 4 trạm quanh lớp, mỗi trạm đặt phiếu nhiệm vụ và đồ dùng. Phổ biến cách di chuyển và thời gian 8 phút/trạm.', minutes: 5 },
+      { title: 'Luân phiên trạm', content: 'Học sinh theo nhóm di chuyển khi có hiệu lệnh, hoàn thành nhiệm vụ ở mỗi trạm và ghi kết quả.', minutes: 24 },
+      { title: 'Chia sẻ chung', content: 'Đại diện nhóm chia sẻ sản phẩm ở mỗi trạm; giáo viên nhấn mạnh điểm cần lưu ý.', minutes: 6 },
+    ],
+    variations: 'Giảm còn 3 trạm nếu lớp đông. Trạm Nghe có thể dùng đoạn ghi âm ngắn thay đọc trực tiếp.',
+    assessment: 'Thu phiếu kết quả của từng trạm; đánh giá qua mức độ hoàn thành và hợp tác trong nhóm.',
+    classroomTips: 'Tạo tín hiệu chuyển trạm rõ ràng (nhạc/tiếng vỗ). Phân công nhóm trưởng giữ trật tự và đồ dùng.',
+    competencies: 'Tự chủ – tự học; giao tiếp – hợp tác.',
+  },
+  {
+    title: 'Hát và vận động theo nhịp “Đếm sao” khởi động giờ Toán',
+    summary: 'Cả lớp hát và vỗ tay theo nhịp, đếm to từ 1 đến 10 để ôn số và tạo không khí vui vẻ.',
+    subject: 'Toán', grade: '1', type: 'amNhac', phase: 'khoiDong', format: 'caLop', difficulty: 'de',
+    status: 'daThu', duration: 5, prepTime: '3 phút', favorite: false, rating: 4,
+    objectives: 'Ôn đếm số trong phạm vi 10; tạo hứng thú đầu giờ và rèn vận động nhịp nhàng.',
+    materials: 'Nhạc/loa (nếu có); không gian đứng cho cả lớp.',
+    tags: ['Hát', 'Khởi động', 'Vận động'],
+    steps: [
+      { title: 'Làm mẫu', content: 'Giáo viên hát mẫu và vỗ tay theo phách, hướng dẫn học sinh đếm “một sao, hai sao…” đến mười.', minutes: 2 },
+      { title: 'Cả lớp cùng hát', content: 'Cả lớp vừa hát vừa vỗ tay, mỗi lần vỗ đếm một số.', minutes: 3 },
+    ],
+    variations: 'Với lớp thích vận động, đổi thành vừa đếm vừa nhảy theo nhịp. Có thể cho 1 bạn làm “nhạc trưởng”.',
+    assessment: 'Quan sát cả lớp đếm đúng và tham gia tích cực.',
+    classroomTips: 'Giữ bài ngắn, vui, tránh kéo dài gây mệt cho học sinh lớp 1.',
+    competencies: 'Năng khiếu nghệ thuật; hứng khởi học tập.',
+  },
+  {
+    title: 'Dự án mini “Góc cây xanh lớp em” — trồng và theo dõi cây trong 2 tuần',
+    summary: 'Mỗi tổ nhận một chậu cây nhỏ, quan sát và ghi nhật ký sinh trưởng, trình bày kết quả sau 2 tuần.',
+    subject: 'Tự nhiên và Xã hội', grade: '3', type: 'duAn', phase: 'vanDung', format: 'nhomNho', difficulty: 'kho',
+    status: 'nhap', duration: 40, prepTime: 'sau giờ học', favorite: true, rating: 5,
+    objectives: 'Tìm hiểu điều kiện sống của cây; rèn quan sát, ghi chép, kiên nhẫn và làm việc nhóm.',
+    materials: 'Chậu nhỏ, đất, hạt giống/cây con; bình tưới; phiếu nhật ký theo dõi.',
+    tags: ['Dự án', 'Khoa học', 'Kiên nhẫn'],
+    steps: [
+      { title: 'Khởi động dự án', content: 'Giáo viên giới thiệu mục tiêu, chia tổ nhận cây và phiếu nhật ký. Thống nhất ngày ghi chép.', minutes: 10 },
+      { title: 'Trồng cây', content: 'Các tổ trồng cây vào chậu, đặt tên và đặt ở nơi có ánh sáng. Ghi ngày trồng.', minutes: 15 },
+      { title: 'Theo dõi & trình bày', content: 'Hằng ngày quan sát, ghi chiều cao/số lá. Sau 2 tuần, mỗi tổ trình bày kết quả và rút ra điều học được.', minutes: 15 },
+    ],
+    variations: 'So sánh cây đặt chỗ sáng và chỗ tối (theo dõi song song). Có thể mời phụ huynh cùng nhắc tưới cây.',
+    assessment: 'Đánh giá qua phiếu nhật ký (đầy đủ, trung thực) và phần trình bày của nhóm.',
+    classroomTips: 'Phân công người tưới cây luân phiên để không quên. Nhắc phải rửa tay sau khi chăm cây.',
+    competencies: 'Tự chủ; hợp tác; khoa học.',
+  },
+];
+
+export function fillSampleIdeas() {
+  const existing = new Set(getIdeas().map((i) => `${i.title}@@${i.subject}@@${i.grade}`));
+  let added = 0;
+  for (const idea of IDEA_SAMPLES) {
+    const key = `${idea.title}@@${idea.subject}@@${idea.grade}`;
+    if (existing.has(key)) continue;
+    try { createIdea(idea); existing.add(key); added++; } catch (e) { console.warn('[sampleData] createIdea failed', e); }
+  }
+  return added;
 }
 
 // ── Kế hoạch bài dạy mẫu KTSP (kho mới khbd_v2_*) ─────────────────────

@@ -349,4 +349,42 @@
 .aia-spin-svg {
   animation: spin 1.2s linear infinite;
 }
+/* ── ConfirmDialog dùng chung (thay window.confirm) ── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  z-index: var(--z-modal, 1000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.confirm-box {
+  background: var(--surface);
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  max-width: min(440px, calc(100vw - 32px));
+  width: 100%;
+  padding: 1.1rem 1.2rem;
+}
+.confirm-title {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.confirm-desc {
+  margin: 0 0 1rem;
+  font-size: 0.86rem;
+  color: var(--text-mid);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
 

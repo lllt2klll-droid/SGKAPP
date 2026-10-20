@@ -25,7 +25,7 @@ const SENDER_ID = (() => {
 })();
 
 // Whitelist sự kiện dữ liệu được đồng bộ giữa các tab.
-// Gồm catch-all DATA_UPDATED + 7 event domain (chúng cũng đã sinh alias DATA_UPDATED
+// Gồm catch-all DATA_UPDATED + các event domain (chúng cũng đã sinh alias DATA_UPDATED
 // ở tab phát, tab nhận sẽ sinh lại alias khi emitLocal) + missions.
 const CROSS_TAB_EVENTS = new Set([
   "sgk:data-updated",
@@ -37,6 +37,10 @@ const CROSS_TAB_EVENTS = new Set([
   "sgk:scan-saved",
   "sgk:webtools-updated",
   "sgk:missions-updated",
+  // P0 • 3 event domain mới (alias vẫn sinh sgk:data-updated ở cả 2 tab)
+  "sgk:vocab-updated",
+  "sgk:research-updated",
+  "sgk:internship-updated",
 ]);
 
 let _channel = null; // null = chưa thử, false = không mở được

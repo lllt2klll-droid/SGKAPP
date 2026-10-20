@@ -30,7 +30,7 @@ import { getPlans as getKhbdPlans } from "./khbd/planModel";
 import MissionWidget from "./MissionWidget";
 import ScanHistory from "./scan/ScanHistory";
 import { getScans } from "./scan/scanStore";
-import { loadSettings } from "./settingsStore";
+import { loadSettings, getDashboardConfig, isViewEnabled } from "./settingsStore";
 import { safeGetJSON, safeGetString, safeSetString } from "./safeStorage";
 import { appEvents, AppEvents } from "./core/appEvents.js";
 import { bookProgress } from "./readingProgress.js";
@@ -98,6 +98,13 @@ function relTime(ts) {
   return new Date(t).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
+// KPI → view mở khi bấm (module đang tắt trong Cài đặt → Tính năng sẽ bị ẩn)
+const KPI_VIEW_MAP = {
+  books: "library", continue: "continue", bookmarks: "marks", vocab: "vocab", clips: "collections",
+  tasks: "tasks", plans: "lessonplans", ideas: "ideas", whiteboard: "whiteboard", marks: "marks",
+  refs: "references",
+};
+
 export default function DashboardView({
   books,
   history,
@@ -134,11 +141,15 @@ export default function DashboardView({
       return [];
     }
   });
-  const [conceptsCount, setConceptsCount] = useState(0);
   const [refsCount, setRefsCount] = useState(0);
   // A3 • Trạng thái sao lưu — hiện trên hero để không bao giờ quên
   const [backupStatus, setBackupStatus] = useState(null);
   const displayName = (()=>{ try{ return loadSettings().general?.displayName || ""; }catch{ return ""; }})();
+
+  // Cài đặt → Bảng điều khiển: bật/tắt từng khối ngay khi mở (đọc mỗi render nên đổi là thấy ngay)
+  const dashCfg = getDashboardConfig();
+  // Cài đặt → Tính năng: module đang tắt → ẩn quick action / KPI / tool dẫn tới nó
+  const moduleOn = (vid) => isViewEnabled(vid);
 
   // Load data — thống nhất qua storage.js + IndexedDB, đồng bộ toàn app via appEvents
   useEffect(() => {
@@ -154,10 +165,8 @@ export default function DashboardView({
         console.warn("[DashboardView] safeGetJSON failed for sgk_wb_index", e);
       }
       try {
-        const { getConcepts } = await import("./researchDB.js");
         const { getRefs } = await import("./researchDB.js");
-        const [c, r] = await Promise.all([getConcepts(), getRefs()]);
-        setConceptsCount(Array.isArray(c) ? c.length : 0);
+        const r = await getRefs();
         setRefsCount(Array.isArray(r) ? r.length : 0);
       } catch {}
       // A3 • tính mốc sao lưu gần nhất (thủ công hoặc tự động)
@@ -291,29 +300,24 @@ export default function DashboardView({
     },
     {
       id: "marks",
-      icon: <Bookmark size={20} />,
+      icon: <ListChecks size={20} />,
       label: "Ghi chú",
       value: totalMarks || 0,
       color: "var(--success)",
       bg: "var(--success-soft)",
     },
     {
-      id: "concepts",
-      icon: <Lightbulb size={20} />,
-      label: "Khái niệm",
-      value: conceptsCount,
-      color: "var(--secondary)",
-      bg: "var(--secondary-light)",
-    },
-    {
       id: "refs",
-      icon: <BookOpen size={20} />,
+      icon: <Database size={20} />,
       label: "Tham khảo",
       value: refsCount,
       color: "var(--pen-blue)",
       bg: "var(--pen-blue-soft)",
     },
   ];
+
+  // Ẩn KPI của module đã tắt trong Cài đặt → Tính năng
+  const visibleKpiCards = kpiCards.filter((c) => !KPI_VIEW_MAP[c.id] || moduleOn(KPI_VIEW_MAP[c.id]));
 
   // Quick Actions — thống nhất toàn app, thêm Word
   const mainQuickActions = [
@@ -418,12 +422,6 @@ export default function DashboardView({
       view: "matrix",
     },
     {
-      id: "concepts",
-      icon: <Lightbulb size={18} />,
-      label: "Khái niệm",
-      view: "concepts",
-    },
-    {
       id: "references",
       icon: <BookOpen size={18} />,
       label: "Tài liệu tham khảo",
@@ -485,6 +483,10 @@ export default function DashboardView({
     },
   ];
 
+  // Danh sách rút gọn theo module đang bật (Tính năng) — dùng cho nút nhanh + modal "Tất cả công cụ"
+  const visibleQuickActions = mainQuickActions.filter((a) => moduleOn(a.view));
+  const visibleTools = allTools.filter((t) => moduleOn(t.view));
+
   const handleNavigate = (view, opts) => {
     if (view === "word") {
       try { appEvents.emit(AppEvents.OPEN_WORD_EDITOR, {}); } catch {}
@@ -497,7 +499,7 @@ export default function DashboardView({
     }
   };
 
-  const filteredTools = allTools.filter((tool) =>
+  const filteredTools = visibleTools.filter((tool) =>
     tool.label.toLowerCase().includes(toolQuery.trim().toLowerCase()),
   );
 
@@ -596,7 +598,7 @@ export default function DashboardView({
     { id: "plans", label: "Giáo án", count: plansCount, icon: <FileText size={19} />, view: "lessonplans" },
     { id: "acts", label: "Hoạt động", count: lessonPlans.length, icon: <Puzzle size={19} />, view: "activities" },
     { id: "bank", label: "Câu hỏi", count: questionCount, icon: <Database size={19} />, view: "questionbank" },
-    { id: "research", label: "Nghiên cứu", count: (totalClips || 0) + conceptsCount + refsCount, icon: <Search size={19} />, view: "search" },
+    { id: "research", label: "Nghiên cứu", count: (totalClips || 0) + refsCount, icon: <Search size={19} />, view: "search" },
     { id: "board", label: "Bảng trắng", count: whiteboards.length, icon: <Palette size={19} />, view: "whiteboard" },
   ];
 
@@ -625,13 +627,17 @@ export default function DashboardView({
         .db-sec-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:11px; }
         .db-sec-title { margin:0; font-size:0.95rem; font-weight:800; color:var(--text-dark); display:flex; align-items:center; gap:8px; }
         .db-sec-title svg { color:var(--color-action, var(--primary)); }
-        .db-kpis { display:grid; grid-template-columns:repeat(auto-fill, minmax(128px, 1fr)); gap:9px; }
-        .db-kpi { display:flex; align-items:center; gap:10px; padding:10px 11px; border-radius:12px; border:1px solid var(--border-color); background:var(--surface); cursor:pointer; transition:transform 0.13s ease, box-shadow 0.13s ease; }
-        .db-kpi:hover { transform:translateY(-2px); box-shadow:0 8px 18px rgba(15,23,42,0.09); }
+        .db-kpis { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:10px; }
+        @media (max-width: 1280px) { .db-kpis { grid-template-columns:repeat(4, minmax(0, 1fr)); } }
+        @media (max-width: 820px) { .db-kpis { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+        @media (max-width: 520px) { .db-kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+        .db-kpi { display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:12px; border:1px solid var(--border-color); background:var(--surface); cursor:pointer; transition:transform 0.13s ease, box-shadow 0.13s ease, border-color 0.13s ease; min-width:0; min-height:64px; }
+        .db-kpi:hover { transform:translateY(-2px); box-shadow:0 8px 18px rgba(15,23,42,0.09); border-color:var(--color-action, var(--primary)); }
         .db-kpi-ic { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
-        .db-kpi-val { font-size:1.12rem; font-weight:800; color:var(--text-dark); line-height:1.1; }
-        .db-kpi-label { font-size:10.5px; color:var(--text-muted); font-weight:600; }
-        .db-kpi-sub { font-size:9.5px; color:var(--text-muted); }
+        .db-kpi-txt { display:flex; flex-direction:column; justify-content:center; gap:1px; min-width:0; line-height:1.2; }
+        .db-kpi-val { font-size:1.12rem; font-weight:800; color:var(--text-dark); line-height:1.1; font-variant-numeric:tabular-nums; }
+        .db-kpi-label { font-size:11px; color:var(--text-muted); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .db-kpi-sub { font-size:10px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .db-pipe { display:flex; align-items:stretch; gap:0; overflow-x:auto; padding-bottom:2px; }
         .db-stage { flex:1 1 0; min-width:104px; display:flex; flex-direction:column; align-items:center; gap:5px; background:none; border:none; padding:6px 4px; border-radius:10px; cursor:pointer; position:relative; }
         .db-stage:hover { background:var(--color-action-soft, #eff6ff); }
@@ -708,16 +714,21 @@ export default function DashboardView({
         .db-tool-ic { width:32px; height:32px; border-radius:9px; background:var(--color-action-soft, var(--primary-light)); color:var(--color-action-strong, var(--primary)); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
       `}</style>
 
-      {/* Hero */}
+      {/* Hero — Cài đặt → Bảng điều khiển: tắt lời chào / thao tác nhanh là biến mất */}
+      {(dashCfg.showGreeting || dashCfg.showQuickActions) && (
       <div className="db-hero">
-        <h1 className="db-hello">Chào {displayName ? displayName : "thầy/cô"} 👋</h1>
-        <p className="db-date">{todayLabel}</p>
-        <div className="db-hero-sub">
-          <b>📚 {totalBooks} sách</b>
-          {wordBooks > 0 && <b>📝 {wordBooks} Word</b>}
-          {pendingTasks > 0 ? <b>📌 {pendingTasks} việc cần làm</b> : <b>✅ Không còn việc tồn</b>}
-          {scans.length > 0 && <b>📷 {scans.length} scan SGK</b>}
-        </div>
+        {dashCfg.showGreeting && (
+          <>
+            <h1 className="db-hello">Chào {displayName ? displayName : "thầy/cô"} 👋</h1>
+            <p className="db-date">{todayLabel}</p>
+            <div className="db-hero-sub">
+              <b>📚 {totalBooks} sách</b>
+              {wordBooks > 0 && <b>📝 {wordBooks} Word</b>}
+              {pendingTasks > 0 ? <b>📌 {pendingTasks} việc cần làm</b> : <b>✅ Không còn việc tồn</b>}
+              {scans.length > 0 && <b>📷 {scans.length} scan SGK</b>}
+            </div>
+          </>
+        )}
         {/* A3 • Dấu mốc sao lưu — bấm là mở Sao lưu & Khôi phục */}
         {backupStatus && (
           <button
@@ -741,8 +752,9 @@ export default function DashboardView({
                 : `💾 Đã sao lưu ${new Date(backupStatus.at).toLocaleString("vi-VN")}`}
           </button>
         )}
+        {dashCfg.showQuickActions && (
         <div className="db-quick">
-          {mainQuickActions.map((action) => (
+          {visibleQuickActions.map((action) => (
             <button key={action.id} className="db-qa" onClick={() => handleNavigate(action.view)}>
               <span className="db-qa-ic">{action.icon}</span>
               <span>{action.label}<small>{action.description}</small></span>
@@ -750,20 +762,22 @@ export default function DashboardView({
           ))}
           <button className="db-qa" onClick={() => setShowAllTools(true)}>
             <span className="db-qa-ic"><MoreHorizontal size={20} /></span>
-            <span>Tất cả công cụ<small>{allTools.length} khu vực</small></span>
+            <span>Tất cả công cụ<small>{visibleTools.length} khu vực</small></span>
           </button>
         </div>
+        )}
       </div>
+      )}
 
-      {/* KPI strip */}
+      {/* KPI strip — Cài đặt → Bảng điều khiển → Dải số liệu */}
+      {dashCfg.showKpis && visibleKpiCards.length > 0 && (
       <div className="db-sec">
         <div className="db-sec-head">
           <h2 className="db-sec-title"><BarChart3 size={16} /> Tổng quan số liệu</h2>
         </div>
         <div className="db-kpis">
-          {kpiCards.map((card) => {
-            const viewMap = { books:"library", continue:"continue", bookmarks:"marks", vocab:"vocab", clips:"collections", tasks:"tasks", plans:"lessonplans", ideas:"ideas", whiteboard:"whiteboard", marks:"marks", concepts:"concepts", refs:"references" };
-            const targetView = viewMap[card.id];
+          {visibleKpiCards.map((card) => {
+            const targetView = KPI_VIEW_MAP[card.id];
             // KPI Nhiệm vụ mở thẳng tab việc cần làm trong hub; các KPI khác mở view tương ứng
             const go = () => { if (targetView) handleNavigate(targetView, card.id === "tasks" ? { tab: "tasks" } : undefined); };
             return (
@@ -771,15 +785,17 @@ export default function DashboardView({
                 role={targetView ? "button" : undefined} tabIndex={targetView ? 0 : undefined}
                 onKeyDown={(e) => targetView && e.key === "Enter" && go()} title={card.sub || card.label}>
                 <span className="db-kpi-ic" style={{ color: card.color, background: card.bg }}>{card.icon}</span>
-                <span><span className="db-kpi-val">{card.value}</span><br /><span className="db-kpi-label">{card.label}</span>
-                {card.sub && <><br /><span className="db-kpi-sub">{card.sub}</span></>}</span>
+                <span className="db-kpi-txt"><span className="db-kpi-val">{card.value}</span><span className="db-kpi-label">{card.label}</span>
+                {card.sub && <span className="db-kpi-sub">{card.sub}</span>}</span>
               </div>
             );
           })}
         </div>
       </div>
+      )}
 
       {/* Quy trình dạy học — bấm vào từng chặng để đi tới */}
+      {dashCfg.showWorkflow && (
       <div className="db-sec">
         <div className="db-sec-head">
           <h2 className="db-sec-title"><LayoutDashboard size={16} /> Quy trình dạy học</h2>
@@ -804,6 +820,7 @@ export default function DashboardView({
           </div>
         )}
       </div>
+      )}
 
       {/* Nội dung chính 2 cột + thanh kéo giữa */}
       <div className="db-main" style={{ "--db-side": `${sideW}px` }}>
@@ -811,7 +828,7 @@ export default function DashboardView({
           {/* Đang đọc + Giáo án gần đây — xếp cạnh nhau khi cột đủ rộng */}
           <div className="db-duo">
             {/* Đang đọc — bấm vào là mở đúng trang đang dừng */}
-            {continueBooks.length > 0 && (
+            {dashCfg.showReading && continueBooks.length > 0 && (
               <section className="db-sec">
                 <div className="db-sec-head">
                   <h2 className="db-sec-title"><BookOpen size={16} /> Đang đọc <span className="db-count">{continueBooks.length}</span></h2>
@@ -854,7 +871,7 @@ export default function DashboardView({
             )}
 
             {/* Giáo án gần đây — sắp theo lần cập nhật mới nhất */}
-            {recentPlans.length > 0 && (
+            {dashCfg.showRecentPlans && recentPlans.length > 0 && (
               <section className="db-sec">
                 <div className="db-sec-head">
                   <h2 className="db-sec-title"><FileText size={16} /> Giáo án gần đây <span className="db-count">{lessonPlans.length}</span></h2>
@@ -897,7 +914,7 @@ export default function DashboardView({
           </div>
 
           {/* Phân bổ hoạt động */}
-          {hasActivityData && (
+          {dashCfg.showStats && hasActivityData && (
             <div className="db-sec">
               <div className="db-sec-head"><h2 className="db-sec-title"><BarChart3 size={16} /> Phân bổ hoạt động</h2></div>
               <div className="db-abars">
@@ -913,6 +930,7 @@ export default function DashboardView({
           )}
 
           {/* Phân bố môn học */}
+          {dashCfg.showStats && (
           <div className="db-sec">
             <div className="db-sec-head">
               <h2 className="db-sec-title"><BookOpen size={16} /> Phân bố theo môn học</h2>
@@ -951,9 +969,10 @@ export default function DashboardView({
               </>
             )}
           </div>
+          )}
 
           {/* Bảng trắng */}
-          {whiteboards.length > 0 && (
+          {dashCfg.showWhiteboards && whiteboards.length > 0 && (
             <div className="db-sec">
               <div className="db-sec-head"><h2 className="db-sec-title"><Palette size={16} /> Bảng trắng ({whiteboards.length})</h2></div>
               {whiteboards.map((board) => (
@@ -979,6 +998,7 @@ export default function DashboardView({
 
         <div className="db-col">
           {/* Cần hoàn thành */}
+          {dashCfg.showTasks && (
           <div className="db-sec">
             <div className="db-sec-head">
               <h2 className="db-sec-title"><ClipboardCheck size={16} /> Cần hoàn thành</h2>
@@ -1003,12 +1023,15 @@ export default function DashboardView({
               </>
             )}
           </div>
+          )}
 
           {/* Nhiệm vụ / huy hiệu — hub `tasks` = daily missions + việc cần làm */}
-          <MissionWidget books={books} onViewMissions={() => handleNavigate("tasks", { tab: "today" })} />
+          {dashCfg.showMissions && (
+            <MissionWidget books={books} onViewMissions={() => handleNavigate("tasks", { tab: "today" })} />
+          )}
 
           {/* Scan gần đây */}
-          {scans.length > 0 && (
+          {dashCfg.showScans && scans.length > 0 && (
             <div className="db-sec">
               <div className="db-sec-head"><h2 className="db-sec-title"><Scissors size={16} /> Scan gần đây ({scans.length})</h2></div>
               <ScanHistory
@@ -1024,6 +1047,7 @@ export default function DashboardView({
           )}
 
           {/* Chỉ số thật */}
+          {dashCfg.showStats && (
           <div className="db-insights">
             <div className="db-insight" style={{ background: "linear-gradient(135deg, #16a34a, #059669)" }}>
               <small>Tiến độ nhiệm vụ</small><b>{taskRate}%</b>
@@ -1038,6 +1062,7 @@ export default function DashboardView({
               <small>vùng đã crop</small>
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -1059,7 +1084,7 @@ export default function DashboardView({
             <div className="dashboard-tools-toolbar">
               <Search size={17} aria-hidden="true" />
               <input autoFocus value={toolQuery} onChange={(e) => setToolQuery(e.target.value)} placeholder="Tìm công cụ..." aria-label="Tìm công cụ" />
-              <span>{filteredTools.length}/{allTools.length}</span>
+              <span>{filteredTools.length}/{visibleTools.length}</span>
             </div>
             <div className="db-tools-grid" style={{ padding: "0.9rem 1.1rem 1.2rem" }}>
               {filteredTools.map((tool) => (

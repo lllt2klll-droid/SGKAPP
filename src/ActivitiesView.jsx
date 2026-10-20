@@ -84,6 +84,7 @@ export default function ActivitiesView({ books, onNavigate }) {
   const [previewAct, setPreviewAct] = useState(null);
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(null); // activity id being reviewed
+  const [formError, setFormError] = useState("");
   const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
   const [ratings, setRatings] = useState(() => {
     return safeGetJSON('sgk_activity_ratings', {}, (v) => v !== null && typeof v === 'object' && !Array.isArray(v));
@@ -172,8 +173,14 @@ export default function ActivitiesView({ books, onNavigate }) {
         .map((t) => t.trim())
         .filter(Boolean),
     };
-    if (editingId) updateActivity(editingId, payload);
-    else addActivity(payload);
+    try {
+      if (editingId) updateActivity(editingId, payload);
+      else addActivity(payload);
+    } catch (e) {
+      setFormError(e.message || "Không lưu được hoạt động.");
+      return;
+    }
+    setFormError("");
     setShowForm(false);
     setEditingId(null);
     refresh();
@@ -491,8 +498,9 @@ export default function ActivitiesView({ books, onNavigate }) {
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="btn btn-primary" onClick={save} disabled={!form.name.trim()}><Check size={14} /> Lưu hoạt động</button>
-            <button className="btn btn-secondary" onClick={() => { setShowForm(false); setEditingId(null); }}><X size={14} /> Hủy</button>
+            <button className="btn btn-secondary" onClick={() => { setShowForm(false); setEditingId(null); setFormError(""); }}><X size={14} /> Hủy</button>
           </div>
+          {formError && <div className="util-error" role="alert" style={{ marginTop: 8 }}>{formError}</div>}
         </div>
       )}
 

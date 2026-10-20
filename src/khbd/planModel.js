@@ -2,9 +2,16 @@
 // Storage key mới hoàn toàn (khbd_v2_*), không đọc/ghi key cũ sgk_lessonplans_*.
 // Mục III: hoạt động chia 4 phân khu A/B/C/D, mỗi hoạt động có các bước GV/HS.
 import { STORAGE_KEYS } from "../core/storageKeys.js";
+import { appEvents, AppEvents, DataDomains } from "../core/appEvents.js";
 import { emitLessonPlanCreated, emitLessonPlanEdited } from "../missionEvents.js";
 import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, listKeys } from "../safeStorage.js";
 import { moveToTrash, TRASH_TYPE } from "../trashStore.js";
+// P0 • bắn event domain riêng (alias tự sinh DATA_UPDATED + qua cross-tab).
+// Trước đây save/duplicate/delete plan hoàn toàn im lặng với bus.
+function notifyPlanUpdated(op, id) {
+  try { appEvents.emit(AppEvents.LESSON_PLAN_UPDATED, { source: "planModel", domain: DataDomains.LESSON_PLANS, op, id }); }
+  catch (e) { console.warn("[planModel] notifyPlanUpdated failed", e); }
+}
 
 export const SECTIONS = ["A", "B", "C", "D"];
 export const SECTION_LABEL = {
@@ -163,6 +170,7 @@ export function savePlan(plan) {
     if (isNew) emitLessonPlanCreated(fresh.id);
     emitLessonPlanEdited(fresh.id);
   } catch {}
+  notifyPlanUpdated(isNew ? "createPlan" : "savePlan", fresh.id);
   return fresh;
 }
 
@@ -173,6 +181,7 @@ export function deletePlan(id) {
     if (plan) moveToTrash({ type: TRASH_TYPE.PLAN, label: plan.title || "Giáo án chưa tên", payload: plan });
   } catch {}
   writePlans(readPlans().filter((p) => p.id !== id));
+  notifyPlanUpdated("deletePlan", id);
   try {
     listKeys()
       .filter((k) => k.startsWith("sgk_autosave_"))
@@ -197,6 +206,7 @@ export function duplicatePlan(id) {
   // Đồng bộ nhiệm vụ: nhân bản = 1 KHBD mới
   try { emitLessonPlanCreated(copy.id); } catch {}
   try { emitLessonPlanEdited(copy.id); } catch {}
+  notifyPlanUpdated("duplicatePlan", copy.id);
   return copy;
 }
 

@@ -2,7 +2,7 @@
 import { makeTocKey } from "./tocData.js";
 
 function normHeader(s) {
-  return String(s || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+  return String(s || "").trim().toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
 }
 
 const HEADER_MAP = {
@@ -68,6 +68,9 @@ export async function parseTocExcel(arrayBuffer, selectedBook = null) {
     let grade = Number(rowMapped.grade) || Number(fallbackBook?.grade) || 1;
     let subject = String(rowMapped.subject || fallbackBook?.subject || "").trim();
     let term = Number(rowMapped.term) || Number(fallbackBook?.term) || 1;
+    // Kẹp lớp 1-5, kỳ 1-2 để tránh Excel ghi 0/99 lọt vào thư viện
+    if (!Number.isFinite(grade) || grade < 1 || grade > 5) grade = 1;
+    if (term !== 1 && term !== 2) term = 1;
 
     if (!key) {
       if (fallbackBook) {
@@ -98,8 +101,23 @@ export async function parseTocExcel(arrayBuffer, selectedBook = null) {
     const m = mapHeaders(raw);
     const title = String(m.title || "").trim();
     if (!title) continue; // bỏ dòng trống
-    const page = Number(String(m.page).replace(/[^0-9]/g, "")) || 1;
-    const depth = Number(m.depth) || (title.toLowerCase().startsWith("bài") ? 1 : 0);
+    // Trang: lấy SỐ ĐẦU TIÊN trong chuỗi ("12-15" → 12, "tr. 8" → 8).
+    // Trước đây replace(/[^0-9]/g,"") biến "12-15" → 1215 và "" → 1 im lặng.
+    const pageRaw = String(m.page ?? "").trim();
+    const pageMatch = pageRaw.match(/\d+/);
+    if (!pageMatch) continue; // không có số trang → bỏ dòng, tránh gán sai trang 1
+    const page = Math.max(1, parseInt(pageMatch[0], 10) || 1);
+    const depthRawStr = String(m.depth ?? "").trim();
+    const startsBai = title.toLowerCase().startsWith("bài") || title.toLowerCase().startsWith("bai");
+    // Ô trống → đoán theo "Bài" (luật cũ); ô có số → giữ cấp 0-5 (sửa lỗi ép 0/1 mất cấp 2-3).
+    // Lưu ý: ô ghi 0 cho "Bài X" vẫn ra 1 như luật cũ (không phân biệt được 0-mặc-định với 0-ghi-tay).
+    let depth;
+    if (depthRawStr === "" || (Number(depthRawStr) === 0 && startsBai)) {
+      depth = startsBai ? 1 : 0;
+    } else {
+      const dr = Number(m.depth);
+      depth = Number.isFinite(dr) && dr >= 0 ? Math.min(Math.floor(dr), 5) : (startsBai ? 1 : 0);
+    }
     const sub = String(m.sub || "").trim();
     const tuann = String(m.tuann || "").trim();
 
@@ -121,7 +139,7 @@ export async function parseTocExcel(arrayBuffer, selectedBook = null) {
       title,
       sub,
       page: Math.max(1, page),
-      depth: depth === 0 ? 0 : 1,
+      depth,
       tuann: tuann || "",
     });
   }
@@ -219,16 +237,21 @@ export async function exportTocSimple(books) {
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
   const rows = [];
+  // Giữ đủ trường để import lại phục hồi được (trước đây chỉ Tên/Trang → mất sub/depth/tuann/key)
   for (const b of books) {
     for (const it of b.items || []) {
       rows.push({
+        "Mã sách": b.key || "",
         "Tên": it.title,
+        "Mô tả": it.sub || "",
         "Trang": it.page,
+        "Độ sâu": it.depth ?? 0,
+        "Tuần": it.tuann || "",
       });
     }
   }
-  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Tên": "", "Trang": "" }]);
-  ws["!cols"] = [{ wch: 40 }, { wch: 12 }];
+  const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ "Mã sách": "", "Tên": "", "Mô tả": "", "Trang": "", "Độ sâu": "", "Tuần": "" }]);
+  ws["!cols"] = [{ wch: 14 }, { wch: 40 }, { wch: 20 }, { wch: 12 }, { wch: 8 }, { wch: 8 }];
   XLSX.utils.book_append_sheet(wb, ws, "MucLuc");
   return XLSX.write(wb, { type: "array", bookType: "xlsx" });
 }

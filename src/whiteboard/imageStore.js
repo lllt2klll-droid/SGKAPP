@@ -20,9 +20,11 @@ function openLegacyDB() {
 }
 
 let _migrated = false;
+let _migratePromise = null;
 async function migrateLegacyIfNeeded() {
   if (_migrated) return;
-  _migrated = true;
+  if (_migratePromise) { try { await _migratePromise; } catch {} return; }
+  _migratePromise = (async () => {
   try {
     if (!indexedDBService.constructor.isAvailable()) return;
     // Try legacy DB
@@ -61,6 +63,9 @@ async function migrateLegacyIfNeeded() {
       db2.close();
     } catch {}
   } catch {}
+  })();
+  try { await _migratePromise; } catch {}
+  _migrated = true;
 }
 
 export async function saveImageBlob(blob) {
@@ -128,6 +133,44 @@ export async function deleteImageBlob(id) {
 
 export function blobToObjectURL(blob) {
   return URL.createObjectURL(blob);
+}
+
+export function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    try {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ""));
+      r.onerror = () => reject(r.error || new Error("read blob failed"));
+      r.readAsDataURL(blob);
+    } catch (e) { reject(e); }
+  });
+}
+
+/**
+ * Xóa blob CHỈ khi không còn board nào tham chiếu (chống xóa nhầm ảnh dùng chung
+ * giữa board gốc + board nhân bản — cả 2 giữ cùng imageId).
+ * @param {string} id imageId cần xóa
+ * @param {Array} boards mọi board để quét (mỗi board có .objects[].imageId)
+ * @param {string|null} excludeBoardId board sắp thay ảnh (vẫn tính là còn dùng nếu board khác giữ)
+ * @returns {Promise<boolean>} true nếu đã xóa, false nếu còn được tham chiếu
+ */
+export async function deleteImageBlobIfOrphan(id, boards, excludeBoardId = null, excludeObjectId = null) {
+  if (!id) return false;
+  try {
+    const list = Array.isArray(boards) ? boards : [];
+    for (const b of list) {
+      if (!b || !Array.isArray(b.objects)) continue;
+      if (excludeBoardId && b.id === excludeBoardId) {
+        // board đang thay ảnh: chỉ coi là còn dùng nếu object KHÁC vẫn giữ imageId
+        const stillUsed = b.objects.some((o) => o && o.imageId === id && o.id !== excludeObjectId);
+        if (stillUsed) return false;
+        continue;
+      }
+      if (b.objects.some((o) => o && o.imageId === id)) return false;
+    }
+  } catch {}
+  await deleteImageBlob(id);
+  return true;
 }
 
 // ── Garbage collection: xoá blob không còn board nào tham chiếu ───

@@ -254,9 +254,38 @@
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-muted);
+  text-align: right;
+}
+.data-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
   border-top: 1px solid var(--border-color);
   background: var(--surface-soft);
-  text-align: right;
+  padding: 0.35rem 0.7rem;
+}
+.data-table-footer .data-table-count {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+.data-table-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.data-table-pageinfo {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  min-width: 3.2rem;
+  text-align: center;
+}
+.data-table-empty-action {
+  margin-top: 0.5rem;
 }
 .data-table-wrap .hide-mobile {
   display: table-cell;

@@ -25,7 +25,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
-      includeAssets: ["favicon.svg", "icons/*.png"],
+      includeAssets: ["favicon.svg", "favicon.ico", "icons/*.png", "templates/KHBD-mau.docx"],
       manifest: {
         name: "Hệ thống Học tập & Giảng dạy SGK thông minh",
         short_name: "SGK Thông Minh",
@@ -39,6 +39,7 @@ export default defineConfig({
         orientation: "any",
         categories: ["education"],
         icons: [
+          { src: "/icons/icon-180.png", sizes: "180x180", type: "image/png", purpose: "any" },
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
           { src: "/icons/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },

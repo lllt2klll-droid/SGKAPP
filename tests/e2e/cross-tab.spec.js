@@ -68,6 +68,22 @@ async function clickNav(page, label) {
 async function openWhiteboard(page) {
   await clickNav(page, "Bảng trắng");
   await page.waitForSelector("svg.wb-svg", { timeout: 20000 });
+  // Tour "30 giây" tự mở ở profile mới khi bảng trống → che nút.
+  await dismissTourIfOpen(page);
+}
+
+async function dismissTourIfOpen(page) {
+  for (let i = 0; i < 3; i++) {
+    const closed = await page.evaluate(() => {
+      const ov = [...document.querySelectorAll(".modal-overlay")].find((el) =>
+        (el.textContent || "").includes("30 giây"),
+      );
+      if (ov) { ov.click(); return true; }
+      return false;
+    });
+    if (!closed) return;
+    await new Promise((r) => setTimeout(r, 400));
+  }
 }
 
 /** Cài listener ghi lại mọi sgk:whiteboard-updated mà tab này nhận được. */
@@ -184,6 +200,47 @@ test("H1 • tab A tạo bảng trắng → tab B nhận sgk:whiteboard-updated"
 test("H2 • tab B vẫn ở Dashboard — broadcast không điều hướng tab khác", async () => {
   assert.equal(await pageB.locator("svg.wb-svg").count(), 0, "tab B không được tự mở Bảng trắng");
   assert.equal(await pageB.locator(".app-shell").count(), 1, "tab B vẫn đang ở app, không bị reload/nhảy view");
+});
+
+test("H4 • tab A lưu bảng đang mở chung → tab B hiện banner, Tải bản mới thì hết", async () => {
+  const boardName = `E2E-Sync-${Date.now()}`;
+
+  // A mở bảng trắng + tạo bảng mới (A đứng trên bảng mới)
+  await openWhiteboard(pageA);
+  await sleep(800);
+  await pageA.locator('button[title="Tạo bảng mới"]').click();
+  await waitFor(async () => ((await pageA.locator(".whiteboard-toast").textContent()) || "").includes("Đã tạo bảng mới"), {
+    timeout: 15000, message: "toast Đã tạo bảng mới (A)",
+  });
+  // Đổi tên để tab B tìm đúng bảng
+  await pageA.locator(".wb-uni-title").fill(boardName);
+  await pageA.keyboard.press("Enter");
+  await waitFor(async () => ((await pageA.locator(".whiteboard-toast").textContent()) || "").includes("Đã đổi tên"), {
+    timeout: 15000, message: "toast Đã đổi tên (A)",
+  });
+
+  // B mount mới (thấy bảng A vừa tạo) rồi mở đúng bảng đó qua drawer
+  await openBase(pageB);
+  await openWhiteboard(pageB);
+  await sleep(800);
+  await pageB.locator('button[title="Danh sách bảng — chuyển bảng, đổi tên, nhân bản"]').click();
+  await pageB.locator(".whiteboard-drawer-item", { hasText: boardName }).first().locator(".wb-board-main").click();
+  // B có thể đã tự mở sẵn đúng bảng này (activeId) nên switchBoard im lặng, không phát toast "Đã mở".
+  // Chốt chắc B đang đứng trên bảng của A qua tiêu đề bảng, không phụ thuộc toast.
+  await waitFor(async () => (await pageB.locator(".wb-uni-title").inputValue()) === boardName, {
+    timeout: 15000, message: "tab B mở đúng bảng của A",
+  });
+
+  // A lưu tay → B phải hiện banner (không tự ghi đè), A không có banner của chính mình
+  await pageA.locator('button[title="Lưu ngay (Ctrl+S)"]').click();
+  await pageB.waitForSelector(".whiteboard-remote-bar", { timeout: 20000 });
+  assert.equal(await pageB.locator(".whiteboard-remote-bar").count(), 1, "tab B phải hiện banner bản mới");
+  assert.equal(await pageA.locator(".whiteboard-remote-bar").count(), 0, "tab A không được hiện banner của chính mình");
+
+  // B bấm Tải bản mới → banner biến mất
+  await pageB.locator(".whiteboard-remote-bar button", { hasText: "Tải bản mới" }).click();
+  await pageB.waitForSelector(".whiteboard-remote-bar", { state: "detached", timeout: 10000 });
+  assert.equal(await pageB.locator(".whiteboard-remote-bar").count(), 0, "banner phải đóng sau khi tải");
 });
 
 test("H3 • chiều ngược lại: tab B tạo bảng → tab A nhận", async () => {

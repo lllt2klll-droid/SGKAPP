@@ -46,6 +46,8 @@ app.disable("x-powered-by");
 // vẫn có thể chạy trên origin app (XSS). App luôn khai báo đúng Content-Type.
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
+  // ── Bản quyền app (header ẩn, không ảnh hưởng file xuất ra) ──
+  res.setHeader("X-App-Copyright", "© 2026 Nguyen Tuan. All rights reserved.");
   next();
 });
 
@@ -96,7 +98,9 @@ const CSP_APP = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob:",
-  "connect-src 'self'",
+  // Cho phép SW/workbox tải stylesheet + file font Google (index.html dùng
+  // fonts.googleapis.com); script-src vẫn 'self' nên XSS không mở thêm.
+  "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com",
   "worker-src 'self' blob:",
   "frame-src 'self' blob: data:",
   "manifest-src 'self'",
@@ -127,6 +131,55 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "25mb" }));
+// ── Auth tối thiểu cho thao tác ghi/xóa (định nghĩa SỚM để route dùng được) ──
+const WRITE_TOKEN = String(process.env.WRITE_TOKEN || process.env.ADMIN_TOKEN || "");
+function hasWriteToken(req) {
+  if (!WRITE_TOKEN) return true;
+  const h = String(req.headers["x-write-token"] || "");
+  const auth = String(req.headers.authorization || "");
+  const q = String(req.query?.token || req.body?.token || "");
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  return h === WRITE_TOKEN || bearer === WRITE_TOKEN || q === WRITE_TOKEN;
+}
+const requireWriteAuth = (req, res, next) => {
+  if (hasWriteToken(req)) return next();
+  return res.status(403).json({
+    error: "Thiếu quyền ghi. Hãy cấu hình WRITE_TOKEN trên server và gửi kèm header x-write-token.",
+  });
+};
+function makeRateLimiter({ windowMs, max, message }) {
+  const hits = new Map();
+  const mw = (req, res, next) => {
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const arr = (hits.get(ip) || []).filter((t) => now - t < windowMs);
+    if (arr.length >= max) {
+      res.setHeader("Retry-After", String(Math.ceil(windowMs / 1000)));
+      return res.status(429).json({ error: message || "Gửi quá nhiều yêu cầu. Hãy chờ một lát rồi thử lại!" });
+    }
+    arr.push(now);
+    hits.set(ip, arr);
+    if (hits.size > 512) {
+      for (const [k, v] of hits) {
+        if (v.every((t) => now - t >= windowMs)) hits.delete(k);
+      }
+    }
+    next();
+  };
+  setInterval(() => {
+    if (hits.size === 0) return;
+    const now = Date.now();
+    for (const [k, v] of hits) {
+      if (v.every((t) => now - t >= windowMs)) hits.delete(k);
+    }
+  }, windowMs).unref();
+  return mw;
+}
+const geminiRateLimit = makeRateLimiter({ windowMs: 60000, max: 40, message: "Gửi quá nhiều yêu cầu cùng lúc. Hãy chờ một lát rồi thử lại nhé!" });
+const rateLimit = geminiRateLimit;
+const uploadRateLimit = makeRateLimiter({ windowMs: 60000, max: 20, message: "Upload quá nhiều. Hãy chờ 1 phút rồi thử lại!" });
+const remoteFetchRateLimit = makeRateLimiter({ windowMs: 60000, max: 30, message: "Tải từ URL quá nhiều. Hãy chờ 1 phút rồi thử lại!" });
+const writeRateLimit = makeRateLimiter({ windowMs: 60000, max: 60, message: "Thao tác quá nhiều. Hãy chờ một lát rồi thử lại!" });
 // Unified JSON error handler (multer / json parse) — returns JSON instead of HTML leak
 app.use((err, _req, res, next) => {
   if (!err) return next();
@@ -240,6 +293,8 @@ function sanitizeStoredBookName(name) {
   const ext = SUPPORTED_EXTS.includes(getExt(name)) ? getExt(name) : ".pdf";
   const base = (name || "sach-moi")
     .replace(/\.[a-z0-9]+$/i, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9\s\-_]+/g, " ")
@@ -432,7 +487,7 @@ function parseBookFilename(filename, statPath) {
   };
 }
 
-app.post("/api/books/upload", upload.single("file"), (req, res) => {
+app.post("/api/books/upload", uploadRateLimit, requireWriteAuth, upload.single("file"), (req, res) => {
   try {
     if (!req.file) {
       return res
@@ -492,7 +547,7 @@ app.post("/api/books/upload", upload.single("file"), (req, res) => {
 });
 
 // ── Thêm sách bằng URL — SECURE (SSRF-hardened) ──
-app.post("/api/books/upload-url", async (req, res) => {
+app.post("/api/books/upload-url", remoteFetchRateLimit, requireWriteAuth, async (req, res) => {
   const url = String(req.body?.url || "").trim();
   const titleHint = String(req.body?.title || "").trim();
   const startTs = Date.now();
@@ -668,7 +723,7 @@ app.post("/api/books/upload-url", async (req, res) => {
   }
 });
 
-app.post("/api/books/create-text", (req, res) => {
+app.post("/api/books/create-text", writeRateLimit, requireWriteAuth, (req, res) => {
   try {
     const titleRaw = String(req.body?.title || "").trim();
     const title = titleRaw ? titleRaw.slice(0, 160) : "Sách mới";
@@ -791,7 +846,7 @@ function sanitizeStoredHtml(html) {
   return sanitizeImportedHtml(html);
 }
 
-app.post("/api/books/import-docx", docxMemoryUpload.single("file"), async (req, res) => {
+app.post("/api/books/import-docx", uploadRateLimit, requireWriteAuth, docxMemoryUpload.single("file"), async (req, res) => {
   try {
     if (!req.file?.buffer?.length) {
       return res.status(400).json({ error: "Vui lòng chọn file Word (.docx) để nhập." });
@@ -938,7 +993,7 @@ app.get("/api/books/:filename/content", (req, res) => {
   }
 });
 
-app.put("/api/books/:filename", (req, res) => {
+app.put("/api/books/:filename", writeRateLimit, requireWriteAuth, (req, res) => {
   if (isMaliciousFilenameParam(req.params.filename)) return res.status(403).json({ error: "Yêu cầu không hợp lệ" });
   try {
     let filename = req.params.filename;
@@ -1086,7 +1141,7 @@ app.get("/api/books", (req, res) => {
     // Sort books by grade, then subject, then term
     books.sort((a, b) => {
       if (a.grade !== b.grade) return a.grade - b.grade;
-      if (a.subject !== b.subject) return a.subject.localeCompare(b.subject);
+      if (a.subject !== b.subject) return a.subject.localeCompare(b.subject, "vi");
       return a.term - b.term;
     });
 
@@ -1103,7 +1158,10 @@ app.get("/api/books", (req, res) => {
 // purge nhầm là mất sạch. File tự được dọn sau BOOK_TRASH_DAYS ngày (kiểm tra
 // khi server khởi động). Xóa thật vĩnh viễn: ?purge=1.
 const BOOK_TRASH_DIR = path.resolve(path.join(path.dirname(BOOKS_DIR), ".sgk-book-trash"));
-const BOOK_TRASH_DAYS = 30;
+const BOOK_TRASH_DAYS = (() => {
+  const n = Number(process.env.BOOK_TRASH_DAYS);
+  return Number.isFinite(n) && n >= 1 && n <= 365 ? Math.floor(n) : 30;
+})();
 
 function bookTrashTarget(filename) {
   fs.mkdirSync(BOOK_TRASH_DIR, { recursive: true });
@@ -1155,6 +1213,8 @@ function purgeExpiredBookTrash() {
   }
 }
 purgeExpiredBookTrash();
+// Dọn định kỳ mỗi 6h để server chạy dài ngày không phình thùng rác
+setInterval(purgeExpiredBookTrash, 6 * 3600 * 1000).unref();
 
 // Danh sách thùng rác server
 app.get("/api/trash/books", (_req, res) => {
@@ -1185,7 +1245,7 @@ app.get("/api/trash/books", (_req, res) => {
 });
 
 // Phục hồi 1 file về thư viện
-app.post("/api/trash/books/restore", (req, res) => {
+app.post("/api/trash/books/restore", writeRateLimit, requireWriteAuth, (req, res) => {
   const raw = String(req.body?.filename || "");
   if (!raw || raw.includes("\0")) return res.status(400).json({ error: "Thiếu tên file." });
   const base = path.basename(raw);
@@ -1205,7 +1265,7 @@ app.post("/api/trash/books/restore", (req, res) => {
 });
 
 // Dọn toàn bộ thùng rác server (xóa thật)
-app.delete("/api/trash/books", (_req, res) => {
+app.delete("/api/trash/books", writeRateLimit, requireWriteAuth, (_req, res) => {
   try {
     if (!fs.existsSync(BOOK_TRASH_DIR)) return res.json({ ok: true, removed: 0 });
     let removed = 0;
@@ -1227,7 +1287,7 @@ app.delete("/api/trash/books", (_req, res) => {
   }
 });
 
-app.delete("/api/books/:filename", (req, res) => {
+app.delete("/api/books/:filename", writeRateLimit, requireWriteAuth, (req, res) => {
   if (isMaliciousFilenameParam(req.params.filename)) return res.status(403).json({ error: "Yêu cầu không hợp lệ" });
   let filename = req.params.filename;
   try {
@@ -1399,8 +1459,15 @@ app.get("/api/books/:filename", (req, res) => {
 });
 
 // Endpoint to check if server is running — đếm đệ quy + tổng dung lượng thư viện ngoài (FS) để thống nhất kiểm tra dung lượng
+// Cache 30s để tránh quét toàn cây mỗi request (100 req/s trước đây gây CPU spike).
+let healthCache = { at: 0, body: null };
+const HEALTH_CACHE_MS = 30000;
 app.get("/api/health", (req, res) => {
   try {
+    const now = Date.now();
+    if (healthCache.body && now - healthCache.at < HEALTH_CACHE_MS) {
+      return res.json(healthCache.body);
+    }
     const pdfFiles = fs.existsSync(BOOKS_DIR) ? collectPdfFiles(BOOKS_DIR) : [];
     const uniqMap = new Map(); // basename lower -> relPath first occurrence (dedupe)
     for (const rel of pdfFiles) {
@@ -1422,7 +1489,7 @@ app.get("/api/health", (req, res) => {
     for (const rel of pdfFiles) {
       try { totalBytesRaw += fs.statSync(path.join(BOOKS_DIR, rel)).size; } catch {}
     }
-    res.json({
+    const body = {
       status: "healthy",
       booksDir: BOOKS_DIR,
       pdfCount: uniqMap.size,
@@ -1431,47 +1498,13 @@ app.get("/api/health", (req, res) => {
       totalBytesRaw, // bao gồm file trùng trong subfolder (nếu có)
       byGrade,
       environment: process.env.NODE_ENV || "development",
-    });
+    };
+    healthCache = { at: Date.now(), body };
+    res.json(body);
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 });
-
-// Simple in-memory rate limiter (per IP, per minute)
-const geminiRate = new Map();
-const RATE_WINDOW_MS = 60000;
-const RATE_MAX = 40;
-const rateLimit = (req, res, next) => {
-  const ip = req.ip || req.socket.remoteAddress || "unknown";
-  const now = Date.now();
-  const hits = (geminiRate.get(ip) || []).filter(
-    (t) => now - t < RATE_WINDOW_MS,
-  );
-  if (hits.length >= RATE_MAX) {
-    res.setHeader("Retry-After", "60");
-    return res.status(429).json({
-      error: "Gửi quá nhiều yêu cầu cùng lúc. Hãy chờ một lát rồi thử lại nhé!",
-    });
-  }
-  hits.push(now);
-  geminiRate.set(ip, hits);
-
-  // Opportunistic cleanup so the map never grows unbounded
-  if (geminiRate.size > 256) {
-    for (const [k, v] of geminiRate) {
-      if (v.every((t) => now - t >= RATE_WINDOW_MS)) geminiRate.delete(k);
-    }
-  }
-  next();
-};
-// Periodic sweep for idle IPs (keeps the process alive handling only itself)
-setInterval(() => {
-  if (geminiRate.size === 0) return;
-  const now = Date.now();
-  for (const [k, v] of geminiRate) {
-    if (v.every((t) => now - t >= RATE_WINDOW_MS)) geminiRate.delete(k);
-  }
-}, 60000).unref();
 
 // Proxy route for Gemini API
 // This allows the client to call Gemini without exposing their API key on the frontend
@@ -1497,6 +1530,23 @@ app.post("/api/gemini", rateLimit, async (req, res) => {
       .status(400)
       .json({ error: "Nội dung gửi lên không hợp lệ. Hãy thử lại nhé!" });
   }
+  // Giới hạn kích thước contents để tránh client POST 25MB JSON → tốn quota/bill Google + DoS.
+  // Ước lượng nhanh bằng JSON.stringify; vượt quá → 413.
+  const GEMINI_CONTENTS_MAX_CHARS = Number(process.env.GEMINI_MAX_CHARS || 500000);
+  let contentsSize = 0;
+  try {
+    contentsSize = JSON.stringify(contents).length + String(rawSys || "").length;
+  } catch {
+    return res.status(400).json({ error: "Nội dung gửi lên không hợp lệ. Hãy thử lại nhé!" });
+  }
+  if (contentsSize > GEMINI_CONTENTS_MAX_CHARS) {
+    return res.status(413).json({
+      error: `Nội dung gửi AI quá lớn (${Math.round(contentsSize / 1024)}KB > ${Math.round(GEMINI_CONTENTS_MAX_CHARS / 1024)}KB). Hãy rút gọn hoặc chia nhỏ yêu cầu.`,
+    });
+  }
+  if (contents.length > 50) {
+    return res.status(400).json({ error: "Quá nhiều phần nội dung (tối đa 50). Hãy rút gọn yêu cầu." });
+  }
   // Gemini yêu cầu systemInstruction dạng Content { parts: [{ text }] }, không phải chuỗi thuần
   const systemInstruction =
     typeof rawSys === "string" ? { parts: [{ text: rawSys }] } : rawSys;
@@ -1518,6 +1568,16 @@ app.post("/api/gemini", rateLimit, async (req, res) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
 
+  // Kẹp generationConfig để client không yêu cầu maxOutputTokens khủng gây bill cao
+  const safeGenConfig = (() => {
+    const base = (generationConfig && typeof generationConfig === "object")
+      ? { ...generationConfig }
+      : { temperature: 0.4, topP: 0.95, maxOutputTokens: 2048 };
+    const n = Number(base.maxOutputTokens);
+    base.maxOutputTokens = Number.isFinite(n) ? Math.min(Math.max(Math.floor(n), 256), 8192) : 2048;
+    return base;
+  })();
+
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -1531,11 +1591,7 @@ app.post("/api/gemini", rateLimit, async (req, res) => {
         body: JSON.stringify({
           contents,
           systemInstruction,
-          generationConfig: generationConfig || {
-            temperature: 0.4,
-            topP: 0.95,
-            maxOutputTokens: 2048,
-          },
+          generationConfig: safeGenConfig,
         }),
         signal: controller.signal,
       },
@@ -1599,7 +1655,7 @@ function lessonErr(res, err, fallback) {
   if (code === "INVALID_URL" || code === "INVALID_HOST" || code === "BLOCKED_PROTOCOL" || code === "BLOCKED_PORT" || code === "CREDENTIALS_IN_URL") return res.status(400).json({ error: "URL không hợp lệ (phải bắt đầu http:// hoặc https://)." });
   return res.status(403).json({ error: fallback || "Remote URL is not allowed" });
 }
-app.post("/api/lesson-url/fetch", async (req, res) => {
+app.post("/api/lesson-url/fetch", remoteFetchRateLimit, async (req, res) => {
   const url = String(req.body?.url || "").trim();
   if (!url) return res.status(400).json({ error: "URL không được để trống." });
   try { validateRemoteUrl(url); }
@@ -1655,7 +1711,7 @@ function lessonImgName(src, index) {
 }
 // POST /api/lesson-url/images { pageUrl, urls[] } → tải từng ảnh về folder,
 // trả [{ index, src, file, url, bytes }], ảnh lỗi thì bỏ qua (skipped++).
-app.post("/api/lesson-url/images", async (req, res) => {
+app.post("/api/lesson-url/images", remoteFetchRateLimit, async (req, res) => {
   const pageUrl = String(req.body?.pageUrl || "").trim();
   const rawUrls = Array.isArray(req.body?.urls) ? req.body.urls : [];
   const urls = rawUrls.map((u) => String(u || "").trim()).filter(Boolean).slice(0, LESSON_IMGS_MAX_COUNT);
@@ -1767,6 +1823,11 @@ const _server = app.listen(PORT, HOST, () => {
   console.log(`Server is running on http://${HOST}:${PORT}`);
   console.log(`Server is listening on ${HOST}:${PORT} (LOCAL-ONLY; set HOST=0.0.0.0 to expose LAN)`);
   console.log(`Scanning PDFs in: ${BOOKS_DIR}`);
+  if (!WRITE_TOKEN) {
+    console.warn("[bao mat] WRITE_TOKEN chưa đặt — mọi client vào được server đều có thể upload/xóa sách. Mở LAN hãy đặt env WRITE_TOKEN.");
+  } else {
+    console.log("[bao mat] WRITE_TOKEN đã bật cho route ghi/xóa.");
+  }
   // Ghi PID để Run_App.bat bg có thể kiểm tra (optional)
   try { fs.writeFileSync(path.join(__dirname, "server.pid"), String(process.pid), "utf8"); } catch {}
 });

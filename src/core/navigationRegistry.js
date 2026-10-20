@@ -51,16 +51,15 @@ export const VIEWS = {
   matrix:      { id:"matrix",      label:"Ma trận",             icon:Tags,           section:"WORKSPACE", sectionId:"workspace", subsection:"Công cụ nâng cao", order:40, mobile:true, desktop:true },
   inventory:   { id:"inventory",   label:"Kiểm kê",             icon:ClipboardList,  section:"WORKSPACE", sectionId:"workspace", subsection:"Công cụ nâng cao", order:41, mobile:true, desktop:true },
   langstats:   { id:"langstats",   label:"Thống kê ngôn ngữ",   icon:TrendingUp,     section:"WORKSPACE", sectionId:"workspace", subsection:"Công cụ nâng cao", order:42, mobile:true, desktop:true },
-  concepts:    { id:"concepts",    label:"Khái niệm",           icon:NotebookPen,    section:"WORKSPACE", sectionId:"workspace", subsection:"Công cụ nâng cao", order:43, mobile:true, desktop:true },
-  references:  { id:"references",  label:"Tài liệu tham khảo",  icon:Library,        section:"WORKSPACE", sectionId:"workspace", subsection:"Công cụ nâng cao", order:44, mobile:true, desktop:true },
-  collections: { id:"collections", label:"Bộ công cụ dữ liệu",  icon:ClipboardList,  section:"WORKSPACE", sectionId:"workspace", subsection:"Công cụ nâng cao", order:45, mobile:true, desktop:true },
+  references:  { id:"references",  label:"Tài liệu tham khảo", icon:Library,        section:"WORKSPACE", sectionId:"workspace", subsection:"Sổ tay nghiên cứu", order:44, mobile:true, desktop:true },
+  collections: { id:"collections", label:"Bộ công cụ dữ liệu", icon:ClipboardList,  section:"WORKSPACE", sectionId:"workspace", subsection:"Sổ tay nghiên cứu", order:45, mobile:true, desktop:true },
   tasks:       { id:"tasks",       label:"Nhiệm vụ",            icon:ClipboardCheck, section:"CÔNG VIỆC", sectionId:"cong-viec", subsection:null,            order:50, mobile:true, desktop:true },
   ideas:       { id:"ideas",       label:"Ý tưởng",             icon:Lightbulb,      section:"CÔNG VIỆC", sectionId:"cong-viec", subsection:null,            order:51, mobile:true, desktop:true },
   stats:       { id:"stats",       label:"Thống kê",            icon:BarChart3,      section:"CÔNG VIỆC", sectionId:"cong-viec", subsection:null,            order:52, mobile:true, desktop:true },
   webtools:    { id:"webtools",    label:"Kho Công cụ Web",     icon:AppWindow,      section:"KHO CÔNG CỤ", sectionId:"kho-cong-cu",subsection:null,           order:60, mobile:true, desktop:true, large:true, promo:true },
   datatools:   { id:"datatools",   label:"Sao lưu & Khôi phục", icon:DatabaseBackup, section:"TIỆN ÍCH", sectionId:"tien-ich",  subsection:null,            order:70, mobile:true, desktop:true },
   help:        { id:"help",        label:"Trợ giúp",            icon:HelpCircle,     section:"TIỆN ÍCH", sectionId:"tien-ich",  subsection:null,            order:71, mobile:true, desktop:true },
-  glossary:    { id:"glossary",    label:"Từ điển",             icon:NotebookPen,    section:"TIỆN ÍCH", sectionId:"tien-ich",  subsection:null,            order:72, mobile:false, desktop:true },
+  // P1 • view Từ điển đã gộp vào Từ vựng (tab Tra cứu) — không còn mục nav riêng
 };
 
 // ── Navigation sections (for sidebar rendering) ──
@@ -75,7 +74,10 @@ export const NAVIGATION_CONFIG = [
       { id:"teaching-group", title:"Soạn Dạy", viewIds: ["lessonplans","activities","worksheets"] },
       { id:"assessment-group", title:"Ngân Hàng", viewIds: ["questionbank"] },
       { id:"research-group", title:"Nghiên Cứu", viewIds: ["search","compare"] },
-      { id:"advanced-group", title:"Công cụ nâng cao", viewIds: ["matrix","inventory","langstats","concepts","references","collections"] },
+      // P1 • tách sổ tay dùng thường xuyên khỏi công cụ ít dùng (nav gọn hơn)
+      // P2 • "Khái niệm" gộp vào "Từ vựng" (tags = phân loại) — chỉ còn 2 mục
+      { id:"notebook-group", title:"Sổ tay nghiên cứu", viewIds: ["references","collections"] },
+      { id:"advanced-group", title:"Công cụ nâng cao", viewIds: ["matrix","inventory","langstats"] },
     ],
     topViewIds: ["dashboard"],
   },
@@ -102,11 +104,13 @@ export const VIEW_ALIASES = {
   langstats_alias: "langstats",
   stats_view: "stats",
   sync: "datatools", // legacy FOOTER_NAV sync → datatools
+  glossary: "vocab", // P1 • view Từ điển gộp vào Từ vựng (tab Tra cứu)
+  concepts: "vocab", // P2 • view Khái niệm gộp vào Từ vựng (tags = phân loại)
 };
 
 export function normalizeViewId(id) {
   if (!id) return id;
-  if (id === "bookmarks") return "marks";
+  if (VIEW_ALIASES[id]) return VIEW_ALIASES[id];
   // stats và langstats là 2 view RIÊNG BIỆT — không map "stats" sang "langstats"
   // (trước đây có nhánh `id === "stats" && false` — dead code, đã xoá)
   return id;
@@ -164,9 +168,13 @@ export function normalizeExpandedKeys(obj, sections = []) {
 
 // For App.jsx to render sidebar without hard-coding NAV_SECTIONS.
 // Returns array suitable for previous NAV_SECTIONS rendering (with icon JSX).
-export function buildNavSections({ badges = {} } = {}) {
+// hiddenViews: viewId bị TẮT trong Cài đặt → Tính năng — ẩn khỏi điều hướng;
+// subgroup/group rỗng sau khi lọc bị loại hẳn, không để lại tiêu đề trống.
+export function buildNavSections({ badges = {}, hiddenViews = [] } = {}) {
+  const hidden = new Set(Array.isArray(hiddenViews) ? hiddenViews.filter(Boolean) : []);
   const iconEl = (Comp, size=17) => React.createElement(Comp, { size });
   const viewToItem = (vid) => {
+    if (hidden.has(vid)) return null;
     const m = VIEWS[vid];
     if (!m) return null;
     return { id: m.id, label: m.label, icon: iconEl(m.icon), badge: badges[m.id] ?? undefined, large: !!m.large, promo: !!m.promo };
@@ -174,24 +182,30 @@ export function buildNavSections({ badges = {} } = {}) {
   return NAVIGATION_CONFIG.map(sec => {
     if (sec.subsections) {
       const topItems = (sec.topViewIds || []).map(viewToItem).filter(Boolean);
+      const subsections = sec.subsections
+        .map(sub => ({
+          id: sub.id,
+          label: sub.title,
+          items: sub.viewIds.map(viewToItem).filter(Boolean),
+        }))
+        .filter(sub => sub.items.length > 0);
+      if (!topItems.length && !subsections.length) return null;
       return {
         id: sec.id,
         label: sec.title,
         items: topItems,
-        subsections: sec.subsections.map(sub => ({
-          id: sub.id,
-          label: sub.title,
-          items: sub.viewIds.map(viewToItem).filter(Boolean),
-        })),
+        subsections,
       };
     }
+    const items = (sec.viewIds || []).map(viewToItem).filter(Boolean);
+    if (!items.length) return null;
     return {
       id: sec.id,
       label: sec.title,
       large: !!sec.large,
-      items: (sec.viewIds || []).map(viewToItem).filter(Boolean),
+      items,
     };
-  });
+  }).filter(Boolean);
 }
 
 export function getFooterNav() { return FOOTER_NAV; }

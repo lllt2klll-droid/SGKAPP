@@ -302,6 +302,240 @@ textarea:focus-visible,
 }
 
 /* ============================================================
+   Accessibility - Liên kết & khoảng chữ
+   (Cài đặt → Trợ năng: "Gạch chân liên kết", "Giãn chữ & giãn dòng")
+   ============================================================ */
+/* WCAG 1.4.1: không nhận ra liên kết chỉ bằng màu — thêm gạch chân khi bật.
+   Loại trừ nút giả dạng link (nav, chip, role=button…) để không gạch chân UI. */
+[data-underline-links="true"] a:not([role="button"]):not(.nav-item):not(.st-nav):not(.st-seg-btn):not(.fb-chip):not(.fb-phrase) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+[data-underline-links="true"] a:not([role="button"]):hover,
+[data-underline-links="true"] a:not([role="button"]):focus-visible {
+  text-decoration-thickness: 2px;
+}
+
+/* Khoảng chữ/dòng rộng hơn — dễ theo dõi khi đọc lâu (không phá component
+   vì mọi element tự set line-height vẫn giữ nguyên của nó). */
+[data-wide-spacing="true"] body {
+  letter-spacing: 0.015em;
+  word-spacing: 0.06em;
+  line-height: 1.7;
+}
+[data-wide-spacing="true"] p,
+[data-wide-spacing="true"] li,
+[data-wide-spacing="true"] .text-body,
+[data-wide-spacing="true"] .text-body-lg,
+[data-wide-spacing="true"] td,
+[data-wide-spacing="true"] textarea {
+  line-height: 1.75;
+}
+[data-wide-spacing="true"] h1,
+[data-wide-spacing="true"] h2,
+[data-wide-spacing="true"] h3 {
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   Accessibility - Chống chớp nhấp nháy
+   (Cài đặt → Trợ năng: "Tắt chớp nhấp nháy")
+   Chỉ tắt các hiệu ứng lặp vô hạn "gọi sự chú ý" — spinner tải vẫn giữ
+   vì nó báo tiến trình, không phải nhấp nháy quấy nhiễu.
+   ============================================================ */
+[data-no-flash="true"] .aia-typing,
+[data-no-flash="true"] .cmp-link-on,
+[data-no-flash="true"] .dash-empty svg,
+[data-no-flash="true"] .whiteboard-empty svg,
+[data-no-flash="true"] .aia-fab.pulse::after,
+[data-no-flash="true"] .whiteboard-save-dot.is-saving,
+[data-no-flash="true"] .whiteboard-save-dot.is-error {
+  animation: none !important;
+}
+
+/* ============================================================
+   Accessibility - Báo động bằng mắt
+   (Cài đặt → Trợ năng: "Chớp viền khi có thông báo")
+   Toast chớp viền đỏ vài lần → thấy thông báo dù khiếm thính/âm thanh tắt.
+   ============================================================ */
+[data-visual-alerts="true"] .toast-container .toast,
+[data-visual-alerts="true"] .whiteboard-toast,
+[data-visual-alerts="true"] .reader-toast {
+  border: 2px solid var(--red-action, #dc2626) !important;
+  animation: a11yAlertFlash 900ms ease-in-out 3 !important;
+}
+/* Giảm chuyển động (bật tay hoặc theo máy): vẫn GIỮ viền đỏ đậm — báo động
+   bằng màu/đường viền, chỉ bỏ chớp nháy. */
+[data-reduce-motion="true"] [data-visual-alerts="true"] .toast-container .toast,
+[data-reduce-motion="true"] [data-visual-alerts="true"] .whiteboard-toast,
+[data-reduce-motion="true"] [data-visual-alerts="true"] .reader-toast {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-visual-alerts="true"] .toast-container .toast,
+  [data-visual-alerts="true"] .whiteboard-toast,
+  [data-visual-alerts="true"] .reader-toast {
+    animation: none !important;
+  }
+}
+@keyframes a11yAlertFlash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.85);
+  }
+}
+
+/* ============================================================
+   Accessibility - Thanh đọc theo con trỏ (reading ruler)
+   Vệt sáng ngang chạy theo chuột — JS trong accessibility/readingRuler.js
+   chỉ định vị (--rr-y); phần hiển thị/định dạng nằm đây.
+   ============================================================ */
+.rr-band {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2.4em;
+  min-height: 34px;
+  transform: translateY(calc(var(--rr-y, 0px) - 50%));
+  pointer-events: none;
+  user-select: none;
+  z-index: 4000; /* trên overlay (500) & modal — luôn thấy khi đọc */
+  opacity: 0;
+  transition: opacity 180ms ease;
+  background: linear-gradient(
+    to bottom,
+    rgba(37, 99, 235, 0) 0%,
+    rgba(37, 99, 235, 0.12) 18%,
+    rgba(37, 99, 235, 0.16) 82%,
+    rgba(37, 99, 235, 0) 100%
+  );
+  border-top: 1px solid rgba(37, 99, 235, 0.35);
+  border-bottom: 1px solid rgba(37, 99, 235, 0.35);
+}
+.rr-band.on {
+  opacity: 1;
+}
+[data-high-contrast="true"] .rr-band {
+  background: rgba(255, 235, 59, 0.22);
+  border-color: #000;
+}
+[data-theme="dark"] .rr-band {
+  background: linear-gradient(
+    to bottom,
+    rgba(147, 197, 253, 0) 0%,
+    rgba(147, 197, 253, 0.14) 18%,
+    rgba(147, 197, 253, 0.18) 82%,
+    rgba(147, 197, 253, 0) 100%
+  );
+  border-color: rgba(147, 197, 253, 0.45);
+}
+
+/* ============================================================
+   Accessibility - Nhấn chỗ lỗi (audit "Kiểm tra nhanh")
+   ============================================================ */
+.a11y-flash {
+  outline: 3px solid var(--red-action, #e11d48) !important;
+  outline-offset: 3px !important;
+  animation: a11yFlashOut 2s ease forwards;
+}
+/* Giảm chuyển động: giữ viền tĩnh (đủ để chỉ chỗ), bỏ hiệu ứng nhấp nháy */
+[data-reduce-motion="true"] .a11y-flash {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .a11y-flash {
+    animation: none !important;
+  }
+}
+@keyframes a11yFlashOut {
+  0%,
+  60% {
+    box-shadow: 0 0 0 6px rgba(225, 29, 72, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgba(225, 29, 72, 0);
+  }
+}
+.a11y-jump {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--color-action, #2563eb);
+  background: var(--color-action-soft, #eff6ff);
+  border: 1px solid var(--color-action, #2563eb);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.a11y-jump:hover {
+  filter: brightness(0.96);
+}
+
+/* ============================================================
+   Accessibility - Windows High Contrast (forced-colors)
+   Khi HĐH ép màu, mọi màu CSS bị thay thế → phải đảm bảo viền, focus,
+   trạng thái vẫn "nhìn ra được" bằng đường viền/hình dạng.
+   ============================================================ */
+@media (forced-colors: active) {
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    border: 1px solid ButtonBorder;
+  }
+  :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+  /* Trạng thái đang chọn/bật phải có hình dạng, không chỉ màu */
+  .st-nav.active {
+    border-inline-start: 3px solid Highlight;
+  }
+  .st-toggle.on {
+    border: 2px solid Highlight;
+  }
+  .st-seg-btn.active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  /* Thanh đọc + viền báo động + nháy chỗ lỗi vẫn hiện */
+  .rr-band {
+    border-top-color: Highlight;
+    border-bottom-color: Highlight;
+  }
+  .toast-container .toast {
+    border: 2px solid CanvasText !important;
+  }
+  .a11y-flash {
+    outline: 3px solid Highlight !important;
+  }
+}
+
+/* Skip-link: ẩn cho tới khi focus bằng Tab */
+.skip-link {
+  position: fixed;
+  top: -48px;
+  left: 12px;
+  z-index: 2000;
+  background: var(--text-dark);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* ============================================================
    Universal utilities
    ============================================================ */
 .muted {

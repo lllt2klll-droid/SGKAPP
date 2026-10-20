@@ -205,6 +205,38 @@ function validateData(syncType, data) {
           if (!a.name) issues.push(`Hoạt động ${idx + 1}: Thiếu tên`);
         });
         break;
+
+      case SYNC_TYPES.WORKSHEETS:
+        data.forEach((w, idx) => {
+          if (!w.id) issues.push(`Phiếu ${idx + 1}: Thiếu ID`);
+          if (!w.title) issues.push(`Phiếu ${idx + 1}: Thiếu tiêu đề`);
+        });
+        break;
+
+      case SYNC_TYPES.VOCABULARY:
+        data.forEach((v, idx) => {
+          if (!v.id && !v.word) issues.push(`Từ vựng ${idx + 1}: Thiếu ID/từ`);
+          if (!v.word) issues.push(`Từ vựng ${idx + 1}: Thiếu từ`);
+        });
+        break;
+
+      case SYNC_TYPES.BOOKMARKS:
+        // bookmarks là object {file: pages[]} — validate nhẹ từng file
+        if (data && typeof data === "object" && !Array.isArray(data)) {
+          for (const [f, pages] of Object.entries(data)) {
+            if (!Array.isArray(pages)) issues.push(`Đánh dấu "${f}": danh sách trang không phải mảng`);
+          }
+          return { valid: issues.length === 0, issues };
+        }
+        break;
+
+      case SYNC_TYPES.CLIPS:
+      case SYNC_TYPES.REFS:
+      case SYNC_TYPES.CONCEPTS:
+        data.forEach((c, idx) => {
+          if (!c.id) issues.push(`${syncType} ${idx + 1}: Thiếu ID`);
+        });
+        break;
     }
 
     return {
@@ -303,7 +335,8 @@ async function performSync(syncType = SYNC_TYPES.ALL, options = {}) {
       success: true,
       dataCount: syncMetadata.dataCount,
       timestamp: syncMetadata.timestamp,
-      message: `Đồng bộ thành công ${syncMetadata.dataCount} mục`,
+      mode: SYNC_MODE,
+      message: `Đã kiểm tra + sao lưu cục bộ ${syncMetadata.dataCount} mục (chế độ ${SYNC_MODE}, chưa đồng bộ cloud)`,
     };
   } catch (error) {
     console.error("Sync error:", error);
@@ -519,45 +552,88 @@ async function importData(importData, options = {}) {
         }
         break;
 
-      case SYNC_TYPES.ALL:
-        // Handle all data types
-        if (data.questions) {
-          const existing = collectData(SYNC_TYPES.QUESTIONS);
+      case SYNC_TYPES.ALL: {
+        // Nhập đủ 9 loại (trước đây chỉ 3/9, 6 loại còn lại bị nuốt im lặng).
+        const ALL_MAP = [
+          [SYNC_TYPES.QUESTIONS, "questions", STORAGE_KEYS.QUESTIONS, null],
+          [SYNC_TYPES.LESSON_PLANS, "lessonPlans", STORAGE_KEYS.KHBD_V2_PLANS, "plans"],
+          [SYNC_TYPES.ACTIVITIES, "activities", STORAGE_KEYS.ACTIVITIES, null],
+          [SYNC_TYPES.WORKSHEETS, "worksheets", STORAGE_KEYS.WORKSHEETS, null],
+          [SYNC_TYPES.VOCABULARY, "vocabulary", STORAGE_KEYS.VOCAB, null],
+          [SYNC_TYPES.BOOKMARKS, "bookmarks", STORAGE_KEYS.BOOKMARKS, "object"],
+          [SYNC_TYPES.CLIPS, "clips", STORAGE_KEYS.CLIPS, null],
+          [SYNC_TYPES.REFS, "refs", STORAGE_KEYS.REFS, null],
+          [SYNC_TYPES.CONCEPTS, "concepts", STORAGE_KEYS.CONCEPTS, null],
+        ];
+        for (const [type, field, lsKey, special] of ALL_MAP) {
+          const incoming = data[field];
+          if (incoming == null) continue;
+          if (special === "object") {
+            // bookmarks là object: merge theo file
+            if (merge && typeof incoming === "object" && !Array.isArray(incoming)) {
+              const existing = collectData(type) || {};
+              const merged = { ...existing };
+              for (const [f, pages] of Object.entries(incoming)) {
+                if (!Array.isArray(pages)) continue;
+                const set = new Set([...(existing[f] || []), ...pages]);
+                merged[f] = [...set].sort((a, b) => a - b);
+              }
+              const r = safeSetJSON(lsKey, merged);
+              if (!r.ok) console.warn("[syncService] import bookmarks (ALL) failed", r.error);
+            } else {
+              const r = safeSetJSON(lsKey, incoming);
+              if (!r.ok) console.warn("[syncService] import bookmarks (ALL) failed", r.error);
+            }
+            continue;
+          }
+          if (!Array.isArray(incoming)) continue;
+          const existing = collectData(type);
           const resolved = resolveDataConflicts(
-            existing,
-            data.questions,
+            Array.isArray(existing) ? existing : [],
+            incoming,
             resolveConflicts,
             "id",
           );
-          const r = safeSetJSON(STORAGE_KEYS.QUESTIONS, resolved.data);
-          if (!r.ok) console.warn("[syncService] import questions (ALL) failed", r.error);
-        }
-        if (data.lessonPlans) {
-          const existing = collectData(SYNC_TYPES.LESSON_PLANS);
-          const resolved = resolveDataConflicts(
-            existing,
-            data.lessonPlans,
-            resolveConflicts,
-            "id",
-          );
-          const r = writeLessonPlans(resolved.data);
-          if (!r.ok) console.warn("[syncService] import lessonPlans (ALL) failed", r.error);
-        }
-        if (data.activities) {
-          const existing = collectData(SYNC_TYPES.ACTIVITIES);
-          const resolved = resolveDataConflicts(
-            existing,
-            data.activities,
-            resolveConflicts,
-            "id",
-          );
-          const r = safeSetJSON(STORAGE_KEYS.ACTIVITIES, resolved.data);
-          if (!r.ok) console.warn("[syncService] import activities (ALL) failed", r.error);
+          const r = special === "plans" ? writeLessonPlans(resolved.data) : safeSetJSON(lsKey, resolved.data);
+          if (!r.ok) console.warn(`[syncService] import ${field} (ALL) failed`, r.error);
         }
         break;
+      }
 
-      default:
+      default: {
+        // Các loại đơn còn lại (worksheets/vocabulary/bookmarks/clips/refs/concepts):
+        // xử lý generic thay vì throw, để export/import đơn loại hoạt động được.
+        const SINGLE_MAP = {
+          [SYNC_TYPES.WORKSHEETS]: STORAGE_KEYS.WORKSHEETS,
+          [SYNC_TYPES.VOCABULARY]: STORAGE_KEYS.VOCAB,
+          [SYNC_TYPES.CLIPS]: STORAGE_KEYS.CLIPS,
+          [SYNC_TYPES.REFS]: STORAGE_KEYS.REFS,
+          [SYNC_TYPES.CONCEPTS]: STORAGE_KEYS.CONCEPTS,
+        };
+        if (SINGLE_MAP[syncType] && Array.isArray(data)) {
+          if (merge) {
+            const existing = collectData(syncType);
+            const resolved = resolveDataConflicts(
+              Array.isArray(existing) ? existing : [],
+              data,
+              resolveConflicts,
+              "id",
+            );
+            const r = safeSetJSON(SINGLE_MAP[syncType], resolved.data);
+            if (!r.ok) console.warn(`[syncService] import ${syncType} failed`, r.error);
+          } else {
+            const r = safeSetJSON(SINGLE_MAP[syncType], data);
+            if (!r.ok) console.warn(`[syncService] import ${syncType} failed`, r.error);
+          }
+          break;
+        }
+        if (syncType === SYNC_TYPES.BOOKMARKS && data && typeof data === "object") {
+          const r = safeSetJSON(STORAGE_KEYS.BOOKMARKS, data);
+          if (!r.ok) console.warn("[syncService] import bookmarks failed", r.error);
+          break;
+        }
         throw new Error(`Loại đồng bộ không hỗ trợ: ${syncType}`);
+      }
     }
 
     updateSyncStatus(syncType, {
@@ -611,20 +687,26 @@ function detectConflicts(syncType, incomingData) {
       return conflicts;
     }
 
-    // Check for ID conflicts
-    const existingIds = new Set(existingData.map((item) => item.id));
-    incomingData.forEach((item) => {
-      if (existingIds.has(item.id)) {
-        const existingItem = existingData.find((ex) => ex.id === item.id);
+    // So sánh theo id + diff nội dung (shallow JSON) để phân biệt
+    // "trùng y hệt" vs "cùng id khác nội dung".
+    const existingMap = new Map(existingData.map((item) => [item?.id, item]));
+    for (const item of incomingData) {
+      if (!item || item.id == null) continue;
+      if (existingMap.has(item.id)) {
+        const existingItem = existingMap.get(item.id);
+        let identical = false;
+        try {
+          identical = JSON.stringify(existingItem) === JSON.stringify(item);
+        } catch { identical = false; }
         conflicts.push({
           id: item.id,
           type: syncType,
           existing: existingItem,
           incoming: item,
-          conflictType: "id_collision",
+          conflictType: identical ? "identical" : "modified",
         });
       }
-    });
+    }
 
     return conflicts;
   } catch (error) {
@@ -673,21 +755,28 @@ function resolveDataConflicts(existing, incoming, strategy, idField = "id") {
           result.data.push(incomingItem);
           result.stats.incomingKept++;
           break;
-        case "keep-both":
-          // Keep both by adding a suffix to the incoming ID
+        case "keep-both": {
+          // Giữ cả hai với ID duy nhất cho bản incoming (counter + random để
+          // import hàng loạt cùng ms không trùng nhau; import lặp không rác vô hạn
+          // vì detectConflicts đã phân biệt identical/modified).
+          const stamp = Date.now().toString(36);
+          const rand = Math.random().toString(36).slice(2, 6);
+          const n = result.data.length;
           const modifiedIncoming = {
             ...incomingItem,
-            [idField]: `${id}_import_${Date.now()}`,
+            [idField]: `${id}_import_${stamp}${n}_${rand}`,
           };
           result.data.push(existingItem, modifiedIncoming);
           result.stats.existingKept++;
           result.stats.incomingKept++;
           break;
-        case "keep-newer":
-          const existingTime =
-            existingItem.updatedAt || existingItem.createdAt || 0;
-          const incomingTime =
-            incomingItem.updatedAt || incomingItem.createdAt || 0;
+        }
+        case "keep-newer": {
+          const tsOf = (o) => Number(
+            o?.updatedAt ?? o?.createdAt ?? o?.at ?? 0,
+          ) || 0;
+          const existingTime = tsOf(existingItem);
+          const incomingTime = tsOf(incomingItem);
           if (incomingTime > existingTime) {
             result.data.push(incomingItem);
             result.stats.incomingKept++;
@@ -696,6 +785,7 @@ function resolveDataConflicts(existing, incoming, strategy, idField = "id") {
             result.stats.existingKept++;
           }
           break;
+        }
         default:
           result.data.push(existingItem);
           result.stats.existingKept++;

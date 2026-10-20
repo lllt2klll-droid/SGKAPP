@@ -147,13 +147,14 @@ describe('Runner / Server Smoke', () => {
     it('sanitize preserves canonical book.filename identity', () => {
       // Simulate sanitize logic
       function sanitizeStoredBookName(name) {
-        const base = (name || "sach-moi").replace(/\.pdf$/i, "").normalize("NFD")
+        const base = (name || "sach-moi").replace(/\.pdf$/i, "").replace(/đ/g, "d").replace(/Đ/g, "D").normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9\s\-_]+/g, " ")
           .replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").trim();
         const safe = (base || "sach-moi").slice(0, 90);
         return `${safe || "sach-moi"}.pdf`;
       }
       assert.equal(sanitizeStoredBookName('Toán 1.pdf'), 'Toan-1.pdf');
+      assert.equal(sanitizeStoredBookName('Đạo đức 2.pdf'), 'Dao-duc-2.pdf');
       assert.equal(sanitizeStoredBookName(''), 'sach-moi.pdf');
       assert.ok(sanitizeStoredBookName('a'.repeat(100) + '.pdf').length <= 94);
     });

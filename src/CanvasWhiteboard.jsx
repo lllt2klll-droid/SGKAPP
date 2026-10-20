@@ -66,11 +66,16 @@ function shapeHit(o, p, pad = 6) {
       || (p.y >= y0 - tol && p.y <= y1 + tol && (Math.abs(p.x - x0) <= tol || Math.abs(p.x - x1) <= tol));
     return onEdge;
   }
-  // ellipse: chuẩn hoá khoảng cách tới biên
+  // ellipse: chuẩn hoá khoảng cách tới biên — ellipse nhỏ dùng thêm vùng đệm tuyệt đối để dễ chọn
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rx = Math.max(1, (x1 - x0) / 2), ry = Math.max(1, (y1 - y0) / 2);
   const v = ((p.x - cx) ** 2) / (rx * rx) + ((p.y - cy) ** 2) / (ry * ry);
   if (o.fill) return v <= 1.05;
-  return Math.abs(v - 1) <= Math.max(0.08, tol / Math.max(rx, ry));
+  if (Math.abs(v - 1) <= Math.max(0.08, tol / Math.max(rx, ry))) return true;
+  // fallback: ellipse nhỏ (<24px) — cho phép bấm trong vùng biên mở rộng tol
+  if (Math.max(rx, ry) < 24) {
+    return p.x >= x0 - tol && p.x <= x1 + tol && p.y >= y0 - tol && p.y <= y1 + tol;
+  }
+  return false;
 }
 const objectHit = (o, p) => (o.kind === "stroke" ? strokeHit(o, p) : o.kind === "text" ? shapeHit(o, p) : strokeHit(o, p) || shapeHit(o, p));
 
@@ -113,9 +118,16 @@ export default function CanvasWhiteboard({ onCheckDrawing, isAnalyzing, bookKey 
   const boardKeyRef = useRef("");
   const saveTimer = useRef(null);
 
+  // L7: flush save cũ đồng bộ trước khi đổi sách (tránh timer chung clearTimeout làm mất save sách cũ)
+  const pendingSaveRef = useRef(null); // {key, snapshot}
   // ── Load / persist theo sách ──
   const storageKey = `sgk_draw2_${bookKey || "global"}`;
   useEffect(() => {
+    if (pendingSaveRef.current) {
+      try { safeSetJSON(pendingSaveRef.current.key, pendingSaveRef.current.snapshot); } catch {}
+      pendingSaveRef.current = null;
+    }
+    clearTimeout(saveTimer.current);
     boardKeyRef.current = storageKey;
     try {
       const parsed = safeGetJSON(storageKey, null);
@@ -143,23 +155,33 @@ export default function CanvasWhiteboard({ onCheckDrawing, isAnalyzing, bookKey 
   }, [storageKey]);
 
   // L7: chốt key tại lúc hẹn giờ (tránh timer cũ ghi đè sang key sách mới) + dọn khi unmount
+  // + flush đồng bộ khi unmount để không mất nét cuối
   const persist = useCallback((nextBoards, nextIdx) => {
     const key = boardKeyRef.current;
     const snapshot = { v: 2, boards: nextBoards, activeIdx: nextIdx };
+    pendingSaveRef.current = { key, snapshot };
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       try {
         safeSetJSON(key, snapshot);
       } catch { /* quota: bỏ qua, giữ trong memory */ }
+      if (pendingSaveRef.current && pendingSaveRef.current.key === key) pendingSaveRef.current = null;
     }, 400);
   }, []);
-  useEffect(() => () => clearTimeout(saveTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(saveTimer.current);
+    if (pendingSaveRef.current) {
+      try { safeSetJSON(pendingSaveRef.current.key, pendingSaveRef.current.snapshot); } catch {}
+      pendingSaveRef.current = null;
+    }
+  }, []);
 
   const commit = useCallback((nextObjects, nextBoards = null, nextIdx = null) => {
     const bIdx = nextIdx ?? activeIdx;
     const base = nextBoards ?? boards;
+    // P1: cap undo 30 entries + snapshot gọn (chỉ objects board đang sửa) để tránh phình RAM
     undoRef.current.push(JSON.stringify({ bIdx, objects: base[bIdx]?.objects || [] }));
-    if (undoRef.current.length > 60) undoRef.current.shift();
+    if (undoRef.current.length > 30) undoRef.current.shift();
     redoRef.current = [];
     setCanUndo(true); setCanRedo(false);
     const nb = base.map((b, i) => (i === bIdx ? { ...b, objects: nextObjects } : b));
@@ -172,34 +194,35 @@ export default function CanvasWhiteboard({ onCheckDrawing, isAnalyzing, bookKey 
     if (!top) return;
     try {
       const { bIdx, objects: prev } = JSON.parse(top);
-      setBoards((cur) => {
-        redoRef.current.push(JSON.stringify({ bIdx, objects: cur[bIdx]?.objects || [] }));
-        const nb = cur.map((b, i) => (i === bIdx ? { ...b, objects: prev } : b));
-        persist(nb, bIdx); // L4: persist đúng board được undo, không phải board đang xem
-        return nb;
-      });
+      // P1: tính redo snapshot NGOÀI updater (updater phải pure — StrictMode gọi 2 lần sẽ nhân đôi redo)
+      const curBoards = boardsRef.current || [];
+      redoRef.current.push(JSON.stringify({ bIdx, objects: curBoards[bIdx]?.objects || [] }));
+      if (redoRef.current.length > 30) redoRef.current.shift();
+      const nb = curBoards.map((b, i) => (i === bIdx ? { ...b, objects: prev } : b));
+      setBoards(nb);
+      persist(nb, bIdx); // L4: persist đúng board được undo, không phải board đang xem
       setSelectedId(null);
       setCanUndo(undoRef.current.length > 0);
       setCanRedo(true);
     } catch { /* ignore */ }
-  }, [activeIdx, persist]);
+  }, [persist]);
 
   const redo = useCallback(() => {
     const top = redoRef.current.pop();
     if (!top) return;
     try {
       const { bIdx, objects: next } = JSON.parse(top);
-      setBoards((cur) => {
-        undoRef.current.push(JSON.stringify({ bIdx, objects: cur[bIdx]?.objects || [] }));
-        const nb = cur.map((b, i) => (i === bIdx ? { ...b, objects: next } : b));
-        persist(nb, bIdx); // L4: persist đúng board được redo
-        return nb;
-      });
+      const curBoards = boardsRef.current || [];
+      undoRef.current.push(JSON.stringify({ bIdx, objects: curBoards[bIdx]?.objects || [] }));
+      if (undoRef.current.length > 30) undoRef.current.shift();
+      const nb = curBoards.map((b, i) => (i === bIdx ? { ...b, objects: next } : b));
+      setBoards(nb);
+      persist(nb, bIdx); // L4: persist đúng board được redo
       setSelectedId(null);
       setCanUndo(true);
       setCanRedo(redoRef.current.length > 0);
     } catch { /* ignore */ }
-  }, [activeIdx, persist]);
+  }, [persist]);
 
   // ── Canvas sizing + render ──
   const viewRef = useRef({ w: 600, h: 440, dpr: 1 });
@@ -903,9 +926,9 @@ export default function CanvasWhiteboard({ onCheckDrawing, isAnalyzing, bookKey 
       {/* Hàng zoom + hành động */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <button title="Thu nhỏ" onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))} style={barBtn(false)}><ZoomIn size={14} style={{ transform: "scaleX(-1)" }} /></button>
+          <button title="Thu nhỏ" onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))} style={barBtn(false)}><ZoomOut size={14} style={{ transform: "scaleX(-1)" }} /></button>
           <span style={{ fontSize: "0.72rem", fontWeight: 800, minWidth: 44, textAlign: "center" }}>{Math.round(zoom * 100)}%</span>
-          <button title="Phóng to" onClick={() => setZoom((z) => Math.min(3, z + 0.15))} style={barBtn(false)}><ZoomOut size={14} style={{ transform: "scaleX(-1)" }} /></button>
+          <button title="Phóng to" onClick={() => setZoom((z) => Math.min(3, z + 0.15))} style={barBtn(false)}><ZoomIn size={14} style={{ transform: "scaleX(-1)" }} /></button>
           <button title="Reset khung nhìn (100%)" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={barBtn(false)}><Maximize2 size={14} /></button>
         </div>
         <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>

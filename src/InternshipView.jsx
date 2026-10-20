@@ -7,6 +7,7 @@ import {
   Search,
   Calendar,
   CalendarDays,
+  CalendarRange,
   FileText,
   X,
   ChevronLeft,
@@ -15,10 +16,16 @@ import {
   Check,
   Sparkles,
   BookOpen,
+  Copy,
+  Download,
+  RotateCcw,
 } from "lucide-react";
 import { safeGetJSON, safeSetJSON } from "./safeStorage";
+import { appEvents, AppEvents, DataDomains } from "./core/appEvents.js";
+import { exportWord, exportTxt, escapeHtml, nl2br } from "./exportDoc";
 
 const STORAGE_KEY = "sgk_internship";
+const RANGE_KEY = "sgk_internship_range";
 
 const dateKey = (date) => {
   const year = date.getFullYear();
@@ -43,6 +50,34 @@ const shortDate = (key) => {
   } catch { return key || "-"; }
 };
 
+// Khoảng "YYYY-MM-DD" so sánh được trực tiếp bằng chuỗi (lexicographic).
+const addDays = (date, n) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+};
+const monthRangeOf = (today) => {
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  return { from: dateKey(new Date(y, m, 1)), to: dateKey(new Date(y, m + 1, 0)) };
+};
+// Học kỳ (xấp xỉ năm học VN): HK1 = 05/09 → 15/01 năm sau, HK2 = 16/01 → 31/05.
+const semesterRangeOf = (today) => {
+  const y = today.getFullYear();
+  if (today.getMonth() >= 7) return { from: `${y}-09-05`, to: `${y + 1}-01-15` };
+  return { from: `${y}-01-16`, to: `${y}-05-31` };
+};
+const hasReflection = (entry) => {
+  const r = entry?.reflection;
+  return !!r && Object.values(r).some((v) => String(v || "").trim());
+};
+const formatRangeLabel = (from, to) => {
+  if (from && to) return `${shortDate(from)} – ${shortDate(to)}`;
+  if (from) return `từ ${shortDate(from)}`;
+  if (to) return `đến ${shortDate(to)}`;
+  return "";
+};
+
 export default function InternshipView() {
   const [entries, setEntries] = useState([]);
   // Phase 8: removed fake storage loop
@@ -58,6 +93,14 @@ export default function InternshipView() {
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const [showAllDates, setShowAllDates] = useState(false);
+  // Khoảng thời gian "từ … tới …" trên lịch (lưu lại giữa các lần mở view)
+  const [rangeFrom, setRangeFrom] = useState(() => {
+    try { const r = safeGetJSON(RANGE_KEY, null); return r && typeof r.from === "string" ? r.from : ""; } catch { return ""; }
+  });
+  const [rangeTo, setRangeTo] = useState(() => {
+    try { const r = safeGetJSON(RANGE_KEY, null); return r && typeof r.to === "string" ? r.to : ""; } catch { return ""; }
+  });
+  const [fReflect, setFReflect] = useState(""); // "" | "done" | "todo"
 
   // Form state
   const [formData, setFormData] = useState({
@@ -90,7 +133,16 @@ export default function InternshipView() {
     }
   }, []);
 
+  // Lưu khoảng thời gian đang xem
+  useEffect(() => {
+    try { safeSetJSON(RANGE_KEY, { from: rangeFrom, to: rangeTo }); } catch (e) {
+      console.warn("[InternshipView] failed to persist range", e);
+    }
+  }, [rangeFrom, rangeTo]);
+
   // Save entries to localStorage
+  // P0 • bắn event riêng (alias tự sinh DATA_UPDATED + qua cross-tab).
+  // Trước đây lưu/xóa nhật ký hoàn toàn im lặng với bus và tab khác.
   const saveEntries = (updatedEntries) => {
     try {
       const res = safeSetJSON(STORAGE_KEY, updatedEntries);
@@ -99,6 +151,8 @@ export default function InternshipView() {
         else console.warn("[InternshipView] safeSetJSON failed for sgk_internship", res);
       }
       setEntries(updatedEntries);
+      try { appEvents.emit(AppEvents.INTERNSHIP_UPDATED, { source: "InternshipView", domain: DataDomains.INTERNSHIP, op: "saveEntries", count: updatedEntries.length }); }
+      catch (e) { console.warn("[InternshipView] emit failed", e); }
     } catch (e) {
       console.warn("[InternshipView] Failed to save internship entries:", e);
       setEntries(updatedEntries);
@@ -107,8 +161,12 @@ export default function InternshipView() {
 
   const handleCreate = () => {
     setEditingId(null);
+    // Mặc định lấy ngày đang chọn (nếu đang xem theo ngày), tiện ghi nhanh
+    const defaultDate = (!rangeFrom && !rangeTo && !showAllDates && selectedDate)
+      ? selectedDate
+      : new Date().toISOString().split("T")[0];
     setFormData({
-      date: new Date().toISOString().split("T")[0],
+      date: defaultDate,
       school: "",
       class: "",
       subject: "",
@@ -200,17 +258,19 @@ export default function InternshipView() {
     setReflectionId(null);
   };
 
-  // Filter entries
+  // Filter entries — tìm cả hoạt động & phản ánh (không chỉ trường/lớp/môn/chủ đề)
   const filteredEntries = entries.filter((entry) => {
     const s = searchTerm.trim().toLowerCase();
-    const matchesSearch =
-      s === "" ||
-      entry.school?.toLowerCase().includes(s) ||
-      entry.class?.toLowerCase().includes(s) ||
-      entry.subject?.toLowerCase().includes(s) ||
-      entry.topic?.toLowerCase().includes(s);
-
-    return matchesSearch;
+    if (s === "") return true;
+    const r = entry.reflection || {};
+    const haystack = [
+      entry.school, entry.class, entry.subject, entry.topic, entry.activities,
+      r.whatWentWell, r.whatToImprove, r.studentEngagement, r.teacherFeedback, r.notes,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(s);
   });
 
   const sortedEntries = useMemo(
@@ -224,13 +284,39 @@ export default function InternshipView() {
     [entries],
   );
 
+  // ── Khoảng thời gian ──
+  const rangeActive = !!(rangeFrom || rangeTo);
+  const inRange = (key) => {
+    if (!key) return false;
+    if (rangeFrom && key < rangeFrom) return false;
+    if (rangeTo && key > rangeTo) return false;
+    return true;
+  };
+  const rangeStats = useMemo(() => {
+    if (!rangeActive) return null;
+    const list = entries.filter((e) => {
+      if (!e.date) return false;
+      if (rangeFrom && e.date < rangeFrom) return false;
+      if (rangeTo && e.date > rangeTo) return false;
+      return true;
+    });
+    const hours = list.reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+    const days = new Set(list.map((e) => e.date).filter(Boolean)).size;
+    return { count: list.length, hours, days };
+  }, [entries, rangeActive, rangeFrom, rangeTo]);
+
+  const isFiltering = !!(searchTerm.trim() || fSubject || fReflect || rangeActive);
+
   const visibleEntries = useMemo(() => {
-    const list = showAllDates
-      ? sortedEntries
-      : sortedEntries.filter((entry) => entry.date === selectedDate);
-    if (!fSubject) return list;
-    return list.filter((e) => e.subject === fSubject);
-  }, [sortedEntries, showAllDates, selectedDate, fSubject]);
+    let list = sortedEntries;
+    if (rangeActive) list = list.filter((e) => inRange(e.date));
+    else if (!showAllDates) list = list.filter((entry) => entry.date === selectedDate);
+    if (fSubject) list = list.filter((e) => e.subject === fSubject);
+    if (fReflect === "done") list = list.filter(hasReflection);
+    else if (fReflect === "todo") list = list.filter((e) => !hasReflection(e));
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedEntries, showAllDates, selectedDate, fSubject, fReflect, rangeActive, rangeFrom, rangeTo]);
 
   const selectedEntries = visibleEntries;
 
@@ -280,6 +366,8 @@ export default function InternshipView() {
   const selectDate = (date) => {
     setSelectedDate(dateKey(date));
     setShowAllDates(false);
+    // Chọn 1 ngày = xem ngày đó → bỏ lọc khoảng để tránh xung đột hiển thị
+    if (rangeFrom || rangeTo) { setRangeFrom(""); setRangeTo(""); }
   };
 
   const reflectionItems = (r) => [
@@ -289,6 +377,82 @@ export default function InternshipView() {
     ["GV hướng dẫn", r?.teacherFeedback, "#6d28d9"],
     ["Ghi chú", r?.notes, "#475569"],
   ].filter(([, v]) => String(v || "").trim());
+
+  // ── Nhân bản nhật ký (ghi nhanh buổi lặp lại) ──
+  const handleDuplicate = (entry) => {
+    const now = new Date().toISOString();
+    const copy = {
+      ...entry,
+      id: `internship_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: now,
+      updatedAt: now,
+      reflection: null,
+    };
+    saveEntries([...entries, copy]);
+  };
+
+  // ── Khoảng thời gian ──
+  const setRange = (from, to) => {
+    setRangeFrom(from || "");
+    setRangeTo(to || "");
+    if (from) {
+      try {
+        const d = dateFromKey(from);
+        setVisibleMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+      } catch { /* ignore */ }
+    }
+  };
+  const clearRange = () => { setRangeFrom(""); setRangeTo(""); };
+  const applyPreset = (kind) => {
+    const today = new Date();
+    if (kind === "7d") setRange(dateKey(addDays(today, -6)), dateKey(today));
+    else if (kind === "30d") setRange(dateKey(addDays(today, -29)), dateKey(today));
+    else if (kind === "month") { const r = monthRangeOf(today); setRange(r.from, r.to); }
+    else if (kind === "semester") { const r = semesterRangeOf(today); setRange(r.from, r.to); }
+  };
+
+  // ── Xuất báo cáo thực tập (Word / TXT) theo đúng phần đang xem ──
+  const exportEntries = (kind) => {
+    const list = [...visibleEntries].sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (!list.length) return;
+    const scope = rangeActive
+      ? `Khoảng ${formatRangeLabel(rangeFrom, rangeTo)}`
+      : showAllDates ? "Tất cả nhật ký" : formatLongDate(selectedDate);
+    const title = "Nhật ký thực tập";
+    const totalHours = list.reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+    const meta = [
+      `${list.length} nhật ký`,
+      `${totalHours % 1 ? totalHours.toFixed(1) : totalHours} giờ`,
+      scope,
+      `Xuất ${new Date().toLocaleString("vi-VN")}`,
+    ];
+    if (kind === "txt") {
+      const lines = [title.toUpperCase(), ...meta, ""];
+      for (const e of list) {
+        lines.push(`■ ${formatLongDate(e.date)}`);
+        lines.push(`  Trường: ${e.school || "—"} • Lớp: ${e.class || "—"} • Môn: ${e.subject || "—"}`);
+        lines.push(`  Chủ đề: ${e.topic || "—"}${e.hours ? ` • ${e.hours} giờ` : ""}`);
+        if (e.activities) lines.push(`  Hoạt động: ${String(e.activities).replace(/\n/g, "\n    ")}`);
+        const items = reflectionItems(e.reflection);
+        if (items.length) {
+          lines.push("  Phản ánh:");
+          for (const [label, val] of items) lines.push(`    - ${label}: ${val}`);
+        }
+        lines.push("");
+      }
+      exportTxt(title, lines.join("\n"));
+      return;
+    }
+    const body = list.map((e) => {
+      const items = reflectionItems(e.reflection);
+      return `<h2>${escapeHtml(formatLongDate(e.date))}</h2>` +
+        `<p><b>Trường:</b> ${escapeHtml(e.school || "—")} • <b>Lớp:</b> ${escapeHtml(e.class || "—")} • <b>Môn:</b> ${escapeHtml(e.subject || "—")}</p>` +
+        `<p><b>Chủ đề:</b> ${escapeHtml(e.topic || "—")}${e.hours ? ` • <b>${escapeHtml(String(e.hours))}</b> giờ` : ""}</p>` +
+        (e.activities ? `<p><b>Hoạt động:</b><br>${nl2br(e.activities)}</p>` : "") +
+        (items.length ? `<p><b>Phản ánh sau giờ dạy:</b></p><ul>${items.map(([l, v]) => `<li><b>${escapeHtml(l)}:</b> ${nl2br(v)}</li>`).join("")}</ul>` : "");
+    }).join("<hr>");
+    exportWord(title, `<h1>${escapeHtml(title)}</h1><div class="meta">${meta.map(escapeHtml).join(" • ")}</div>${body}`);
+  };
 
   return (
     <div className="itn-root">
@@ -301,6 +465,7 @@ export default function InternshipView() {
         .itn-stats { display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
         .itn-stat { font-size:11.5px; font-weight:700; color:#334155; background:rgba(255,255,255,0.85); border:1px solid #e2e8f0; padding:4px 10px; border-radius:999px; display:inline-flex; align-items:center; gap:5px; }
         .itn-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .itn-export { display:flex; gap:6px; }
         .itn-search { flex:1 1 200px; min-width:170px; position:relative; }
         .itn-search input { width:100%; padding:8px 12px 8px 32px; border-radius:10px; border:1px solid #e2e8f0; font-size:13px; background:#fff; }
         .itn-search > svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8; }
@@ -318,6 +483,22 @@ export default function InternshipView() {
         .itn-navbtn:hover { border-color:#f59e0b; color:#b45309; }
         .itn-today { width:100%; margin-top:9px; font-size:12px; font-weight:800; padding:7px; border-radius:9px; border:1px dashed #fcd34d; background:#fffbeb; color:#b45309; cursor:pointer; }
         .itn-today:hover { background:#fef3c7; }
+        .itn-range { border:1px dashed var(--border-color); border-radius:12px; padding:9px 10px; margin-bottom:10px; background:var(--surface-soft, #f8fafc); display:flex; flex-direction:column; gap:7px; }
+        .itn-range-title { font-size:11px; font-weight:800; color:var(--text-muted); display:flex; align-items:center; gap:6px; text-transform:uppercase; letter-spacing:0.04em; }
+        .itn-range-inputs { display:flex; align-items:flex-end; gap:6px; flex-wrap:wrap; }
+        .itn-range-inputs label { flex:1 1 108px; display:flex; flex-direction:column; gap:3px; font-size:10.5px; font-weight:700; color:var(--text-muted); }
+        .itn-range-inputs input { width:100%; padding:6px 8px; border-radius:8px; border:1px solid var(--border-color, #e2e8f0); font-size:12.5px; background:var(--surface, #fff); color:var(--text-dark); }
+        .itn-range-inputs input:focus { outline:none; border-color:var(--color-action, #f59e0b); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-action, #f59e0b) 18%, transparent); }
+        .itn-range-arrow { color:var(--text-muted); font-weight:800; padding-bottom:7px; }
+        .itn-range-presets { display:flex; flex-wrap:wrap; gap:5px; }
+        .itn-range-chip { font-size:11px; font-weight:700; padding:4px 9px; border-radius:999px; border:1px solid var(--border-color, #e2e8f0); background:var(--surface, #fff); color:var(--text-mid, #475569); cursor:pointer; }
+        .itn-range-chip:hover { border-color:var(--color-action, #f59e0b); color:var(--color-action-strong, #b45309); }
+        .itn-range-chip.clear { color:#b45309; border-color:#fcd34d; background:#fffbeb; display:inline-flex; align-items:center; gap:4px; }
+        .itn-range-stat { font-size:11.5px; font-weight:700; color:var(--text-mid); display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+        .itn-range-stat b { color:var(--color-action-strong, #b45309); }
+        .itn-day.in-range { background:var(--color-action-soft, #fffbeb); border-color:#fde68a; }
+        .itn-day.in-range.has::after { background:#b45309; }
+        .itn-day.sel.in-range { background:var(--color-action, #f59e0b); color:#fff; }
         .itn-week { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; margin:10px 0 5px; font-size:10px; font-weight:800; color:#94a3b8; text-align:center; }
         .itn-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
         .itn-day { aspect-ratio:1; border-radius:8px; border:1px solid transparent; background:transparent; font-size:12px; font-weight:600; color:#334155; cursor:pointer; position:relative; display:flex; align-items:center; justify-content:center; }
@@ -376,7 +557,7 @@ export default function InternshipView() {
         <div className="itn-toolbar">
           <div className="itn-search">
             <Search size={15} />
-            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Tìm trường, lớp, môn, chủ đề…" aria-label="Tìm nhật ký" />
+            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Tìm trường, lớp, môn, chủ đề, hoạt động, phản ánh…" aria-label="Tìm nhật ký" />
           </div>
           {subjects.length > 0 && (
             <select value={fSubject} onChange={(e) => setFSubject(e.target.value)} aria-label="Lọc môn">
@@ -384,9 +565,22 @@ export default function InternshipView() {
               {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowAllDates((v) => !v)}>
+          <select value={fReflect} onChange={(e) => setFReflect(e.target.value)} aria-label="Lọc theo phản ánh">
+            <option value="">Mọi phản ánh</option>
+            <option value="done">Đã phản ánh</option>
+            <option value="todo">Chưa phản ánh</option>
+          </select>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowAllDates((v) => !v)} disabled={rangeActive}>
             {showAllDates ? "Theo ngày" : "Xem tất cả"}
           </button>
+          <div className="itn-export">
+            <button className="btn btn-secondary btn-sm" onClick={() => exportEntries("word")} disabled={!visibleEntries.length} title="Xuất phần đang xem ra Word">
+              <Download size={14} /> Word
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => exportEntries("txt")} disabled={!visibleEntries.length} title="Xuất phần đang xem ra TXT">
+              <Download size={14} /> TXT
+            </button>
+          </div>
           <button className="btn btn-primary btn-sm" onClick={handleCreate}><Plus size={14} /> Thêm nhật ký</button>
         </div>
       </div>
@@ -490,6 +684,38 @@ export default function InternshipView() {
       <div className="itn-work">
         {/* ── Lịch ── */}
         <aside className="itn-cal" aria-label="Lịch thực tập">
+          {/* Khoảng thời gian từ … tới … (lọc cả lịch lẫn danh sách) */}
+          <div className="itn-range">
+            <div className="itn-range-title"><CalendarRange size={13} /> Khoảng thời gian</div>
+            <div className="itn-range-inputs">
+              <label htmlFor="itn-range-from">Từ ngày
+                <input id="itn-range-from" type="date" value={rangeFrom}
+                  max={rangeTo || undefined}
+                  onChange={(e) => setRangeFrom(e.target.value)} />
+              </label>
+              <span className="itn-range-arrow" aria-hidden="true">→</span>
+              <label htmlFor="itn-range-to">Tới ngày
+                <input id="itn-range-to" type="date" value={rangeTo}
+                  min={rangeFrom || undefined}
+                  onChange={(e) => setRangeTo(e.target.value)} />
+              </label>
+            </div>
+            <div className="itn-range-presets">
+              <button type="button" className="itn-range-chip" onClick={() => applyPreset("7d")}>7 ngày</button>
+              <button type="button" className="itn-range-chip" onClick={() => applyPreset("30d")}>30 ngày</button>
+              <button type="button" className="itn-range-chip" onClick={() => applyPreset("month")}>Tháng này</button>
+              <button type="button" className="itn-range-chip" onClick={() => applyPreset("semester")}>Học kỳ</button>
+              {rangeActive && (
+                <button type="button" className="itn-range-chip clear" onClick={clearRange}><RotateCcw size={11} /> Xóa khoảng</button>
+              )}
+            </div>
+            {rangeActive && rangeStats && (
+              <div className="itn-range-stat">
+                <CalendarDays size={12} /> <b>{rangeStats.count}</b> nhật ký • <b>{rangeStats.days}</b> ngày • <b>{rangeStats.hours % 1 ? rangeStats.hours.toFixed(1) : rangeStats.hours}</b> giờ
+              </div>
+            )}
+          </div>
+
           <div className="itn-cal-top">
             <span className="itn-cal-title"><Calendar size={15} /> {monthLabelCap}</span>
             <div className="itn-cal-nav">
@@ -497,7 +723,7 @@ export default function InternshipView() {
               <button className="itn-navbtn" onClick={() => changeMonth(1)} title="Tháng sau" aria-label="Tháng sau"><ChevronRight size={15} /></button>
             </div>
           </div>
-          <button className="itn-today" onClick={() => { const today = new Date(); setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1)); selectDate(today); }}>
+          <button className="itn-today" onClick={() => { clearRange(); const today = new Date(); setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1)); selectDate(today); }}>
             Về hôm nay
           </button>
           <div className="itn-week">{["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((d) => <span key={d}>{d}</span>)}</div>
@@ -506,12 +732,13 @@ export default function InternshipView() {
               if (!date) return <span key={`empty-${index}`} className="itn-day-empty" />;
               const key = dateKey(date);
               const isToday = key === dateKey(new Date());
-              const isSelected = !showAllDates && key === selectedDate;
+              const isSelected = !showAllDates && !rangeActive && key === selectedDate;
+              const isInRange = rangeActive && inRange(key);
               return (
                 <button key={key}
-                  className={`itn-day${isSelected ? " sel" : ""}${isToday ? " today" : ""}${entryDates.has(key) ? " has" : ""}`}
+                  className={`itn-day${isSelected ? " sel" : ""}${isToday ? " today" : ""}${entryDates.has(key) ? " has" : ""}${isInRange ? " in-range" : ""}`}
                   onClick={() => selectDate(date)}
-                  aria-label={`${date.getDate()} tháng ${date.getMonth() + 1}${entryDates.has(key) ? ", có nhật ký" : ""}`}>
+                  aria-label={`${date.getDate()} tháng ${date.getMonth() + 1}${entryDates.has(key) ? ", có nhật ký" : ""}${isInRange ? ", trong khoảng đang lọc" : ""}`}>
                   {date.getDate()}
                 </button>
               );
@@ -524,8 +751,8 @@ export default function InternshipView() {
         <section aria-label="Danh sách nhật ký">
           <div className="itn-panel-head">
             <div>
-              <h2>{showAllDates ? "Tất cả nhật ký" : formatLongDate(selectedDate)}</h2>
-              <p>{selectedEntries.length} nhật ký{searchTerm || fSubject ? " • đang lọc" : ""}</p>
+              <h2>{rangeActive ? `Khoảng ${formatRangeLabel(rangeFrom, rangeTo)}` : showAllDates ? "Tất cả nhật ký" : formatLongDate(selectedDate)}</h2>
+              <p>{selectedEntries.length} nhật ký{isFiltering ? " • đang lọc" : ""}</p>
             </div>
           </div>
           {selectedEntries.length > 0 ? (
@@ -570,6 +797,7 @@ export default function InternshipView() {
                           title={hasRefl ? "Xem / sửa phản ánh" : "Viết phản ánh sau giờ dạy"}>
                           <FileText size={13} /> {hasRefl ? "Xem phản ánh" : "Viết phản ánh"}
                         </button>
+                        <button className="itn-icobtn" onClick={() => handleDuplicate(entry)} title="Nhân bản nhật ký" aria-label="Nhân bản nhật ký"><Copy size={14} /></button>
                         <button className="itn-icobtn" onClick={() => handleEdit(entry)} title="Sửa nhật ký" aria-label="Sửa nhật ký"><Pencil size={14} /></button>
                         <button className="itn-icobtn danger" onClick={() => handleDelete(entry.id)} title="Xóa nhật ký" aria-label="Xóa nhật ký"><Trash2 size={14} /></button>
                       </div>
@@ -581,10 +809,13 @@ export default function InternshipView() {
           ) : (
             <div className="itn-empty">
               <Calendar size={30} />
-              <strong>{searchTerm || fSubject ? "Không tìm thấy nhật ký phù hợp" : "Chưa có nhật ký cho ngày này"}</strong>
-              <span style={{ fontSize: 12 }}>{searchTerm || fSubject ? "Thử từ khóa khác hoặc chọn một ngày khác." : "Chọn ngày có chấm cam hoặc thêm nhật ký mới để bắt đầu."}</span>
-              {!searchTerm && !fSubject && (
+              <strong>{isFiltering ? "Không tìm thấy nhật ký phù hợp" : "Chưa có nhật ký cho ngày này"}</strong>
+              <span style={{ fontSize: 12 }}>{isFiltering ? "Thử đổi khoảng thời gian, từ khóa hoặc bộ lọc khác." : "Chọn ngày có chấm cam hoặc thêm nhật ký mới để bắt đầu."}</span>
+              {!isFiltering && (
                 <button className="btn btn-primary btn-sm" onClick={handleCreate}><Plus size={14} /> Thêm nhật ký</button>
+              )}
+              {rangeActive && (
+                <button className="btn btn-secondary btn-sm" onClick={clearRange}><RotateCcw size={14} /> Xóa khoảng thời gian</button>
               )}
             </div>
           )}

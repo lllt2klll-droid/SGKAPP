@@ -3,9 +3,9 @@
 export const tocBooks = [
  {
   "key": "tiengviet1t1",
-  "title": "tiếng việt 1 - tập 1",
+  "title": "Tiếng Việt 1 - Tập 1",
   "grade": 1,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 1,
   "items": [
    {
@@ -621,9 +621,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet1t2",
-  "title": "tiếng việt 1 - tập 2",
+  "title": "Tiếng Việt 1 - Tập 2",
   "grade": 1,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 2,
   "items": [
    {
@@ -1029,9 +1029,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet2t1",
-  "title": "tiếng việt 2 - tập 1",
+  "title": "Tiếng Việt 2 - Tập 1",
   "grade": 2,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 1,
   "items": [
    {
@@ -1150,9 +1150,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet2t2",
-  "title": "tiếng việt 2 - tập 2",
+  "title": "Tiếng Việt 2 - Tập 2",
   "grade": 2,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 2,
   "items": [
    {
@@ -1418,9 +1418,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet3t1",
-  "title": "tiếng việt 3 - tập 1",
+  "title": "Tiếng Việt 3 - Tập 1",
   "grade": 3,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 1,
   "items": [
    {
@@ -1693,9 +1693,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet3t2",
-  "title": "tiếng việt 3 - tập 2",
+  "title": "Tiếng Việt 3 - Tập 2",
   "grade": 3,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 2,
   "items": [
    {
@@ -1926,9 +1926,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet4t1",
-  "title": "tiếng việt 4 - tập 1",
+  "title": "Tiếng Việt 4 - Tập 1",
   "grade": 4,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 1,
   "items": [
    {
@@ -2201,9 +2201,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet4t2",
-  "title": "tiếng việt 4 - tập 2",
+  "title": "Tiếng Việt 4 - Tập 2",
   "grade": 4,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 2,
   "items": [
    {
@@ -2462,9 +2462,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet5t1",
-  "title": "tiếng việt 5 - tập 1",
+  "title": "Tiếng Việt 5 - Tập 1",
   "grade": 5,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 1,
   "items": [
    {
@@ -2751,9 +2751,9 @@ export const tocBooks = [
  },
  {
   "key": "tiengviet5t2",
-  "title": "tiếng việt 5 - tập 2",
+  "title": "Tiếng Việt 5 - Tập 2",
   "grade": 5,
-  "subject": "TiengViet",
+  "subject": "Tiếng Việt",
   "term": 2,
   "items": [
    {
@@ -3026,9 +3026,9 @@ export const tocBooks = [
  },
  {
   "key": "toan1t1",
-  "title": "Toán 1 - tập 1",
+  "title": "Toán 1 - Tập 1",
   "grade": 1,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 1,
   "items": [
    {
@@ -3224,9 +3224,9 @@ export const tocBooks = [
  },
  {
   "key": "toan1t2",
-  "title": "Toán 1 - tập 2",
+  "title": "Toán 1 - Tập 2",
   "grade": 1,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 2,
   "items": [
    {
@@ -3422,9 +3422,9 @@ export const tocBooks = [
  },
  {
   "key": "toan2t1",
-  "title": "Toán 2 - tập 1",
+  "title": "Toán 2 - Tập 1",
   "grade": 2,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 1,
   "items": [
    {
@@ -3739,9 +3739,9 @@ export const tocBooks = [
  },
  {
   "key": "toan2t2",
-  "title": "Toán 2 - tập 2",
+  "title": "Toán 2 - Tập 2",
   "grade": 2,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 2,
   "items": [
    {
@@ -4077,9 +4077,9 @@ export const tocBooks = [
  },
  {
   "key": "toan3t1",
-  "title": "Toán 3 - tập 1",
+  "title": "Toán 3 - Tập 1",
   "grade": 3,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 1,
   "items": [
    {
@@ -4450,9 +4450,9 @@ export const tocBooks = [
  },
  {
   "key": "toan3t2",
-  "title": "Toán 3 - tập 2",
+  "title": "Toán 3 - Tập 2",
   "grade": 3,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 2,
   "items": [
    {
@@ -4788,9 +4788,9 @@ export const tocBooks = [
  },
  {
   "key": "toan4t1",
-  "title": "Toán 4 - tập 1",
+  "title": "Toán 4 - Tập 1",
   "grade": 4,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 1,
   "items": [
    {
@@ -5112,9 +5112,9 @@ export const tocBooks = [
  },
  {
   "key": "toan4t2",
-  "title": "Toán 4 - tập 2",
+  "title": "Toán 4 - Tập 2",
   "grade": 4,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 2,
   "items": [
    {
@@ -5422,9 +5422,9 @@ export const tocBooks = [
  },
  {
   "key": "toan5t1",
-  "title": "Toán 5 - tập 1",
+  "title": "Toán 5 - Tập 1",
   "grade": 5,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 1,
   "items": [
    {
@@ -5725,9 +5725,9 @@ export const tocBooks = [
  },
  {
   "key": "toan5t2",
-  "title": "Toán 5 - tập 2",
+  "title": "Toán 5 - Tập 2",
   "grade": 5,
-  "subject": "Toan",
+  "subject": "Toán",
   "term": 2,
   "items": [
    {
@@ -6066,7 +6066,7 @@ export const tocBooks = [
 import { STORAGE_KEYS } from "./core/storageKeys.js";
 import { safeGetJSON, safeSetJSON } from "./safeStorage.js";
 
-const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+const norm = (s) => String(s || '').toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 export const TOC_PDF_OFFSET = 1;
 export const FILE_TOC_PREFIX = STORAGE_KEYS.TOC_FILE_MARKER;
 export function makeFileTocKey(book) {

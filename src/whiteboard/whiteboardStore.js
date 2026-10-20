@@ -218,6 +218,11 @@ export async function migrateBookRefs(oldFilename, newFilename) {
 }
 
 export function uid(prefix = "o") {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return `${prefix}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    }
+  } catch {}
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
@@ -239,6 +244,9 @@ export function blankBoard(name = "Bảng mới") {
     snap: false,
     smartAlign: true,
     smartSpacing: true,
+    // Font mặc định của bảng (null = Quicksand). Object nào chưa có fontFamily riêng
+    // sẽ hiển thị + xuất file theo font này → tải về giống màn hình.
+    defaultFontFamily: null,
     objects: [],
     connectors: [],
   };
@@ -262,9 +270,11 @@ export function blankObject(kind, patch = {}) {
     strokeDash: "", // "" solid | "6 4" dashed | "2 4" dotted
     color: "#1e293b",
     fontSize: 15,
+    fontFamily: "", // "" = theo font mặc định của bảng (đồng nhất màn hình + lúc tải về)
     bold: false,
     italic: false,
     align: "center",
+    bullets: false, // mỗi dòng text thêm "• " đầu dòng (trang trí nhanh sơ đồ)
     src: null, // image dataURL (legacy) — mới dùng imageId + IndexedDB
     imageId: null, // id trỏ Blob trong IndexedDB
     points: null, // stroke: [{x,y}...] tương đối theo x/y
@@ -278,6 +288,36 @@ export function blankObject(kind, patch = {}) {
     citation: "", // hiển thị trích dẫn ngắn
     ...patch,
   };
+}
+
+// ── Font chữ dùng chung cho Whiteboard (màn hình + file tải về) ──
+// value là CSS font-family stack đầy đủ để SVG export giữ nguyên khi serialize.
+export const WB_DEFAULT_FONT_STACK =
+  '"Quicksand", "Mulish", "Be Vietnam Pro", "Segoe UI", Tahoma, Arial, sans-serif';
+export const WB_FONTS = [
+  { id: "default", label: "Mặc định", value: "" },
+  { id: "quicksand", label: "Quicksand", value: '"Quicksand", "Mulish", "Be Vietnam Pro", "Segoe UI", sans-serif' },
+  { id: "mulish", label: "Mulish", value: '"Mulish", "Quicksand", "Be Vietnam Pro", "Segoe UI", sans-serif' },
+  { id: "andika", label: "Andika", value: '"Andika", "Quicksand", "Be Vietnam Pro", "Segoe UI", sans-serif' },
+  { id: "bevn", label: "Be Vietnam Pro", value: '"Be Vietnam Pro", "Segoe UI", Arial, sans-serif' },
+  { id: "arial", label: "Arial", value: 'Arial, Helvetica, "Segoe UI", sans-serif' },
+  { id: "times", label: "Times New Roman", value: '"Times New Roman", Times, serif' },
+  { id: "notoserif", label: "Noto Serif", value: '"Noto Serif", Georgia, "Times New Roman", serif' },
+];
+export const WB_FONT_KEY = "sgk:whiteboard-font";
+
+export function resolveWbFont(oOrValue, boardDefault = "") {
+  const v =
+    typeof oOrValue === "string"
+      ? oOrValue
+      : typeof oOrValue?.fontFamily === "string"
+        ? oOrValue.fontFamily
+        : "";
+  const t = String(v || "").trim();
+  if (t) return t;
+  const b = String(boardDefault || "").trim();
+  if (b) return b;
+  return WB_DEFAULT_FONT_STACK;
 }
 
 export function getWrapLines(text, width, fontSize) {
@@ -551,30 +591,28 @@ export function duplicateBoard(id, suffix = " (bản sao)") {
   const b = loadBoard(id);
   if (!b) return null;
   const idMap = new Map();
+  const clonedObjects = (b.objects || []).map((o) => {
+    const nid = uid("o");
+    idMap.set(o.id, nid);
+    const src = o.imageId ? null : o.src;
+    return { ...o, id: nid, src, parentId: null };
+  });
+  const clonedConns = (b.connectors || []).map((c) => ({ ...c, id: uid("c") }));
+  // Pass 2: remap parentId/connector theo idMap đầy đủ (không giữ id cũ board gốc)
+  const rel = remapCloneRelations(
+    clonedObjects.map((o, i) => ({ ...o, parentId: (b.objects[i] || {}).parentId || null })),
+    clonedConns.map((c, i) => ({ ...c, fromId: (b.connectors[i] || {}).fromId, toId: (b.connectors[i] || {}).toId })),
+    idMap,
+  );
   const clone = {
     ...b,
     id: uid("b"),
     name: (b.name || "Bảng") + suffix,
     createdAt: now(),
     updatedAt: now(),
-    objects: (b.objects || []).map((o) => {
-      const nid = uid("o");
-      idMap.set(o.id, nid);
-      const src = o.imageId ? null : o.src;
-      return { ...o, id: nid, src, parentId: o.parentId ? idMap.get(o.parentId) || o.parentId : null };
-    }),
-    connectors: (b.connectors || []).map((c) => ({ ...c, id: uid("c") })),
+    objects: rel.objects,
+    connectors: rel.connectors.map((c, i) => ({ ...c, id: clonedConns[i]?.id || uid("c") })),
   };
-  const known = new Set(clone.objects.map((o) => o.id));
-  clone.objects = clone.objects.map((o) => ({
-    ...o,
-    parentId: o.parentId && idMap.has(o.parentId) ? idMap.get(o.parentId) : o.parentId && [...idMap.values()].includes(o.parentId) ? o.parentId : null,
-  }));
-  clone.connectors = clone.connectors.map((c) => ({
-    ...c,
-    fromId: idMap.get(c.fromId) || c.fromId,
-    toId: idMap.get(c.toId) || c.toId,
-  })).filter((c) => known.has(c.fromId) && known.has(c.toId));
   const isDupMigrated = safeGetString(WB_MIGRATION_KEY, null) === "1";
   if (isDupMigrated) {
     // IDB canonical — fire-and-forget legacy compat, cache only after verify
@@ -648,29 +686,26 @@ export async function duplicateBoardAsync(id, suffix = " (bản sao)") {
   const b = await loadBoardAsync(id);
   if (!b) throw new Error("Source board not found");
   const idMap = new Map();
+  const clonedObjects = (b.objects || []).map((o) => {
+    const nid = uid("o");
+    idMap.set(o.id, nid);
+    return { ...o, id: nid, src: o.imageId ? null : o.src, parentId: null };
+  });
+  const clonedConns = (b.connectors || []).map((c) => ({ ...c, id: uid("c") }));
+  const rel = remapCloneRelations(
+    clonedObjects.map((o, i) => ({ ...o, parentId: (b.objects[i] || {}).parentId || null })),
+    clonedConns.map((c, i) => ({ ...c, fromId: (b.connectors[i] || {}).fromId, toId: (b.connectors[i] || {}).toId })),
+    idMap,
+  );
   const clone = {
     ...b,
     id: uid("b"),
     name: (b.name || "Bảng") + suffix,
     createdAt: now(),
     updatedAt: now(),
-    objects: (b.objects || []).map((o) => {
-      const nid = uid("o");
-      idMap.set(o.id, nid);
-      return { ...o, id: nid, src: o.imageId ? null : o.src, parentId: o.parentId ? idMap.get(o.parentId) || o.parentId : null };
-    }),
-    connectors: (b.connectors || []).map((c) => ({ ...c, id: uid("c") })),
+    objects: rel.objects,
+    connectors: rel.connectors.map((c, i) => ({ ...c, id: clonedConns[i]?.id || uid("c") })),
   };
-  const known = new Set(clone.objects.map((o) => o.id));
-  clone.objects = clone.objects.map((o) => ({
-    ...o,
-    parentId: o.parentId && idMap.has(o.parentId) ? idMap.get(o.parentId) : o.parentId && [...idMap.values()].includes(o.parentId) ? o.parentId : null,
-  }));
-  clone.connectors = clone.connectors.map((c) => ({
-    ...c,
-    fromId: idMap.get(c.fromId) || c.fromId,
-    toId: idMap.get(c.toId) || c.toId,
-  })).filter((c) => known.has(c.fromId) && known.has(c.toId));
   const isDupMigrated = safeGetString(WB_MIGRATION_KEY, null) === "1";
   if (await idbAvailable()) {
     const ok = await idbPutBoard(clone);
@@ -722,25 +757,47 @@ export function wouldCreateCycle(objects, childId, newParentId) {
   return false;
 }
 export function repairCycles(objects) {
-  // cắt parentId gây cycle về null theo thứ tự an toàn
-  const parent = new Map(objects.map((o) => [o.id, o.parentId]));
-  for (const o of objects) {
-    if (wouldCreateCycle(objects.filter((x) => x.id !== o.id).concat([{ ...o, parentId: null }]), o.id, o.parentId)) {
-      // actually test original
-    }
-    if (o.parentId && wouldCreateCycle(objects, o.id, o.parentId)) {
+  // cắt parentId gây cycle về null theo thứ tự an toàn — không mutate mảng đầu vào
+  const cloned = (Array.isArray(objects) ? objects : []).map((o) => ({ ...o }));
+  const parent = new Map(cloned.map((o) => [o.id, o.parentId]));
+  for (const o of cloned) {
+    if (o.parentId && wouldCreateCycle(cloned, o.id, o.parentId)) {
       o.parentId = null;
+      parent.set(o.id, null);
     }
   }
-  return objects;
+  return cloned;
+}
+
+// Remap parentId/connector an toàn cho duplicate: build idMap đầy đủ trước, rồi mới remap.
+// parentId chỉ giữ khi trỏ tới object CÙNG board gốc (có trong idMap), ngược lại về null —
+// không bao giờ giữ id cũ của board gốc (tránh cross-board link).
+function remapCloneRelations(objects, connectors, idMap) {
+  const known = new Set((objects || []).map((o) => o.id));
+  const origIds = new Set(idMap.keys());
+  const nextObjects = (objects || []).map((o) => {
+    if (!o.parentId) return o;
+    if (idMap.has(o.parentId)) return { ...o, parentId: idMap.get(o.parentId) };
+    // parentId trỏ ra ngoài board gốc (hoặc id lạ) → cắt, không giữ id cũ
+    if (!origIds.has(o.parentId) && !known.has(o.parentId)) return { ...o, parentId: null };
+    return { ...o, parentId: null };
+  });
+  const nextConns = (connectors || [])
+    .map((c) => ({ ...c, fromId: idMap.get(c.fromId) || null, toId: idMap.get(c.toId) || null }))
+    .filter((c) => c.fromId && c.toId && known.has(c.fromId) && known.has(c.toId) && c.fromId !== c.toId);
+  return { objects: nextObjects, connectors: nextConns };
 }
 
 // ─── Validate JSON import — không để JSON lỗi crash app ───
 const VALID_KINDS = new Set(["node", "text", "shape", "note", "image", "stroke"]);
 const VALID_SHAPES = new Set(["rect", "rounded", "circle", "ellipse", "diamond", "triangle"]);
-const VALID_CONN = new Set(["line", "arrow", "double", "elbow"]);
+const VALID_CONN = new Set(["line", "arrow", "double", "elbow", "curve"]);
+
 const VALID_ANCHOR = new Set(["auto", "top", "right", "bottom", "left"]);
 
+const VALID_CONN_HEAD = new Set(["none", "arrow", "dot", "diamond"]);
+
+const VALID_CONN_DASH = new Set(["", "6 4", "2 4"]);
 function num(v, fb) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fb;
@@ -748,8 +805,11 @@ function num(v, fb) {
 
 export function normalizeBoard(b) {
   const board = { ...blankBoard(b.name || "Bảng nhập"), ...b };
+  const PLACEHOLDER_HEAD = "Trang này dạng ảnh";
   board.objects = (Array.isArray(b.objects) ? b.objects : [])
-    .filter((o) => o && typeof o === "object" && VALID_KINDS.has(o.kind) && !(o.kind === "note" && typeof o.text === "string" && String(o.text).includes("Trang này dạng ảnh")))
+    // Chỉ lọc placeholder legacy khi note MỞ ĐẦU bằng cụm đó (bản cũ do BookReader tạo).
+    // Không dùng includes() để tránh xóa nhầm khi user tự gõ cụm này giữa câu.
+    .filter((o) => o && typeof o === "object" && VALID_KINDS.has(o.kind) && !(o.kind === "note" && typeof o.text === "string" && String(o.text).trim().startsWith(PLACEHOLDER_HEAD)))
     .map((o, idx) => {
       // Fix persisted ephemeral blob: URL (lost after reload/revoke) → clear src so resolver re-hydrates from IndexedDB
       let src = o.src || null;
@@ -774,6 +834,7 @@ export function normalizeBoard(b) {
         z: Number.isFinite(Number(o.z)) ? Number(o.z) : idx,
         imageId: o.imageId ? String(o.imageId) : null,
         src,
+        fontFamily: typeof o.fontFamily === "string" ? o.fontFamily.slice(0, 160) : "",
         sourceRef: o.sourceRef && typeof o.sourceRef === "object" ? o.sourceRef : null,
         citation: typeof o.citation === "string" ? o.citation.slice(0, 300) : (o.sourceRef?.citation || ""),
       };
@@ -781,16 +842,27 @@ export function normalizeBoard(b) {
   const ids = new Set(board.objects.map((o) => o.id));
   board.connectors = (Array.isArray(b.connectors) ? b.connectors : [])
     .filter((c) => c && typeof c === "object" && ids.has(c.fromId) && ids.has(c.toId) && c.fromId !== c.toId)
-    .map((c) => ({
-      id: String(c.id || uid("c")),
-      fromId: String(c.fromId),
-      toId: String(c.toId),
-      type: VALID_CONN.has(c.type) ? c.type : "arrow",
-      color: typeof c.color === "string" ? c.color : "#475569",
-      width: Math.min(12, Math.max(1, num(c.width, 2))),
-      sourceAnchor: VALID_ANCHOR.has(c.sourceAnchor) ? c.sourceAnchor : "auto",
-      targetAnchor: VALID_ANCHOR.has(c.targetAnchor) ? c.targetAnchor : "auto",
-    }));
+    .map((c) => {
+      const type = VALID_CONN.has(c.type) ? c.type : "arrow";
+      // Style mới tường minh; board cũ thiếu thì suy từ type (không migrate ồn ào).
+      // (Logic mirror connHeads bên mindmapEngine — viết inline để tránh import vòng.)
+      const legacyHeads = type === "line" ? ["none", "none"] : type === "double" ? ["arrow", "arrow"] : ["none", "arrow"];
+      return {
+        id: String(c.id || uid("c")),
+        fromId: String(c.fromId),
+        toId: String(c.toId),
+        type,
+        color: typeof c.color === "string" ? c.color.slice(0, 20) : "#475569",
+        width: Math.min(12, Math.max(1, num(c.width, 2))),
+        label: typeof c.label === "string" ? c.label.slice(0, 120) : "",
+        sourceAnchor: VALID_ANCHOR.has(c.sourceAnchor) ? c.sourceAnchor : "auto",
+        targetAnchor: VALID_ANCHOR.has(c.targetAnchor) ? c.targetAnchor : "auto",
+        startHead: VALID_CONN_HEAD.has(c.startHead) ? c.startHead : legacyHeads[0],
+        endHead: VALID_CONN_HEAD.has(c.endHead) ? c.endHead : legacyHeads[1],
+        dash: VALID_CONN_DASH.has(c.dash) ? c.dash : "",
+        ...(Number.isFinite(Number(c.bend)) ? { bend: Math.max(0, Math.min(150, Number(c.bend))) } : {}),
+      };
+    });
   // parentId trỏ tới id không tồn tại -> null, và chỉ node mới được làm parent
   board.objects = board.objects.map((o) => {
     if (!o.parentId || !ids.has(o.parentId)) return { ...o, parentId: null };
@@ -803,7 +875,8 @@ export function normalizeBoard(b) {
     board.objects = repairCycles(board.objects);
   }
   // DEDUP: sửa board đã bị lặp nhiều ảnh/note do BookReader emit 3 lần (cực nặng)
-  // Giữ 1 object cho mỗi content hash (kind+text+source) trong cùng board
+  // Chỉ dedup khi CÙNG nguồn sách (srcKey non-empty và bằng nhau) — không xóa node
+  // do user tự tạo trùng text (vd 2 node "Nhánh mới" cạnh nhau, srcKey rỗng).
   if (board.objects.length > 1) {
     const seen = new Map();
     const deduped = [];
@@ -814,10 +887,16 @@ export function normalizeBoard(b) {
       const key = o.kind === "image" ? `image|${srcKey}|${o.width}x${o.height}` : `${o.kind}|${textKey}|${srcKey}`;
       if (seen.has(key)) {
         const prev = seen.get(key);
-        // nếu vị trí gần nhau (<250px) hoặc cùng source thì là duplicate do bug → bỏ
-        const near = Math.abs(prev.x - o.x) < 250 && Math.abs(prev.y - o.y) < 250;
-        const sameSource = !!srcKey && srcKey === `${prev.sourceRef?.filename || ""}#${prev.sourceRef?.page || ""}`;
-        if (near || sameSource) continue;
+        const prevSrcKey = prev.sourceRef ? `${prev.sourceRef?.filename || ""}#${prev.sourceRef?.page || ""}` : "";
+        // srcKey rỗng (node user tự tạo, template mindmap) → KHÔNG dedup, giữ lại
+        if (!srcKey || !prevSrcKey) {
+          seen.set(`${key}|${o.id}`, o);
+          deduped.push(o);
+          continue;
+        }
+        const sameSource = srcKey === prevSrcKey;
+        // chỉ coi là duplicate do bug khi cùng source; khác source (dù gần nhau) vẫn giữ
+        if (sameSource) continue;
       }
       seen.set(key, o);
       deduped.push(o);
@@ -836,6 +915,8 @@ export function normalizeBoard(b) {
   board.pan = { x: num(b?.pan?.x, 40), y: num(b?.pan?.y, 40) };
   board.smartSpacing = b.smartSpacing !== false;
   board.smartAlign = b.smartAlign !== false;
+  if (typeof b.defaultFontFamily === "string") board.defaultFontFamily = b.defaultFontFamily.slice(0, 160);
+  else if (board.defaultFontFamily == null) board.defaultFontFamily = "";
   board.objects = board.objects.map((o) => ({ ...o, autoSize: !!o.autoSize }));
   // đảm bảo box chứa vừa chữ (tự tăng kích thước hợp lý)
   board.objects = board.objects.map((o) => ensureFits(o));

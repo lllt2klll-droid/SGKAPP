@@ -1,6 +1,9 @@
 /* ============================================================
-   22 - WebToolbox — Kho Công cụ Web (desktop-like grid)
+   22-webtoolbox.css — Kho Công cụ Web (desktop-like grid)
    Ô vuông ~2cm = 76-88px, grid xếp gọn, kéo thả
+   SCOPE: chỉ .webtoolbox-view / .wt-* — KHÔNG đè .library-* nên thứ tự
+   với 22-library-redesign.css không quan trọng (giữ số 22 chung vì cùng đợt).
+   Quy ước cascade toàn app: xem chú thích import trong src/main.jsx.
    ============================================================ */
 
 .webtoolbox-view {
@@ -503,3 +506,111 @@
 [data-theme="dark"] .wt-tile-icon { background: var(--surface-soft); border-color: var(--border-color); }
 [data-theme="dark"] .wt-tile-add { background: var(--surface-soft); }
 [data-theme="dark"] .wt-search { background: var(--surface-soft); border-color: var(--border-color); }
+
+/* ============================================================
+   PHÂN NHÓM + GHIM + BÀN PHÍM (tinh tế, khớp ngôn ngữ toàn app)
+   - Chip lọc dùng .filter-btn chung (đồng bộ Thư viện/Cài đặt).
+   - Ô ghim có vạch accent mảnh trên đỉnh + huy hiệu ghim.
+   - Ô vuông có focus ring rõ để điều hướng bằng bàn phím.
+   ============================================================ */
+
+/* Thanh chip lọc theo nhóm */
+.wt-catbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0 0.2rem;
+}
+.wt-cat-n {
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  min-width: 18px;
+  text-align: center;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+.filter-btn.active .wt-cat-n {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: transparent;
+  color: inherit;
+}
+
+/* Gợi ý phím tắt trong ô tìm kiếm */
+.wt-search-kbd {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 0 0.32rem;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Ô chọn nhóm trong modal thêm/sửa */
+.wt-cat-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+}
+
+/* Ô vuông: nền phẳng + shadow nhẹ, khớp card toàn app */
+.wt-tile {
+  box-shadow: var(--shadow-xs);
+}
+/* Ô được ghim: vạch accent mảnh trên đỉnh */
+.wt-tile.is-pinned::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--color-action, var(--primary));
+  z-index: 2;
+}
+/* Khi ghim, huy hiệu ghim thay chỗ tay cầm kéo */
+.wt-tile.is-pinned .wt-tile-handle { display: none; }
+.wt-tile-pinmark {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  color: var(--color-action, var(--primary));
+  z-index: 2;
+}
+
+/* Focus ring rõ cho điều hướng bàn phím */
+.wt-tile-main:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--primary));
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.wt-tile-add:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--primary));
+  outline-offset: 2px;
+}
+
+/* Nút ghim ở trạng thái bật */
+.wt-tile-btn.active,
+.wt-tile-btn.active:hover {
+  background: var(--color-action-soft, var(--pen-blue-soft));
+  border-color: var(--color-action, var(--primary));
+  color: var(--color-action, var(--primary));
+}
+
+@media (max-width: 560px) {
+  .wt-catbar { gap: 0.32rem; }
+}

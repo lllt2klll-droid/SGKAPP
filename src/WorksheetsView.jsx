@@ -32,6 +32,7 @@ import { shouldConfirmDelete } from "./settingsStore.js";
 import SampleButton from "./SampleButton";
 import { fillSampleQuestions } from "./sampleData";
 import DataTable from "./DataTable";
+import ConfirmDialog from "./ui/ConfirmDialog.jsx";
 import { makeId } from "./storage";
 import SourceBadge from "./scan/SourceBadge";
 
@@ -76,6 +77,13 @@ export default function WorksheetsView({ books, onNavigate }) {
   // ── Editor: tab soạn / xem trước + tiêu đề nháp ──
   const [tab, setTab] = useState("edit"); // edit | preview
   const [titleDraft, setTitleDraft] = useState("");
+  const [notice, setNotice] = useState("");
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  const flash = (msg) => {
+    setNotice(msg);
+    try { clearTimeout(flash.t); } catch {}
+    flash.t = setTimeout(() => setNotice(""), 3500);
+  };
   // ── Tùy chọn xuất DOCX (chọn mỗi lần xuất, không đụng dữ liệu phiếu) ──
   const [expTemplate, setExpTemplate] = useState("full"); // full | compact
   const [shuffleQ, setShuffleQ] = useState(false);
@@ -103,13 +111,24 @@ export default function WorksheetsView({ books, onNavigate }) {
 
   const mk = (patch) => {
     if (ws) {
-      saveWorksheet({ ...ws, ...patch, updatedAt: Date.now() });
-      refresh();
+      try {
+        saveWorksheet({ ...ws, ...patch, updatedAt: Date.now() });
+        refresh();
+      } catch (e) {
+        // saveWorksheet throw khi đầy bộ nhớ — báo 1 lần, không spam mỗi phím gõ
+        if (!mk.warned) {
+          mk.warned = true;
+          flash(e.message || "Không lưu được thay đổi (bộ nhớ đầy).");
+          setTimeout(() => { mk.warned = false; }, 10000);
+        }
+      }
     }
   };
   const commitTitle = () => {
     const t = (titleDraft || "").trim();
-    if (t && ws && t !== ws.title) mk({ title: t });
+    if (!t) { setTitleDraft(ws?.title || ""); flash("Tên phiếu không được để trống."); return; }
+    if (t.length > 120) { flash(`Tên phiếu tối đa 120 ký tự (đang ${t.length}).`); return; }
+    if (ws && t !== ws.title) mk({ title: t });
     else setTitleDraft(ws?.title || "");
   };
 
@@ -141,7 +160,12 @@ export default function WorksheetsView({ books, onNavigate }) {
 
   const createSheet = () => {
     const n = makeWs();
-    saveWorksheet(n);
+    try {
+      saveWorksheet(n);
+    } catch (e) {
+      flash(e.message || "Không tạo được phiếu (bộ nhớ đầy).");
+      return;
+    }
     setSelId(n.id);
     refresh();
   };
@@ -150,7 +174,7 @@ export default function WorksheetsView({ books, onNavigate }) {
     // Đồng bộ Cài đặt → Hành vi → "Hỏi trước khi xóa": tắt là xóa ngay
     let needConfirm = true;
     try { needConfirm = shouldConfirmDelete(); } catch {}
-    if (needConfirm && !confirm("Xóa phiếu này?")) return;
+    if (needConfirm) { setPendingDeleteId(id); return; }
     deleteWorksheet(id);
     if (selId === id) setSelId(null);
     refresh();
@@ -168,11 +192,11 @@ export default function WorksheetsView({ books, onNavigate }) {
     const existing = new Set(ws.questions);
     const newIds = pkList.map((q) => q.id).filter((id) => !existing.has(id));
     if (newIds.length === 0) {
-      alert("Tất cả câu trong kết quả này đã có trong phiếu.");
+      flash("Tất cả câu trong kết quả này đã có trong phiếu.");
       return;
     }
     mk({ questions: [...ws.questions, ...newIds] });
-    alert(`Đã thêm ${newIds.length} câu vào phiếu.`);
+    flash(`Đã thêm ${newIds.length} câu vào phiếu.`);
   };
   const autoSample = () => {
     let bank = getQuestions();
@@ -182,7 +206,7 @@ export default function WorksheetsView({ books, onNavigate }) {
       bank = getQuestions();
     }
     if (!bank.length) {
-      alert("Không tạo được câu hỏi mẫu.");
+      flash("Không tạo được câu hỏi mẫu.");
       return;
     }
     const ws = makeWs();
@@ -194,10 +218,15 @@ export default function WorksheetsView({ books, onNavigate }) {
       "Học sinh hãy hoàn thành các bài tập dưới đây.";
     ws.questions = bank.slice(0, 5).map((q) => q.id);
     ws.showAnswers = false;
-    saveWorksheet(ws);
+    try {
+      saveWorksheet(ws);
+    } catch (e) {
+      flash(e.message || "Không tạo được phiếu mẫu (bộ nhớ đầy).");
+      return;
+    }
     setSelId(ws.id);
     refresh();
-    alert(
+    flash(
       `Đã tạo phiếu học tập mẫu với 5 câu hỏi${filled ? " (tự thêm câu hỏi mẫu vào ngân hàng trước)." : "."}`,
     );
   };
@@ -316,14 +345,16 @@ export default function WorksheetsView({ books, onNavigate }) {
         shuffleQuestions: shuffleQ,
         shuffleOptions: shuffleO,
       });
-      if (!ok) alert("Không xuất được file DOCX. Hãy thử lại.");
+      if (!ok) flash("Không xuất được file DOCX. Hãy thử lại.");
     } finally {
       setExporting(false);
     }
   };
   // In = đúng bản đang xem ở tab preview (WYSIWYG: cùng mẫu + cùng cờ đáp án)
   const doPrint = () => {
-    if (ws) printToPdf(ws.title || "Phiếu học tập", renderPaper(ws, ws.showAnswers, true, expTemplate));
+    if (!ws) return;
+    const ok = printToPdf(ws.title || "Phiếu học tập", renderPaper(ws, ws.showAnswers, true, expTemplate));
+    if (!ok) flash("Trình duyệt chặn cửa sổ in. Hãy cho phép popup rồi thử lại.");
   };
   // Zoom bản xem trước (chỉ đổi hiển thị, không đụng nội dung xuất)
   const [previewZoom, setPreviewZoom] = useState(100);
@@ -600,7 +631,14 @@ export default function WorksheetsView({ books, onNavigate }) {
               </div>
               <div>
                 <label className="form-label">Thời gian (phút)</label>
-                <input className="form-control" type="number" min="0" max="180" value={ws.timeMinutes || ""} onChange={(e) => mk({ timeMinutes: Math.max(0, Math.min(180, Number(e.target.value) || 0)) || "" })} placeholder="VD: 35" />
+                <input className="form-control" type="number" min="0" max="180" value={ws.timeMinutes || ""} onChange={(e) => {
+                  const raw = Number(e.target.value);
+                  if (e.target.value !== "" && (!Number.isFinite(raw) || raw < 0 || raw > 180)) {
+                    flash("Thời gian chỉ từ 0 đến 180 phút.");
+                    return;
+                  }
+                  mk({ timeMinutes: e.target.value === "" ? "" : Math.max(0, Math.min(180, raw || 0)) || "" });
+                }} placeholder="VD: 35" />
               </div>
               <div>
                 <label className="form-label">Số câu</label>
@@ -778,6 +816,24 @@ export default function WorksheetsView({ books, onNavigate }) {
           </div>
         </div>
       )}
+      {notice && (
+        <div className="toast-container" aria-live="polite">
+          <div className="toast success">{notice}</div>
+        </div>
+      )}
+      <ConfirmDialog
+        open={pendingDeleteId != null}
+        title="Xóa phiếu này?"
+        message="Phiếu đã xóa sẽ vào Thùng rác (giữ 30 ngày)."
+        confirmText="Xóa"
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          deleteWorksheet(pendingDeleteId);
+          if (selId === pendingDeleteId) setSelId(null);
+          setPendingDeleteId(null);
+          refresh();
+        }}
+      />
     </div>
   );
 }

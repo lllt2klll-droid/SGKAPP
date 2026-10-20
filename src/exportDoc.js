@@ -95,34 +95,52 @@ export function nl2br(s) {
 }
 
 export function dl(blob, filename) {
-  // Cài đặt → Xuất dữ liệu → "Kèm thời gian xuất": tắt là tên file giữ nguyên
+  // Cài đặt → Xuất dữ liệu → "Mốc thời gian trong tên file": none / date / datetime
+  // includeTimestamp=false là công tắc tắt (backup cũ) — ưu tiên trước filenameStamp
   try {
     const settings = safeGetJSON("sgk_settings", null);
-    const includeTs = !settings || settings?.export?.includeTimestamp !== false;
-    if (includeTs && filename && !/_20\d{2}-?\d{2}-?\d{2}/.test(filename)) {
+    const expCfg = settings?.export || {};
+    let style = ["date", "datetime", "none"].includes(expCfg.filenameStamp) ? expCfg.filenameStamp : "date";
+    if (expCfg.includeTimestamp === false) style = "none";
+    if (style !== "none" && filename && !/_20\d{2}[-_]?\d{2}[-_]?\d{2}/.test(filename)) {
       const dot = String(filename).lastIndexOf(".");
-      const stamp = "_" + new Date().toISOString().slice(0, 10);
+      const d = new Date();
+      const p2 = (n) => String(n).padStart(2, "0");
+      const dateStr = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+      const stamp = style === "datetime"
+        ? `_${dateStr}_${p2(d.getHours())}${p2(d.getMinutes())}`
+        : `_${dateStr}`;
       filename = (dot > 0 ? filename.slice(0, dot) : filename) + stamp + (dot > 0 ? filename.slice(dot) : "");
     }
   } catch {}
-  const url = URL.createObjectURL(blob);
+  let url = "";
+  try {
+    url = URL.createObjectURL(blob);
+  } catch (e) {
+    console.warn("[exportDoc] createObjectURL failed (blob quá lớn?):", e?.message);
+    return false;
+  }
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try { document.body.removeChild(a); } catch {}
+    try { URL.revokeObjectURL(url); } catch {}
   }, 1500);
+  return true;
 }
 
-function safeName(s) {
+export function safeName(s) {
   return (
     String(s || "tai-lieu")
-      .replace(/[\\/:*?"<>|]+/g, "-")
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x1f\\/:*?"<>|]+/g, "-")
+      .replace(/[. ]+$/g, "")
       .trim()
-      .slice(0, 120) || "tai-lieu"
+      .slice(0, 120)
+      .replace(/[. ]+$/g, "") || "tai-lieu"
   );
 }
 
@@ -135,20 +153,50 @@ export function exportWord(title, bodyHtml) {
 }
 
 // ── Print → PDF (browser print dialog lets the user pick "Save as PDF") ──
+// Trả về false khi popup bị chặn (caller tự báo bằng toast inline thay vì alert chặn UI).
+// Chờ fonts + ảnh xong (tối đa 1.5s) rồi mới print để không mất chữ/ảnh.
 export function printToPdf(title, bodyHtml) {
-  const w = window.open("", "_blank", "width=900,height=700");
+  let w = null;
+  try {
+    w = window.open("", "_blank", "width=900,height=700");
+  } catch { w = null; }
   if (!w) {
-    alert("Trình duyệt chặn cửa sổ in. Hãy cho phép popup rồi thử lại.");
-    return;
+    console.warn("[exportDoc] print popup blocked");
+    return false;
   }
-  w.document.write(wrapDoc(title, bodyHtml));
-  w.document.close();
+  try {
+    w.document.write(wrapDoc(title, bodyHtml));
+    w.document.close();
+  } catch (e) {
+    console.warn("[exportDoc] print write failed:", e?.message);
+    return false;
+  }
+  let done = false;
   const runner = () => {
-    w.focus();
-    w.print();
+    if (done) return;
+    done = true;
+    try { w.focus(); w.print(); } catch {}
   };
-  // wait for fonts/images to settle
-  setTimeout(runner, 400);
+  try {
+    const waits = [];
+    if (w.document?.fonts?.ready) waits.push(w.document.fonts.ready.catch(() => {}));
+    const imgs = Array.from(w.document?.images || []);
+    waits.push(...imgs.map((img) => {
+      if (img.complete) return Promise.resolve();
+      return new Promise((res) => {
+        img.addEventListener("load", res, { once: true });
+        img.addEventListener("error", res, { once: true });
+        setTimeout(res, 1500);
+      });
+    }));
+    Promise.race([
+      Promise.all(waits).catch(() => {}),
+      new Promise((res) => setTimeout(res, 1500)),
+    ]).then(runner);
+  } catch {
+    setTimeout(runner, 400);
+  }
+  return true;
 }
 
 // ── TXT ────────────────────────────────────────────────────────────
@@ -163,7 +211,7 @@ export function exportTxt(title, content) {
 export function exportCsv(title, rows) {
   const esc = (v) => {
     const s = String(v ?? "").replace(/"/g, '""');
-    return /[",\n]/.test(s) ? `"${s}"` : s;
+    return /[",\n\r]/.test(s) ? `"${s}"` : s;
   };
   const body = rows.map((r) => r.map(esc).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + body], { type: "text/csv;charset=utf-8" });

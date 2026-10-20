@@ -18,10 +18,19 @@ export function isLegacyDocFile(file) {
 function sanitizeHtml(html) {
   let out = String(html || "");
   out = out.replace(/<script[^>]*>[\s\S]*?<\/script\s*>/gi, "");
-  out = out.replace(/<\s*(iframe|object|embed|form|input|button|select|textarea)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, "");
-  out = out.replace(/<\s*(iframe|object|embed|form|input|button|select|textarea)[^>]*\/?>/gi, "");
+  out = out.replace(/<\s*(iframe|object|embed|form|input|button|select|textarea|link|meta|base|title)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, "");
+  out = out.replace(/<\s*(iframe|object|embed|form|input|button|select|textarea|link|meta|base)[^>]*\/?>/gi, "");
   out = out.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
   out = out.replace(/(href|src|xlink:href)\s*=\s*("javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, '$1="#"');
+  // style="...javascript:... / expression(...) / vbscript:..." vẫn chạy ở một số trình đọc
+  out = out.replace(/\s*style\s*=\s*("[^"]*"|'[^']*')/gi, (m, q) => {
+    const quote = q[0];
+    let css = q.slice(1, -1);
+    if (/javascript\s*:|vbscript\s*:|expression\s*\(|behaviou?r\s*:/i.test(css)) return "";
+    // bỏ url(javascript:...) lẻ trong style nhưng giữ url ảnh thường
+    css = css.replace(/url\s*\(\s*(['"]?)\s*javascript:[^)]*\)/gi, "url()");
+    return ` style=${quote}${css}${quote}`;
+  });
   return out.trim();
 }
 
@@ -92,8 +101,8 @@ export async function importDocxToHtml(file) {
 function pxToHalfPoints(px) {
   const n = parseFloat(px);
   if (!Number.isFinite(n)) return undefined;
-  // 1px ≈ 0.75pt → half-points = px * 1.5
-  return Math.max(16, Math.min(96, Math.round(n * 1.5)));
+  // 1px ≈ 0.75pt → half-points = px * 1.5 (giữ 6pt–72pt, không cắt chữ trang trí)
+  return Math.max(12, Math.min(144, Math.round(n * 1.5)));
 }
 
 function cssColorToHex(color) {
@@ -133,10 +142,85 @@ function dataUrlToImageData(src) {
     if (mime.includes("jpg") || mime.includes("jpeg")) type = "jpg";
     else if (mime.includes("gif")) type = "gif";
     else if (mime.includes("bmp")) type = "bmp";
-    return { data: bytes, type };
+    return { data: bytes, type, width: readImageWidth(bytes, type), height: readImageHeight(bytes, type) };
   } catch {
     return null;
   }
+}
+
+// Đọc kích thước thật từ header ảnh để giữ đúng tỷ lệ (không méo ảnh dọc)
+function readPngSize(b) {
+  try {
+    if (b.length < 24) return null;
+    if (b[0] !== 0x89 || b[1] !== 0x50 || b[2] !== 0x4e || b[3] !== 0x47) return null;
+    const w = (b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19];
+    const h = (b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23];
+    return w > 0 && h > 0 && w < 20000 && h < 20000 ? { w, h } : null;
+  } catch { return null; }
+}
+function readGifSize(b) {
+  try {
+    if (b.length < 10) return null;
+    const w = b[6] | (b[7] << 8);
+    const h = b[8] | (b[9] << 8);
+    return w > 0 && h > 0 ? { w, h } : null;
+  } catch { return null; }
+}
+function readBmpSize(b) {
+  try {
+    if (b.length < 26 || b[0] !== 0x42 || b[1] !== 0x4d) return null;
+    const w = b[18] | (b[19] << 8) | (b[20] << 16) | (b[21] << 24);
+    const h = Math.abs(b[22] | (b[23] << 8) | (b[24] << 16) | (b[25] << 24));
+    return w > 0 && h > 0 ? { w, h } : null;
+  } catch { return null; }
+}
+function readJpegSize(b) {
+  try {
+    let i = 2;
+    while (i + 8 < b.length) {
+      if (b[i] !== 0xff) { i++; continue; }
+      const marker = b[i + 1];
+      // SOF0-SOF3, SOF5-SOF15 (trừ DHT/JPG/DAC)
+      if ((marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc)) {
+        const h = (b[i + 5] << 8) | b[i + 6];
+        const w = (b[i + 7] << 8) | b[i + 8];
+        return w > 0 && h > 0 ? { w, h } : null;
+      }
+      const len = (b[i + 2] << 8) | b[i + 3];
+      if (len < 2) break;
+      i += 2 + len;
+    }
+    return null;
+  } catch { return null; }
+}
+function readImageSize(bytes, type) {
+  if (type === "png") return readPngSize(bytes);
+  if (type === "jpg") return readJpegSize(bytes);
+  if (type === "gif") return readGifSize(bytes);
+  if (type === "bmp") return readBmpSize(bytes);
+  return null;
+}
+function readImageWidth(bytes, type) {
+  return readImageSize(bytes, type)?.w ?? null;
+}
+function readImageHeight(bytes, type) {
+  return readImageSize(bytes, type)?.h ?? null;
+}
+// Vừa khung 480px rộng (tối đa cao 640px), giữ tỷ lệ; ảnh dọc không còn bị méo
+const IMG_MAX_W = 480;
+const IMG_MAX_H = 640;
+function fitImage(img, el) {
+  // Ưu tiên width/height ghi trên thẻ <img>, sau đó là kích thước thật trong bytes
+  let w = parseInt(el?.getAttribute?.("width"), 10);
+  let h = parseInt(el?.getAttribute?.("height"), 10);
+  if (!Number.isFinite(w) || w <= 0) w = img.width || null;
+  if (!Number.isFinite(h) || h <= 0) h = img.height || null;
+  if (!w || !h) return { width: IMG_MAX_W, height: Math.round(IMG_MAX_W * 2 / 3) };
+  const scale = Math.min(IMG_MAX_W / w, IMG_MAX_H / h, 1);
+  // Không phóng to ảnh nhỏ (giữ nét), chỉ thu ảnh lớn
+  const dw = Math.max(1, Math.round(w * scale));
+  const dh = Math.max(1, Math.round(h * scale));
+  return { width: dw, height: dh };
 }
 
 function parseStyle(el) {
@@ -213,7 +297,7 @@ export async function exportHtmlToDocx(html, title = "sach-word") {
         const img = dataUrlToImageData(node.getAttribute("src"));
         if (img) {
           try {
-            runs.push(new ImageRun({ data: img.data, transformation: { width: 480, height: 320 }, type: img.type }));
+            runs.push(new ImageRun({ data: img.data, transformation: fitImage(img, node), type: img.type }));
           } catch {
             runs.push(new TextRun({ text: `[Ảnh: ${node.getAttribute("alt") || "minh họa"}]`, italics: true }));
           }
@@ -251,7 +335,7 @@ export async function exportHtmlToDocx(html, title = "sach-word") {
     return runs;
   }
 
-  function blockToDocx(el, listCtx = null) {
+  function blockToDocx(el, listCtx = null, listLevel = 0) {
     if (el.nodeType === 3) {
       const t = (el.textContent || "").trim();
       if (!t) return [];
@@ -266,7 +350,7 @@ export async function exportHtmlToDocx(html, title = "sach-word") {
       const img = dataUrlToImageData(el.getAttribute("src"));
       if (img) {
         try {
-          return [new Paragraph({ alignment: alignment || AlignmentType.CENTER, children: [new ImageRun({ data: img.data, transformation: { width: 480, height: 320 }, type: img.type })] })];
+          return [new Paragraph({ alignment: alignment || AlignmentType.CENTER, children: [new ImageRun({ data: img.data, transformation: fitImage(img, el), type: img.type })] })];
         } catch {}
       }
       return [new Paragraph({ children: [new TextRun({ text: `[Ảnh: ${el.getAttribute("alt") || "minh họa"}]`, italics: true })] })];
@@ -279,36 +363,70 @@ export async function exportHtmlToDocx(html, title = "sach-word") {
       return [new Paragraph({ heading: level, alignment, children: inlineRuns(el, { bold: tag === "h1" || tag === "h2" }) })];
     }
     if (tag === "li") {
-      return [new Paragraph({ ...(listCtx || { bullet: { level: 0 } }), alignment, children: inlineRuns(el) })];
+      const lvl = Math.min(Math.max(listLevel, 0), 8);
+      const ctx = listCtx
+        ? (listCtx.bullet ? { bullet: { level: lvl } } : { numbering: { reference: "default-numbering", level: lvl } })
+        : { bullet: { level: lvl } };
+      // Chạy inline TRỪ list con (tránh lặp text của ul/ol lồng)
+      const own = Array.from(el.childNodes).filter((c) => {
+        const ct = c.tagName?.toLowerCase?.();
+        return ct !== "ul" && ct !== "ol";
+      });
+      const holder = el.ownerDocument.createElement("span");
+      own.forEach((c) => holder.appendChild(c.cloneNode(true)));
+      const out = [new Paragraph({ ...ctx, alignment, children: inlineRuns(holder) })];
+      // list lồng trong <li> (ul/ol con) → level + 1
+      Array.from(el.children).forEach((child) => {
+        const ct = child.tagName?.toLowerCase();
+        if (ct === "ul" || ct === "ol") out.push(...blockToDocx(child, listCtx || ctx, lvl + 1));
+      });
+      return out;
     }
     if (tag === "ul") {
+      const lvl = Math.min(Math.max(listLevel, 0), 8);
       const out = [];
       Array.from(el.children).forEach((li) => {
-        if (li.tagName?.toLowerCase() === "li") out.push(...blockToDocx(li, { bullet: { level: 0 } }));
+        if (li.tagName?.toLowerCase() === "li") out.push(...blockToDocx(li, { bullet: { level: lvl } }, lvl));
       });
-      return out.length ? out : [new Paragraph({ bullet: { level: 0 }, children: inlineRuns(el) })];
+      return out.length ? out : [new Paragraph({ bullet: { level: lvl }, children: inlineRuns(el) })];
     }
     if (tag === "ol") {
+      const lvl = Math.min(Math.max(listLevel, 0), 8);
       const out = [];
       Array.from(el.children).forEach((li) => {
-        if (li.tagName?.toLowerCase() === "li") out.push(...blockToDocx(li, { numbering: { reference: "default-numbering", level: 0 } }));
+        if (li.tagName?.toLowerCase() === "li") out.push(...blockToDocx(li, { numbering: { reference: "default-numbering", level: lvl } }, lvl));
       });
-      return out.length ? out : [new Paragraph({ numbering: { reference: "default-numbering", level: 0 }, children: inlineRuns(el) })];
+      return out.length ? out : [new Paragraph({ numbering: { reference: "default-numbering", level: lvl }, children: inlineRuns(el) })];
     }
     if (tag === "table") {
       try {
         const rows = Array.from(el.querySelectorAll("tr"));
         if (!rows.length) return [new Paragraph({ children: inlineRuns(el) })];
-        // Đếm cột lớn nhất để chia đều độ rộng
+        // Đếm cột = max(sum colspan) để chia đều độ rộng
         let maxCols = 1;
         rows.forEach((tr) => {
-          const cols = tr.querySelectorAll("th,td").length;
+          let cols = 0;
+          tr.querySelectorAll("th,td").forEach((td) => {
+            const cs = parseInt(td.getAttribute("colspan"), 10);
+            cols += Number.isFinite(cs) && cs > 1 ? Math.min(cs, 12) : 1;
+          });
           if (cols > maxCols) maxCols = cols;
         });
         const colW = Math.floor(9036 / Math.max(1, maxCols));
+        // rowspan: theo dõi ô đang merge dọc theo từng cột
+        const vSpans = new Array(maxCols).fill(0);
         const tRows = rows.map((tr) => {
           const cells = Array.from(tr.querySelectorAll("th,td"));
-          const tCells = (cells.length ? cells : [document.createElement("td")]).map((td) => {
+          const tCells = [];
+          let colIdx = 0;
+          const nextCells = [];
+          cells.forEach((td) => {
+            // bỏ qua cột đang bị rowspan từ hàng trên chiếm
+            while (colIdx < maxCols && vSpans[colIdx] > 0) { vSpans[colIdx]--; colIdx++; }
+            const cs = parseInt(td.getAttribute("colspan"), 10);
+            const rs = parseInt(td.getAttribute("rowspan"), 10);
+            const colSpan = Number.isFinite(cs) && cs > 1 ? Math.min(cs, 12) : 1;
+            const rowSpan = Number.isFinite(rs) && rs > 1 ? Math.min(rs, 20) : 1;
             const isHeader = td.tagName.toLowerCase() === "th" || !!tr.parentElement?.tagName?.match(/thead/i);
             const cellChildren = [];
             // Mỗi ô: tách block con, fallback inline
@@ -320,9 +438,28 @@ export async function exportHtmlToDocx(html, title = "sach-word") {
               });
             });
             if (!hasBlock) cellChildren.push(new Paragraph({ children: inlineRuns(td, isHeader ? { bold: true } : {}) }));
-            return new TableCell({ width: { size: colW, type: WidthType.DXA }, children: cellChildren, shading: isHeader ? { fill: "EDF2F7" } : undefined });
+            const cellOpts = {
+              width: { size: colW * colSpan, type: WidthType.DXA },
+              children: cellChildren,
+              shading: isHeader ? { fill: "EDF2F7" } : undefined,
+            };
+            if (colSpan > 1) cellOpts.columnSpan = colSpan;
+            if (rowSpan > 1) {
+              cellOpts.verticalMerge = "restart";
+              for (let k = 0; k < colSpan && colIdx + k < maxCols; k++) vSpans[colIdx + k] = rowSpan - 1;
+            }
+            nextCells.push(new TableCell(cellOpts));
+            colIdx += colSpan;
           });
-          return new TableRow({ children: tCells });
+          // các cột còn lại đang merge dọc → ô tiếp nối
+          while (colIdx < maxCols) {
+            if (vSpans[colIdx] > 0) {
+              vSpans[colIdx]--;
+              nextCells.push(new TableCell({ width: { size: colW, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun({ text: "" })] })], verticalMerge: "continue" }));
+            }
+            colIdx++;
+          }
+          return new TableRow({ children: nextCells.length ? nextCells : [new TableCell({ width: { size: colW, type: WidthType.DXA }, children: [new Paragraph({ children: [new TextRun({ text: "" })] })] })] });
         });
         return [new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tRows })];
       } catch {

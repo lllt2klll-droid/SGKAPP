@@ -44,9 +44,18 @@ describe("missionRegistry — type/template/nav đồng bộ", () => {
     }
   });
 
-  it("event trong MISSION_TYPES là duy nhất", () => {
+  it("event trong MISSION_TYPES gần như duy nhất (ngoại lệ: VOCAB_CREATED)", () => {
+    // P2 • "Khái niệm" gộp vào "Từ vựng": RESEARCH đổi event sang VOCAB_CREATED
+    // (cùng trigger với VOCABULARY) — missionStore.EVENT_TO_TYPES cho phép 1 event nhiều type.
+    const SHARED_EVENTS = new Set(["VOCAB_CREATED"]);
     const events = Object.values(MISSION_TYPES).map((t) => t.event);
-    assert.equal(new Set(events).size, events.length, "event bị trùng");
+    const counts = {};
+    for (const e of events) counts[e] = (counts[e] || 0) + 1;
+    for (const [e, n] of Object.entries(counts)) {
+      if (n > 1) assert.ok(SHARED_EVENTS.has(e), `event bị trùng: ${e}`);
+    }
+    assert.equal(MISSION_TYPES.RESEARCH.event, MISSION_TYPES.VOCABULARY.event,
+      "research phải bám VOCAB_CREATED sau khi gộp Khái niệm → Từ vựng");
   });
 });
 

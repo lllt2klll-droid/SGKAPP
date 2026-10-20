@@ -4,6 +4,10 @@ import {
   X,
   Trash2,
   BookOpen,
+  BookOpenCheck,
+  BookMarked,
+  CheckCircle2,
+  GraduationCap,
   Sparkles,
   NotebookPen,
   Plus,
@@ -17,8 +21,12 @@ import {
   Loader2,
   Pencil,
   Tag,
+  Tags,
+  Wand2,
 } from "lucide-react";
 import DataTable from "./DataTable";
+import ConfirmDialog from "./ui/ConfirmDialog.jsx";
+import GlossaryPanel from "./GlossaryPanel";
 import aiService, { getFriendlyErrorMessage } from "./aiService";
 import { loadSettings } from "./settingsStore";
 import { exportCsv, exportWord } from "./exportDoc";
@@ -61,6 +69,9 @@ export default function VocabView({
   notify,
   initialQuery = "",
   onQueryConsumed,
+  // P1 • gộp view Từ điển vào đây: điều hướng "glossary" mở tab Tra cứu
+  initialTab = "table",
+  onTabConsumed,
 }) {
   const [tab, setTab] = useState("table");
   const [query, setQuery] = useState("");
@@ -85,6 +96,7 @@ export default function VocabView({
   const [form, setForm] = useState(null); // { id?, word, meaning, file, page, grade, tags }
   const [editingMeaningId, setEditingMeaningId] = useState(null);
   const [meaningDraft, setMeaningDraft] = useState("");
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   const byFilename = useMemo(() => new Map(books.map((b) => [b.filename, b])), [books]);
 
@@ -95,6 +107,14 @@ export default function VocabView({
     if (typeof onQueryConsumed === "function") onQueryConsumed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
+
+  // P1 • mở thẳng tab Tra cứu khi điều hướng từ view Từ điển cũ
+  useEffect(() => {
+    if (initialTab !== "lookup") return;
+    setTab("lookup");
+    if (typeof onTabConsumed === "function") onTabConsumed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTab]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
@@ -114,6 +134,7 @@ export default function VocabView({
   const stats = useMemo(() => computeVocabStats(vocab), [vocab]);
   const daySeries = useMemo(() => computeDaySeries(vocab, dayRange), [vocab, dayRange]);
   const tags = useMemo(() => collectTags(vocab), [vocab]);
+  const coverage = stats.total ? Math.round((stats.withMeaning / stats.total) * 100) : 0;
 
   const say = (text, undo) => {
     if (typeof notify === "function") notify(text, undo);
@@ -179,8 +200,7 @@ export default function VocabView({
 
   const clearAll = () => {
     if (!vocab.length) return;
-    if (!confirm("Xóa toàn bộ sổ tay từ vựng? (vào Thùng rác, giữ 30 ngày)")) return;
-    trashEntries([...vocab], `Toàn bộ sổ tay (${vocab.length} từ)`);
+    setConfirmClearAll(true);
   };
 
   const removeSelected = () => {
@@ -211,15 +231,68 @@ export default function VocabView({
       setError("Thiếu từ cần lưu.");
       return;
     }
+    if (word.length > 80) {
+      setError(`Từ quá dài (${word.length}/80 ký tự). Hãy rút gọn.`);
+      return;
+    }
+    const meaning = String(form.meaning || "").trim();
+    if (meaning.length > 2000) {
+      setError("Nghĩa quá dài (tối đa 2000 ký tự).");
+      return;
+    }
+    // Lớp: để trống hoặc 1-5
+    let grade = null;
+    if (String(form.grade ?? "").trim() !== "") {
+      const g = Number(form.grade);
+      if (!Number.isInteger(g) || g < 1 || g > 5) {
+        setError("Lớp phải từ 1 đến 5 (hoặc để trống).");
+        return;
+      }
+      grade = g;
+    } else {
+      const book = form.file ? byFilename.get(form.file) : null;
+      grade = book?.grade || null;
+    }
+    // Trang: để trống hoặc số nguyên >= 1
+    let page = null;
+    if (String(form.page ?? "").trim() !== "") {
+      const p = Number(form.page);
+      if (!Number.isInteger(p) || p < 1 || p > 5000) {
+        setError("Trang phải là số nguyên từ 1 trở lên.");
+        return;
+      }
+      page = p;
+    }
+    const tags = normalizeTags(form.tags);
+    if (tags.length > 10) {
+      setError("Tối đa 10 thẻ cho mỗi từ.");
+      return;
+    }
+    if (tags.some((t) => t.length > 30)) {
+      setError("Mỗi thẻ tối đa 30 ký tự.");
+      return;
+    }
+    // Chống trùng: cùng từ (không phân biệt hoa/thường/dấu cách) + sách + trang
+    const normWord = word.toLowerCase();
+    const dup = vocab.find((e) =>
+      String(e.word || "").trim().toLowerCase() === normWord &&
+      String(e.file || "") === String(form.file || "") &&
+      Number(e.page || 0) === Number(page || 0) &&
+      (!form.id || e.id !== form.id),
+    );
+    if (dup && !form.id) {
+      setError(`Từ "${word}" đã có trong sổ tay (cùng sách/trang). Mở sửa thay vì thêm mới.`);
+      return;
+    }
     const book = form.file ? byFilename.get(form.file) : null;
     const payload = {
-      word: word.slice(0, 80),
-      meaning: String(form.meaning || "").trim(),
+      word,
+      meaning,
       file: form.file || "",
       bookTitle: book?.title || "",
-      grade: Number(form.grade) || book?.grade || null,
-      page: Number(form.page) || null,
-      tags: normalizeTags(form.tags),
+      grade,
+      page,
+      tags,
     };
     if (form.id) {
       onUpdate(form.id, payload);
@@ -236,7 +309,8 @@ export default function VocabView({
   const saveMeaningInline = (id) => {
     const value = meaningDraft.trim();
     setEditingMeaningId(null);
-    if (!value) return;
+    if (!value) { setError("Nghĩa đang trống — chưa lưu gì."); return; }
+    if (value.length > 2000) { setError("Nghĩa quá dài (tối đa 2000 ký tự)."); return; }
     onUpdateMeaning(id, value);
     onChanged();
   };
@@ -271,9 +345,13 @@ export default function VocabView({
           },
         ],
         systemInstruction: {
-          parts: [{ text: "Bạn là trợ lý từ điển sư phạm tiểu học, trả về đúng định dạng JSON được yêu cầu." }],
+          parts: [
+            {
+              text: "Bạn là từ điển học thuật dành cho sinh viên đại học và cao học: giải nghĩa chuẩn xác, ngôn ngữ chuẩn mực, súc tích, không dùng emoji. Luôn trả về đúng định dạng JSON được yêu cầu.",
+            },
+          ],
         },
-        generationConfig: { temperature: 0.3, maxOutputTokens: 700 },
+        generationConfig: { temperature: 0.3, maxOutputTokens: 900 },
         timeout: 60000,
         maxRetries: 2,
         requestId,
@@ -328,10 +406,12 @@ export default function VocabView({
             contents: [{ role: "user", parts: [{ text: buildExplainPrompt(chunk, grade) }] }],
             systemInstruction: {
               parts: [
-                { text: "Bạn là trợ lý từ điển sư phạm tiểu học, trả về đúng định dạng JSON được yêu cầu." },
+                {
+                  text: "Bạn là từ điển học thuật dành cho sinh viên đại học và cao học: giải nghĩa chuẩn xác, ngôn ngữ chuẩn mực, súc tích, không dùng emoji. Luôn trả về đúng định dạng JSON được yêu cầu.",
+                },
               ],
             },
-            generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+            generationConfig: { temperature: 0.3, maxOutputTokens: 2600 },
             timeout: 90000,
             maxRetries: 2,
             requestId,
@@ -569,7 +649,11 @@ export default function VocabView({
         ) : (
           <button
             className="vocab-missing-cell"
-            title={geminiKey ? "Chưa có nghĩa — bấm để AI giải nghĩa" : "Chưa có nghĩa (cần Gemini key)"}
+            title={
+              geminiKey
+                ? "Chưa có nghĩa — bấm để AI giải nghĩa chi tiết (chuẩn sinh viên đại học & cao học)"
+                : "Chưa có nghĩa (cần Gemini key)"
+            }
             onClick={() => explainOne(row)}
             disabled={!geminiKey || aiRunning}
           >
@@ -634,7 +718,7 @@ export default function VocabView({
     {
       key: "_actions",
       label: "Thao tác",
-      width: "172px",
+      width: "224px",
       align: "right",
       render: (_, row) => (
         <span className="data-table-actions">
@@ -653,7 +737,7 @@ export default function VocabView({
             className="btn btn-secondary btn-xs"
             onClick={() => explainOne(row)}
             disabled={!geminiKey || aiRunning}
-            title={geminiKey ? "Giải nghĩa bằng AI" : "Cần cấu hình Gemini"}
+            title={geminiKey ? "AI giải nghĩa chuẩn học thuật (đại học & cao học)" : "Cần cấu hình Gemini"}
           >
             {aiRunning ? "…" : <Sparkles size={12} />}
           </button>
@@ -683,7 +767,7 @@ export default function VocabView({
   const toolbar = (
     <div className="data-table-toolbar vocab-toolbar">
       <div className="data-table-toolbar-left">
-        <div className="search-input-wrapper ui-s-903b9c">
+        <div className="search-input-wrapper vocab-search">
           <Search className="search-icon" size={14} />
           <input
             type="text"
@@ -700,7 +784,7 @@ export default function VocabView({
           )}
         </div>
         <button
-          className={`vocab-filter-chip${missingOnly ? " on" : ""}`}
+          className={`vocab-filter-chip${missingOnly ? " on" : ""}${stats.missingMeaning && !missingOnly ? " warn" : ""}`}
           onClick={() => setMissingOnly((v) => !v)}
           title="Chỉ hiện các từ chưa có nghĩa"
         >
@@ -716,12 +800,12 @@ export default function VocabView({
             <Tag size={11} /> {tagFilter} <X size={11} />
           </button>
         )}
-        <span className="ui-s-1f9717">
+        <span className="vocab-count">
           {filtered.length}/{vocab.length} từ
         </span>
       </div>
       <div className="data-table-toolbar-right">
-        <button className="btn btn-secondary btn-xs" onClick={openAddForm}>
+        <button className="btn btn-secondary btn-xs" onClick={openAddForm} title="Thêm từ mới vào sổ tay">
           <Plus size={12} /> Thêm từ
         </button>
         <button
@@ -730,19 +814,19 @@ export default function VocabView({
           disabled={!filtered.length}
           title="Chọn/bỏ chọn tất cả dòng đang hiển thị"
         >
-          <ListChecks size={12} /> {allFilteredSelected ? "Bỏ chọn" : `Chọn tất cả`}
+          <ListChecks size={12} /> {allFilteredSelected ? "Bỏ chọn" : "Chọn tất cả"}
         </button>
         <button
-          className="btn btn-secondary btn-xs"
+          className="vocab-ai-btn"
           onClick={runBatchExplain}
           disabled={!geminiKey || aiRunning || aiQuestionRunning}
           title={
             geminiKey
-              ? `Giải nghĩa hàng loạt (10 từ/lần)${selected.length ? ` cho ${selected.length} từ đã chọn` : " cho các từ đang lọc"}`
-              : "Cần cấu hình Gemini"
+              ? `AI giải nghĩa học thuật (10 từ/lần)${selected.length ? ` cho ${selected.length} từ đã chọn` : " cho các từ đang lọc"}`
+              : "Cần cấu hình Gemini ở Cài đặt AI"
           }
         >
-          <Sparkles size={12} /> AI giải nghĩa
+          <Sparkles size={13} /> AI giải nghĩa
         </button>
         <button
           className="btn btn-secondary btn-xs"
@@ -757,7 +841,7 @@ export default function VocabView({
           disabled={!geminiKey || aiQuestionRunning || aiRunning}
           title={geminiKey ? "AI soạn câu hỏi theo ngữ cảnh sách (tối đa 20 từ đã chọn)" : "Cần cấu hình Gemini"}
         >
-          {aiQuestionRunning ? <Loader2 size={12} className="vocab-spin" /> : <Sparkles size={12} />} AI soạn câu
+          {aiQuestionRunning ? <Loader2 size={12} className="vocab-spin" /> : <Wand2 size={12} />} AI soạn câu
         </button>
         <button className="btn btn-secondary btn-xs" onClick={doExportCsv} title="Xuất danh sách đang lọc ra CSV/Excel">
           <FileSpreadsheet size={12} /> CSV
@@ -785,13 +869,55 @@ export default function VocabView({
     </div>
   );
 
+  // Thanh thao tác nhanh khi đang chọn nhiều dòng (AI giải nghĩa / câu hỏi / xuất)
+  const selbar =
+    selected.length > 0 ? (
+      <div className="vocab-selbar">
+        <Check size={14} /> Đã chọn <b>{selected.length}</b> từ
+        <button
+          className="vocab-ai-btn"
+          onClick={runBatchExplain}
+          disabled={!geminiKey || aiRunning || aiQuestionRunning}
+          title={geminiKey ? "AI giải nghĩa các từ đã chọn" : "Cần cấu hình Gemini ở Cài đặt AI"}
+        >
+          <Sparkles size={13} /> AI giải nghĩa
+        </button>
+        <button className="btn btn-secondary btn-xs" onClick={createMcQuestions}>
+          <ListChecks size={12} /> Tạo câu hỏi
+        </button>
+        <button
+          className="btn btn-secondary btn-xs"
+          onClick={createAiQuestions}
+          disabled={!geminiKey || aiQuestionRunning || aiRunning}
+        >
+          <Wand2 size={12} /> AI soạn câu
+        </button>
+        <button className="btn btn-secondary btn-xs" onClick={doExportWord}>
+          <FileText size={12} /> Xuất Word
+        </button>
+        <button className="btn btn-danger btn-xs" onClick={removeSelected}>
+          <Trash2 size={12} /> Xóa
+        </button>
+        <button className="btn btn-ghost btn-xs" onClick={() => setSelectedIds(new Set())}>
+          Bỏ chọn hết
+        </button>
+      </div>
+    ) : null;
+
   const progress =
     aiRunning || aiProgress ? (
       <div className="vocab-progress" role="status" aria-live="polite">
         <Loader2 size={13} className="vocab-spin" />
-        <span>
-          {aiProgress ? `Đang giải nghĩa ${aiProgress.done}/${aiProgress.total} từ…` : "Đang xử lý bằng AI…"}
+        <span className="vocab-progress-text">
+          {aiProgress
+            ? `Đang giải nghĩa ${aiProgress.done}/${aiProgress.total} từ (văn phong học thuật, chuẩn đại học & cao học)…`
+            : "Đang xử lý bằng AI…"}
         </span>
+        {aiProgress && (
+          <span className="vocab-progress-track" aria-hidden="true">
+            <i style={{ width: `${aiProgress.total ? Math.round((aiProgress.done / aiProgress.total) * 100) : 0}%` }} />
+          </span>
+        )}
         {aiRunning && (
           <button
             className="btn btn-secondary btn-xs"
@@ -805,34 +931,70 @@ export default function VocabView({
 
   const statsTab = (
     <div className="vocab-stats">
-      <div className="vocab-stat-cards">
-        <div className="vocab-stat-card">
-          <span className="vocab-stat-value">{stats.total}</span>
-          <span className="vocab-stat-label">Tổng từ</span>
+      <div className="vocab-kpis">
+        <div className="vocab-kpi">
+          <span className="vocab-kpi-ic"><BookMarked size={16} /></span>
+          <span className="vocab-kpi-value">{stats.total}</span>
+          <span className="vocab-kpi-label">Tổng từ</span>
+        </div>
+        <div className="vocab-kpi ok">
+          <span className="vocab-kpi-ic"><CheckCircle2 size={16} /></span>
+          <span className="vocab-kpi-value">{stats.withMeaning}</span>
+          <span className="vocab-kpi-label">Đã có nghĩa</span>
         </div>
         <button
-          className="vocab-stat-card clickable"
+          className="vocab-kpi warn clickable"
           onClick={() => {
             setMissingOnly(true);
             setTab("table");
           }}
           title="Lọc các từ chưa có nghĩa"
         >
-          <span className="vocab-stat-value">{stats.missingMeaning}</span>
-          <span className="vocab-stat-label">Chưa có nghĩa</span>
+          <span className="vocab-kpi-ic"><Sparkles size={16} /></span>
+          <span className="vocab-kpi-value">{stats.missingMeaning}</span>
+          <span className="vocab-kpi-label">Chưa có nghĩa</span>
         </button>
-        <div className="vocab-stat-card">
-          <span className="vocab-stat-value">{stats.byFile.filter((b) => b.file).length}</span>
-          <span className="vocab-stat-label">Sách khác nhau</span>
+        <div className="vocab-kpi violet">
+          <span className="vocab-kpi-ic"><Tags size={16} /></span>
+          <span className="vocab-kpi-value">{tags.length}</span>
+          <span className="vocab-kpi-label">Thẻ phân loại</span>
         </div>
-        <div className="vocab-stat-card">
-          <span className="vocab-stat-value">{stats.tagged}</span>
-          <span className="vocab-stat-label">Có gắn thẻ</span>
+        <div className="vocab-kpi">
+          <span className="vocab-kpi-ic"><BookOpen size={16} /></span>
+          <span className="vocab-kpi-value">{stats.byFile.filter((b) => b.file).length}</span>
+          <span className="vocab-kpi-label">Sách nguồn</span>
         </div>
       </div>
 
-      <section className="vocab-stat-section">
-        <h4>Theo sách</h4>
+      <section className="vocab-panel">
+        <div className="vocab-panel-head">
+          <h4><BookOpenCheck size={15} /> Độ phủ nghĩa</h4>
+          <span className="vocab-coverage-pct">{coverage}%</span>
+        </div>
+        <div className="vocab-coverage" role="progressbar" aria-valuenow={coverage} aria-valuemin={0} aria-valuemax={100}>
+          <i style={{ width: `${coverage}%` }} />
+        </div>
+        <p className="vocab-panel-note">
+          {stats.missingMeaning
+            ? `Còn ${stats.missingMeaning} từ chưa có nghĩa — dùng AI giải nghĩa để hoàn thiện sổ tay (văn phong học thuật, đạt chuẩn sinh viên đại học & cao học).`
+            : "Tuyệt vời — mọi từ trong sổ tay đều đã có nghĩa."}
+        </p>
+        {stats.missingMeaning > 0 && (
+          <div className="vocab-panel-actions">
+            <button
+              className="vocab-ai-btn"
+              onClick={runBatchExplain}
+              disabled={!geminiKey || aiRunning || aiQuestionRunning}
+              title={geminiKey ? "AI giải nghĩa các từ còn thiếu" : "Cần cấu hình Gemini ở Cài đặt AI"}
+            >
+              <Sparkles size={13} /> AI giải nghĩa {stats.missingMeaning} từ còn thiếu
+            </button>
+          </div>
+        )}
+      </section>
+
+      <section className="vocab-panel">
+        <h4 className="vocab-panel-title"><BookOpen size={15} /> Theo sách</h4>
         {stats.byFile.length ? (
           <div className="vocab-bars">
             {stats.byFile.map((b) => {
@@ -861,8 +1023,8 @@ export default function VocabView({
         )}
       </section>
 
-      <section className="vocab-stat-section">
-        <h4>Theo lớp</h4>
+      <section className="vocab-panel">
+        <h4 className="vocab-panel-title"><GraduationCap size={15} /> Theo lớp</h4>
         {stats.byGrade.length ? (
           <div className="vocab-bars">
             {stats.byGrade.map((g) => {
@@ -883,9 +1045,9 @@ export default function VocabView({
         )}
       </section>
 
-      <section className="vocab-stat-section">
-        <div className="vocab-stat-head">
-          <h4>Theo ngày</h4>
+      <section className="vocab-panel">
+        <div className="vocab-panel-head">
+          <h4><BarChart3 size={15} /> Từ mới theo ngày</h4>
           <div className="vocab-range">
             {[7, 30].map((d) => (
               <button
@@ -913,12 +1075,36 @@ export default function VocabView({
         </div>
       </section>
 
+      {tags.length > 0 && (
+        <section className="vocab-panel">
+          <h4 className="vocab-panel-title"><Tags size={15} /> Thẻ phổ biến</h4>
+          <div className="vocab-tagcloud">
+            {tags.map((t) => (
+              <button
+                key={t.tag}
+                className="vocab-tag-chip"
+                onClick={() => {
+                  setTagFilter(t.tag);
+                  setTab("table");
+                }}
+                title={`Lọc bảng theo thẻ "${t.tag}"`}
+              >
+                {t.tag} <b>{t.count}</b>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="vocab-stat-actions">
         <button className="btn btn-secondary btn-xs" onClick={() => setTab("table")}>
           <Table2 size={12} /> Xem bảng
         </button>
         <button className="btn btn-secondary btn-xs" onClick={doExportCsv}>
           <FileSpreadsheet size={12} /> Xuất CSV thống kê
+        </button>
+        <button className="btn btn-secondary btn-xs" onClick={doExportWord}>
+          <FileText size={12} /> Xuất Word
         </button>
       </div>
     </div>
@@ -927,6 +1113,7 @@ export default function VocabView({
   const tableTab = (
     <>
       {toolbar}
+      {selbar}
       {progress}
       {error && (
         <div className="util-error vocab-error">
@@ -936,29 +1123,41 @@ export default function VocabView({
           </button>
         </div>
       )}
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyField="id"
-        resizableId="vocab"
-        emptyText={
-          vocab.length
-            ? query || missingOnly || fileFilter || tagFilter
-              ? `Không tìm thấy kết quả${query ? ` cho "${query}"` : ""}`
-              : "Chưa có dữ liệu"
-            : "Chưa có từ vựng nào"
-        }
-        emptyHint={
-          vocab.length
-            ? "Thử đổi từ khóa hoặc bỏ bộ lọc."
-            : "Hãy bôi đen từ trong sách và chọn “Lưu từ vựng”, hoặc bấm “Thêm mẫu”."
-        }
-      />
-      {!vocab.length && (
-        <div className="vocab-empty-actions">
-          <button className="btn btn-primary" onClick={autoFillVocab}>
-            Thêm mẫu
-          </button>
+      {vocab.length ? (
+        <>
+          <DataTable
+            columns={columns}
+            data={filtered}
+            keyField="id"
+            resizableId="vocab"
+            emptyText={
+              query || missingOnly || fileFilter || tagFilter
+                ? `Không tìm thấy kết quả${query ? ` cho "${query}"` : ""}`
+                : "Chưa có dữ liệu"
+            }
+            emptyHint="Thử đổi từ khóa hoặc bỏ bộ lọc."
+          />
+          <p className="vocab-hint">
+            Bấm đúp ô “Nghĩa” để sửa nhanh • tích ☑ để AI giải nghĩa hàng loạt • nút ⭐ trong dòng để giải
+            nghĩa từng từ • nút 📖 mở sách tại trang đã lưu.
+          </p>
+        </>
+      ) : (
+        <div className="vocab-empty">
+          <span className="vocab-empty-ic"><NotebookPen size={24} /></span>
+          <p className="vocab-empty-title">Sổ tay đang trống</p>
+          <p className="vocab-empty-hint">
+            Bôi đen từ trong sách và chọn “Lưu từ vựng”, hoặc thêm ngay tại đây. AI sẽ giải nghĩa chi tiết
+            theo văn phong học thuật — từ loại, định nghĩa, ví dụ, thuật ngữ liên quan — phù hợp sinh viên đại học và cao học.
+          </p>
+          <div className="vocab-empty-actions">
+            <button className="btn btn-primary btn-sm" onClick={openAddForm}>
+              <Plus size={14} /> Thêm từ đầu tiên
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={autoFillVocab}>
+              <BookOpen size={14} /> Thêm mẫu
+            </button>
+          </div>
         </div>
       )}
     </>
@@ -966,30 +1165,81 @@ export default function VocabView({
 
   return (
     <div className="vocab-view">
-      <div className="vocab-tabs" role="tablist" aria-label="Sổ tay từ vựng">
-        <button
-          role="tab"
-          aria-selected={tab === "table"}
-          className={`vocab-tab${tab === "table" ? " active" : ""}`}
-          onClick={() => setTab("table")}
-        >
-          <Table2 size={14} /> Bảng
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "stats"}
-          className={`vocab-tab${tab === "stats" ? " active" : ""}`}
-          onClick={() => setTab("stats")}
-        >
-          <BarChart3 size={14} /> Thống kê
-        </button>
-        <span className="vocab-tabs-spacer" />
-        <span className="vocab-total">
-          <NotebookPen size={13} /> {vocab.length} từ trong sổ tay
-        </span>
+      {/* ── Hero header: tiêu đề + số liệu nhanh + tab ── */}
+      <div className="vocab-head">
+        <div className="vocab-title-row">
+          <h2 className="vocab-title">
+            <span className="vocab-title-ic"><NotebookPen size={17} /></span>
+            Sổ tay từ vựng
+          </h2>
+          <span
+            className="vocab-level-badge"
+            title="AI giải nghĩa chi tiết: từ loại, định nghĩa, ví dụ, thuật ngữ liên quan — văn phong học thuật, chuẩn đại học & cao học"
+          >
+            <GraduationCap size={12} /> AI giải nghĩa chuẩn đại học & cao học
+          </span>
+          <div className="vocab-pills">
+            <span className="vocab-pill">
+              <BookMarked size={12} /> {stats.total} từ
+            </span>
+            <span className="vocab-pill ok">
+              <CheckCircle2 size={12} /> {stats.withMeaning} có nghĩa
+            </span>
+            <button
+              className={`vocab-pill warn${stats.missingMeaning ? "" : " calm"}`}
+              onClick={() => {
+                setMissingOnly(true);
+                setTab("table");
+              }}
+              title="Lọc các từ chưa có nghĩa"
+            >
+              <Sparkles size={12} /> {stats.missingMeaning} chưa nghĩa
+            </button>
+            <span className="vocab-pill">
+              <Tags size={12} /> {tags.length} thẻ
+            </span>
+            {selected.length > 0 && (
+              <span className="vocab-pill hot">
+                <Check size={12} /> {selected.length} đã chọn
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="vocab-tabs" role="tablist" aria-label="Sổ tay từ vựng">
+          <button
+            role="tab"
+            aria-selected={tab === "table"}
+            className={`vocab-tab${tab === "table" ? " active" : ""}`}
+            onClick={() => setTab("table")}
+          >
+            <Table2 size={14} /> Bảng
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === "stats"}
+            className={`vocab-tab${tab === "stats" ? " active" : ""}`}
+            onClick={() => setTab("stats")}
+          >
+            <BarChart3 size={14} /> Thống kê
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === "lookup"}
+            className={`vocab-tab${tab === "lookup" ? " active" : ""}`}
+            onClick={() => setTab("lookup")}
+          >
+            <BookOpen size={14} /> Tra cứu
+          </button>
+          <span className="vocab-tabs-spacer" />
+          <span className="vocab-total">
+            <NotebookPen size={13} /> {vocab.length} từ trong sổ tay
+          </span>
+        </div>
       </div>
 
-      {tab === "table" ? tableTab : statsTab}
+      {tab === "table" ? tableTab : tab === "stats" ? statsTab : (
+        <GlossaryPanel geminiKey={geminiKey} inline />
+      )}
 
       {form && (
         <div className="modal-overlay" onClick={() => setForm(null)}>
@@ -1018,7 +1268,7 @@ export default function VocabView({
                 rows={3}
                 value={form.meaning}
                 onChange={(e) => setForm({ ...form, meaning: e.target.value })}
-                placeholder="Để trống rồi dùng nút AI giải nghĩa sau cũng được"
+                placeholder="Để trống rồi dùng “AI giải nghĩa” — AI viết định nghĩa học thuật kèm ví dụ, thuật ngữ liên quan (chuẩn sinh viên đại học & cao học)"
               />
 
               <div className="vocab-form-row">
@@ -1091,6 +1341,17 @@ export default function VocabView({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmClearAll}
+        title="Xóa toàn bộ sổ tay?"
+        message={`Toàn bộ ${vocab.length} từ sẽ vào Thùng rác (giữ 30 ngày).`}
+        confirmText="Xóa toàn bộ"
+        onCancel={() => setConfirmClearAll(false)}
+        onConfirm={() => {
+          setConfirmClearAll(false);
+          trashEntries([...vocab], `Toàn bộ sổ tay (${vocab.length} từ)`);
+        }}
+      />
     </div>
   );
 }

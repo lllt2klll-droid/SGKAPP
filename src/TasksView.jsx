@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import DataTable from "./DataTable";
+import ConfirmDialog from "./ui/ConfirmDialog.jsx";
 import { getTasks, createTask, updateTask, deleteTask, toggleTaskComplete } from "./personalDB";
 import { appEvents, AppEvents } from "./core/appEvents.js";
 
@@ -53,6 +54,7 @@ export default function TasksView({ embedded = false }) {
 
   const handleCreate = () => {
     setEditingId(null);
+    setFormError("");
     setFormData({
       title: "",
       description: "",
@@ -65,6 +67,7 @@ export default function TasksView({ embedded = false }) {
 
   const handleEdit = (task) => {
     setEditingId(task.id);
+    setFormError("");
     setFormData({
       title: task.title || "",
       description: task.description || "",
@@ -76,11 +79,9 @@ export default function TasksView({ embedded = false }) {
   };
 
   const handleDelete = (id) => {
-    if (confirm("Thầy/cô có chắc muốn xóa việc này?")) {
-      try { deleteTask(id); } catch (e) { console.warn("[TasksView] deleteTask failed", e); }
-      setTasks(getTasks());
-    }
+    setPendingDeleteId(id);
   };
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
   const handleToggleComplete = (id) => {
     // personalDB.toggleTaskComplete đã emit TASK_COMPLETED + DATA_UPDATED duy nhất
@@ -93,21 +94,32 @@ export default function TasksView({ embedded = false }) {
     const now = new Date().toISOString();
     const taskData = {
       ...formData,
+      title: String(formData.title || "").trim(),
+      description: String(formData.description || "").trim(),
+      category: String(formData.category || "").trim(),
       updatedAt: now,
     };
 
-    if (editingId) {
-      try { updateTask(editingId, taskData); } catch (e) { console.warn("[TasksView] updateTask failed", e); }
-      setTasks(getTasks());
-    } else {
-      // personalDB.createTask — việc mới chưa hoàn thành nên chưa emit mission (emit khi tick xong)
-      try { createTask(taskData); } catch (e) { console.warn("[TasksView] createTask failed", e); }
-      setTasks(getTasks());
+    try {
+      if (editingId) {
+        updateTask(editingId, taskData);
+      } else {
+        // personalDB.createTask — việc mới chưa hoàn thành nên chưa emit mission (emit khi tick xong)
+        const created = createTask(taskData);
+        if (!created) { setFormError("Không lưu được (bộ nhớ đầy)."); return; }
+      }
+    } catch (err) {
+      setFormError(err.message || "Dữ liệu chưa hợp lệ.");
+      return;
     }
+    setFormError("");
+    setTasks(getTasks());
 
     setShowForm(false);
     setEditingId(null);
   };
+
+  const [formError, setFormError] = useState("");
 
   const handleCancel = () => {
     setShowForm(false);
@@ -243,16 +255,19 @@ export default function TasksView({ embedded = false }) {
             </button>
           </div>
           <form onSubmit={handleSubmit} className="form-panel-body">
+            {formError && <div className="util-error" role="alert">{formError}</div>}
             <div className="form-group">
               <label htmlFor="task-title">Tiêu đề *</label>
               <input
                 id="task-title"
                 type="text"
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                onChange={(e) => { setFormData({ ...formData, title: e.target.value }); if (formError) setFormError(""); }}
                 required
+                maxLength={120}
                 placeholder="Nhập tiêu đề công việc"
               />
+              <span className="word-meta-hint">{String(formData.title || "").length}/120</span>
             </div>
             <div className="form-group">
               <label htmlFor="task-description">Mô tả</label>
@@ -263,6 +278,7 @@ export default function TasksView({ embedded = false }) {
                   setFormData({ ...formData, description: e.target.value })
                 }
                 rows={3}
+                maxLength={2000}
                 placeholder="Mô tả chi tiết công việc"
               />
             </div>
@@ -302,6 +318,7 @@ export default function TasksView({ embedded = false }) {
                 onChange={(e) =>
                   setFormData({ ...formData, category: e.target.value })
                 }
+                maxLength={40}
                 placeholder="Ví dụ: Soạn giáo án, Nghiên cứu, Học tập"
               />
             </div>
@@ -361,6 +378,18 @@ export default function TasksView({ embedded = false }) {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={pendingDeleteId != null}
+        title="Xóa việc này?"
+        message="Việc đã xóa sẽ không khôi phục được."
+        confirmText="Xóa"
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={() => {
+          try { deleteTask(pendingDeleteId); } catch (e) { console.warn("[TasksView] deleteTask failed", e); }
+          setPendingDeleteId(null);
+          setTasks(getTasks());
+        }}
+      />
     </div>
   );
 }

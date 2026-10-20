@@ -25,6 +25,7 @@ export const STORAGE_KEYS = {
   COUNTS: "sgk_counts",
   VIEW_MODE: "sgk_view_mode",
   SORT_BY: "sgk_sort_by",
+  LIB_FILTERS: "sgk_lib_filters",
   // Research
   REFS: "sgk_refs",
   CONCEPTS: "sgk_concepts",
@@ -129,6 +130,7 @@ export const BACKUP_KEYS = [
   STORAGE_KEYS.COUNTS,
   STORAGE_KEYS.VIEW_MODE,
   STORAGE_KEYS.SORT_BY,
+  STORAGE_KEYS.LIB_FILTERS,
   "glossary_history",
   STORAGE_KEYS.STUDYNOTES_PREFIX,
   STORAGE_KEYS.NOTES_PREFIX,

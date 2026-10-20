@@ -19,6 +19,9 @@ export const TRASH_TYPE = {
   PLAN: "plan",
   QUESTION: "question",
   VOCAB: "vocab",
+  ACTIVITY: "activity",
+  WORKSHEET: "worksheet",
+  IDEA: "idea",
 };
 
 export const TRASH_TYPE_LABEL = {
@@ -26,6 +29,9 @@ export const TRASH_TYPE_LABEL = {
   plan: "Giáo án",
   question: "Câu hỏi",
   vocab: "Từ vựng",
+  activity: "Hoạt động",
+  worksheet: "Phiếu học tập",
+  idea: "Ý tưởng dạy học",
 };
 
 function notify(type) {

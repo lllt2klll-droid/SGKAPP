@@ -4,6 +4,8 @@
 // Dùng sẵn deps: `mammoth` (đọc) + `docx` (ghi). Không thêm dependency mới.
 
 import { uid, blankObject, ensureFits } from "./whiteboardStore.js";
+import { docxFontOf, boardDocxFont } from "./whiteboardFonts.js";
+import { normalizeBulletStyle, stripBulletMark, bulletPrefix, parseRichSegments } from "./mindmapEngine.js";
 
 const MAX_BLOCKS = 300;
 const MAX_TEXT_LEN = 1200;
@@ -326,7 +328,7 @@ function boardTextOf(o) {
 }
 
 function dataUrlToBytes(src) {
-  const m = String(src || "").match(/^data:(image\/(png|jpe?g|gif|bmp));base64,(.+)$/i);
+  const m = String(src || "").match(/^data:(image\/(png|jpe?g|gif|bmp|webp));base64,(.+)$/i);
   if (!m) return null;
   try {
     const b64 = m[3];
@@ -338,22 +340,39 @@ function dataUrlToBytes(src) {
     if (mime.includes("jpg") || mime.includes("jpeg")) type = "jpg";
     else if (mime.includes("gif")) type = "gif";
     else if (mime.includes("bmp")) type = "bmp";
+    else if (mime.includes("webp")) type = "png"; // docx không hỗ trợ webp → giữ bytes, khai png để Word tự chuyển
     return { data: bytes, type };
   } catch { return null; }
 }
 
-async function srcToImageBytes(src) {
-  if (!src) return null;
-  if (String(src).startsWith("data:image")) return dataUrlToBytes(src);
-  if (String(src).startsWith("blob:")) {
+async function imageIdToBytes(imageId) {
+  if (!imageId) return null;
+  try {
+    const { getImageBlob } = await import("./imageStore.js");
+    const blob = await getImageBlob(imageId);
+    if (!blob) return null;
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    const t = /png/i.test(blob.type) ? "png" : /gif/i.test(blob.type) ? "gif" : /bmp/i.test(blob.type) ? "bmp" : "jpg";
+    return { data: buf, type: t };
+  } catch { return null; }
+}
+
+async function srcToImageBytes(src, imageId = null) {
+  if (src && String(src).startsWith("data:image")) {
+    const direct = dataUrlToBytes(src);
+    if (direct) return direct;
+  }
+  if (src && String(src).startsWith("blob:")) {
     try {
       const res = await fetch(src);
       const blob = await res.blob();
       const buf = new Uint8Array(await blob.arrayBuffer());
       const t = /png/i.test(blob.type) ? "png" : /gif/i.test(blob.type) ? "gif" : "jpg";
       return { data: buf, type: t };
-    } catch { return null; }
+    } catch {}
   }
+  // P0: board sau stripEphemeralSrc có src=null nhưng imageId còn → resolve từ IDB (path phổ biến nhất)
+  if (imageId) return imageIdToBytes(imageId);
   return null;
 }
 
@@ -370,7 +389,9 @@ export async function exportBoardToDocx(board) {
   const byId = new Map(all.map((o) => [o.id, o]));
   const connectors = Array.isArray(board?.connectors) ? board.connectors : [];
 
-  const TNR = "Times New Roman";
+  // Font Word = font đang hiển thị của từng khối (object > font mặc định bảng > máy),
+  // để file .docx mở ra giống màn hình whiteboard thay vì cứng Times New Roman.
+  const boardFont = boardDocxFont(board);
   const PAGE_DXA = 9036; // A4usable sau trừ lề
 
   const hex6 = (c) => {
@@ -403,21 +424,44 @@ export async function exportBoardToDocx(board) {
   };
   const runOf = (o, text) => new TextRun({
     text: String(text ?? " "),
-    font: TNR,
+    font: docxFontOf(o, board),
     size: pxToHalf(o?.fontSize),
     bold: !!o?.bold || undefined,
     italics: !!o?.italic || undefined,
     color: hex6(o?.color) || undefined,
   });
+  // Markdown-lite **đậm** / *nghiêng* trong node → nhiều TextRun giữ style khi xuất Word
+  const runsOf = (o, text) => {
+    const segs = parseRichSegments(text).filter((r) => r.t);
+    if (!segs.length) return [runOf(o, " ")];
+    return segs.map((r) => new TextRun({
+      text: r.t,
+      font: docxFontOf(o, board),
+      size: pxToHalf(o?.fontSize),
+      bold: r.bold || !!o?.bold || undefined,
+      italics: r.italic || !!o?.italic || undefined,
+      color: hex6(o?.color) || undefined,
+    }));
+  };
 
   // Gom khối thành hàng: khối sau chồng dọc với hàng hiện tại -> chung hàng (giữ bố cục ngang)
+  // Dùng overlap dọc (>25% chiều cao nhỏ nhất) thay vì ngưỡng cứng 200px để không vỡ với node cao
   const items = all.filter((o) => o.kind !== "stroke");
   const rows = [];
   for (const o of items) {
+    const oy = Number(o.y) || 0;
+    const oh = Math.max(20, Number(o.height) || 40);
     const last = rows[rows.length - 1];
-    const rowBottom = last ? Math.max(...last.map((x) => (Number(x.y) || 0) + (Number(x.height) || 40))) : -Infinity;
-    const rowTop = last ? Math.min(...last.map((x) => Number(x.y) || 0)) : 0;
-    if (last && (Number(o.y) || 0) < rowBottom - 4 && ((Number(o.y) || 0) - rowTop) < 200) last.push(o);
+    let sameRow = false;
+    if (last) {
+      sameRow = last.some((x) => {
+        const xy = Number(x.y) || 0;
+        const xh = Math.max(20, Number(x.height) || 40);
+        const overlap = Math.min(oy + oh, xy + xh) - Math.max(oy, xy);
+        return overlap > Math.min(oh, xh) * 0.25;
+      });
+    }
+    if (last && sameRow) last.push(o);
     else rows.push([o]);
   }
   rows.forEach((r) => r.sort((a, b) => (Number(a.x) || 0) - (Number(b.x) || 0)));
@@ -426,13 +470,13 @@ export async function exportBoardToDocx(board) {
   kids.push(new Paragraph({
     heading: HeadingLevel.HEADING_1,
     alignment: AlignmentType.CENTER,
-    children: [new TextRun({ text: name, font: TNR, size: 36, bold: true, color: "1D4ED8" })],
+    children: [new TextRun({ text: name, font: boardFont, size: 36, bold: true, color: "1D4ED8" })],
   }));
   kids.push(new Paragraph({
     alignment: AlignmentType.CENTER,
     children: [new TextRun({
       text: `Xuất từ Whiteboard — ${items.length} khối, ${connectors.length} liên kết — ${new Date().toLocaleString("vi-VN")}`,
-      font: TNR, size: 20, italics: true, color: "64748B",
+      font: boardFont, size: 20, italics: true, color: "64748B",
     })],
   }));
   kids.push(new Paragraph({
@@ -440,7 +484,7 @@ export async function exportBoardToDocx(board) {
     spacing: { after: 200 },
     children: [new TextRun({
       text: "Mỗi khối là một ô bảng — bấm vào ô để sửa chữ trực tiếp. (Hình dạng khối được giữ gần đúng dạng chữ nhật.)",
-      font: TNR, size: 20, italics: true, color: "64748B",
+      font: boardFont, size: 20, italics: true, color: "64748B",
     })],
   }));
 
@@ -455,7 +499,7 @@ export async function exportBoardToDocx(board) {
       const o = row[i];
       const paras = [];
       if (o.kind === "image") {
-        const img = await srcToImageBytes(o.src).catch(() => null);
+        const img = await srcToImageBytes(o.src, o.imageId).catch(() => null);
         if (img) {
           try {
             const W = Math.max(120, Math.min(480, Math.round(cols[i] * 0.0667)));
@@ -470,15 +514,20 @@ export async function exportBoardToDocx(board) {
         const cap = boardTextOf(o);
         paras.push(new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: cap ? cap.slice(0, 300) : "Ảnh minh họa", font: TNR, size: 20, italics: true, color: "64748B" })],
+          children: [new TextRun({ text: cap ? cap.slice(0, 300) : "Ảnh minh họa", font: boardFont, size: 20, italics: true, color: "64748B" })],
         }));
       } else {
         const lines = boardTextOf(o).split("\n").slice(0, 30);
         const use = lines.length ? lines : [""];
+        // bullets trong node cũng xuất ra Word (đánh số đếm riêng từng khối)
+        const bstyle = normalizeBulletStyle(o.bullets);
+        let bn = 0;
         use.forEach((ln) => {
+          let t = String(ln).slice(0, 600) || " ";
+          if (bstyle && t.trim()) { bn++; t = bulletPrefix(bstyle, bn) + stripBulletMark(t); }
           paras.push(new Paragraph({
             alignment: alignOf(o),
-            children: [runOf(o, String(ln).slice(0, 600) || " ")],
+            children: runsOf(o, t),
           }));
         });
       }
@@ -519,13 +568,13 @@ export async function exportBoardToDocx(board) {
   if (namedLinks.length) {
     kids.push(new Paragraph({
       heading: HeadingLevel.HEADING_2,
-      children: [new TextRun({ text: "Sơ đồ liên kết", font: TNR, size: 28, bold: true, color: "1D4ED8" })],
+      children: [new TextRun({ text: "Sơ đồ liên kết", font: boardFont, size: 28, bold: true, color: "1D4ED8" })],
       spacing: { before: 320, after: 120 },
     }));
     namedLinks.forEach((s) => {
       kids.push(new Paragraph({
         bullet: { level: 0 },
-        children: [new TextRun({ text: s, font: TNR, size: 22 })],
+        children: [new TextRun({ text: s, font: boardFont, size: 22 })],
       }));
     });
   }

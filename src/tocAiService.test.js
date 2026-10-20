@@ -97,7 +97,7 @@ test("cleanTocAiItems: bảng mục lục Âm nhạc — dòng Chủ đề khôn
   const { items } = cleanTocAiItems([
     { title: "1 ÂM THANH KÌ DIỆU", page: "" }, // tiêu đề nhóm, không số trang
     { title: "Hát: Vào rừng hoa", page: 6 },
-    { title: "Thương thức âm nhạc: Âm thanh kì diệu", page: 8 },
+    { title: "Thưởng thức âm nhạc: Âm thanh kì diệu", page: 8 },
     { title: "2 VIỆT NAM YÊU THƯƠNG", page: null },
     { title: "Hát: Tổ quốc ta", page: 12 },
   ]);
@@ -105,7 +105,7 @@ test("cleanTocAiItems: bảng mục lục Âm nhạc — dòng Chủ đề khôn
   assert.ok(items.every((i) => !/ÂM THANH KÌ DIỆU|YÊU THƯƠNG/.test(i.title)));
 });
 
-test("roundtrip: AI items → exportTocSimple (2 cột Tên/Trang) → parseTocExcel đọc lại đúng", async () => {
+test("roundtrip: AI items → exportTocSimple → parseTocExcel đọc lại đúng (giữ đủ trường)", async () => {
   const { exportTocSimple, parseTocExcel } = await import("./tocExcel.js");
   const items = [{ title: "Bài 1", page: 15 }, { title: "Bài 2", page: 20 }];
   const buf = await exportTocSimple([{ items }]);
@@ -113,7 +113,7 @@ test("roundtrip: AI items → exportTocSimple (2 cột Tên/Trang) → parseTocE
     key: "test1",
     title: "Sách Test",
     grade: 5,
-    subject: "Toan",
+    subject: "Toán",
     term: 1,
   });
   const b = books.find((x) => x.key === "test1") || books[0];

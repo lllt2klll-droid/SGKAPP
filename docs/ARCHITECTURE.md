@@ -10,7 +10,7 @@
 ┌─ UI ─────────────────────────────────────────────────────────────────────┐
 │ App.jsx (APP SHELL, 4.167 dòng)                                         │
 │   nav  → core/navigationRegistry.buildNavSections() / getBreadcrumb()   │
-│   view → core/viewRegistry (26 view, lazy + Suspense)                   │
+│   view → core/viewRegistry (25 view, lazy + Suspense)                   │
 │   bus  → core/appEvents (47 events)                                     │
 └─────────────────────────────────────────────────────────────────────────┘
          │
@@ -39,9 +39,9 @@ module cũ được giữ làm wrapper/backward-compat có ghi chú (xem `LEGACY
 | Hạng mục | Giá trị |
 |---|---|
 | Module nguồn | `src/` **140 file** không tính test (161 file `.js/.jsx`) |
-| Test | **31 file test** (`src/` 21 + `tests/` 9 + `server/` 1) → **329 test / 57 suites** pass; e2e **5 spec → 24/24** |
+| Test | **~40 file test** → **474 test / 72 suites** pass (verify 11/10/2026); e2e **5 spec → 37/37** |
 | Lint | oxlint 0 warnings / 0 errors (179 file, 89 rules) |
-| View | 26 trong `VIEW_REGISTRY` (21 lazy + 5 inline `component:null`) |
+| View | 25 trong `VIEW_REGISTRY` (20 lazy + 5 inline `component:null`) — P1 gộp Từ điển vào Từ vựng (tab Tra cứu), tách nav "Sổ tay nghiên cứu" khỏi "Công cụ nâng cao" |
 | Event | 47 entries `AppEvents` + `DataDomains` |
 | IndexedDB | `SGKAppDB` **v5**, 10 stores |
 | Truy cập LS trực tiếp ngoài module được phép | 4 hit (chẩn đoán `SettingsCenter`) + 4 comment |
@@ -234,7 +234,7 @@ không import. Xem `docs/TECHNICAL_DEBT.md §1`.
 
 ```bash
 npm run lint      # 0/0 (179 files, 89 rules)
-npm test          # 329/329 (57 suites)
+npm test          # 474/474 (72 suites, verify 11/10/2026)
 npm run build     # 1.994 modules, PWA 78 entries
-npm run test:e2e  # 24/24 (5 spec, cần dist/)
+npm run test:e2e  # 37/37 (5 spec, cần dist/)
 ```

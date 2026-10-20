@@ -411,7 +411,8 @@ export function applyEvent(event){
     PAGE_READ: ['reading'],
     BOOKMARK_CREATED: ['bookmark'],
     NOTE_CREATED: ['note'],
-    VOCAB_CREATED: ['vocabulary'],
+    // P2 • VOCAB_CREATED cũng nuôi nhiệm vụ "research" (khái niệm đã gộp vào Từ vựng)
+    VOCAB_CREATED: ['vocabulary', 'research'],
     CONCEPT_CREATED: ['research'],
     EVIDENCE_CREATED: ['evidence'],
     REFERENCE_CREATED: ['reference'],

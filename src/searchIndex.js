@@ -64,8 +64,14 @@ export async function deleteIndex(filename) {
 }
 
 // Invalidate and mark index for rebuild (triggered on book changes)
+// Xóa dữ liệu index nặng (LS + IDB fire-and-forget) nhưng giữ meta stale để
+// needsRebuild() true và không tốn quota kép.
 export function invalidateIndex(filename) {
   try {
+    safeRemove(IDX_KEY(filename));
+    if (indexedDBService.constructor.isAvailable()) {
+      indexedDBService.delete(STORES.SEARCH_INDEX, filename).catch(() => {});
+    }
     const meta = getIndexMeta(filename);
     if (meta) {
       // Update meta to mark as stale
@@ -132,20 +138,28 @@ export function normalizeText(text) {
   return base.replace(/[^a-z0-9]+/gi, ' ');
 }
 
+export const MAX_QUERY_TOKENS = 12;
 export function tokenize(query) {
-  return normalizeText(query).split(/\s+/).filter(Boolean).slice(0, 8);
+  return normalizeText(query).split(/\s+/).filter(Boolean).slice(0, MAX_QUERY_TOKENS);
 }
 
 // ── Build the index for one book ────────────────────────────────────
 // Đồng bộ Word (html/txt/md) y hệt PDF — fetch content khi pdfDoc null
 // onProgress({ done, total, page, kind }) — kind: 'text' | 'ocr' | 'image'
-export async function buildIndex(book, pdfDoc, onProgress) {
+// opts.signal: AbortSignal để hủy khi user chuyển sách/gõ tiếp
+export async function buildIndex(book, pdfDoc, onProgress, opts = {}) {
+  const signal = opts.signal;
+  const throwIfAborted = () => { if (signal?.aborted) throw new DOMException("Cancelled", "AbortError"); };
   const isWord = /\.(html|htm|txt|md)$/i.test(book.filename || "");
   if (isWord) {
-    // Word — fetch qua API như App.jsx, đồng bộ toàn app
+    // Word — fetch qua API như App.jsx, đồng bộ toàn app (timeout 30s + abort)
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30000);
+    const onAbort = () => ctrl.abort();
+    signal?.addEventListener?.("abort", onAbort, { once: true });
     try {
       const API_BASE = getApiBase();
-      const res = await fetch(`${API_BASE}/api/books/${encodeURIComponent(book.filename)}/content`);
+      const res = await fetch(`${API_BASE}/api/books/${encodeURIComponent(book.filename)}/content`, { signal: ctrl.signal });
       const data = await res.json().catch(()=>({}));
       let raw = data.content || "";
       const plain = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -169,7 +183,13 @@ export async function buildIndex(book, pdfDoc, onProgress) {
         saveJSON(IDX_KEY(book.filename), indexData);
       }
       return meta;
-    } catch(e){ console.warn("buildIndex word failed", e); throw e; }
+    } catch(e){
+      if (e?.name === "AbortError") throw e;
+      console.warn("buildIndex word failed", e); throw e;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener?.("abort", onAbort);
+    }
   }
   const total = pdfDoc.numPages || 0;
   const pages = [];
@@ -177,6 +197,7 @@ export async function buildIndex(book, pdfDoc, onProgress) {
   let ocrPages = 0;
   let imagePages = 0;
   for (let p = 1; p <= total; p++) {
+    throwIfAborted();
     let text = '';
     let kind = 'text';
     try {
@@ -235,53 +256,94 @@ export async function buildIndex(book, pdfDoc, onProgress) {
 
 // ── Search across indexed books ────────────────────────────────────
 // Returns results grouped by book: [{ book, score, hits: [{page, snippet, marks}] }]
-export async function searchAll(query, books) {
+// - Tải index song song (giới hạn 6) thay vì tuần tự từng sách
+// - Điểm chuẩn hóa theo độ dài sách (sách dài không auto thắng)
+// - snippet kèm marks [start,end) theo tọa độ snippet để highlight không lệch
+// - opts.signal: hủy khi user gõ tiếp
+export async function searchAll(query, books, opts = {}) {
   const tokens = tokenize(query);
   if (!tokens.length) return [];
+  const signal = opts.signal;
+  const list = Array.isArray(books) ? books.slice(0, 200) : [];
+  const CONCURRENCY = 6;
   const out = [];
-  for (const book of books) {
+  const searchOne = async (book) => {
+    if (signal?.aborted) return;
     const idx = await getIndex(book.filename);
-    if (!idx || !Array.isArray(idx.pages) || !idx.pages.length) continue;
+    if (!idx || !Array.isArray(idx.pages) || !idx.pages.length) return;
+    const docLen = idx.pages.reduce((s, pg) => s + (pg.text?.length || 0), 0) || 1;
     const bookHits = [];
-    let bookScore = 0;
+    let rawScore = 0;
     for (const pg of idx.pages) {
       if (!pg.text) continue;
       const { norm, map } = normMap(pg.text);
+      if (!norm) continue;
       let allFound = true;
       let firstPos = -1;
       let score = 0;
+      const tokPositions = [];
       for (const tok of tokens) {
         const pos = norm.indexOf(tok);
         if (pos === -1) { allFound = false; break; }
-        score += 1;
         if (firstPos === -1 || pos < firstPos) firstPos = pos;
-        // count occurrences for better ranking
+        // đếm occurrences, chuẩn hóa theo độ dài trang
         let c = 0, from = 0;
-        while ((from = norm.indexOf(tok, from)) !== -1) { c++; from += tok.length; }
-        score += c;
+        const positions = [];
+        while ((from = norm.indexOf(tok, from)) !== -1) { c++; positions.push(from); from += tok.length; }
+        score += c / (1 + Math.log10(1 + norm.length / 500));
+        tokPositions.push({ tok, positions });
       }
       if (!allFound) continue;
-      bookScore += score;
-      bookHits.push({ page: pg.page, kind: pg.kind, snippet: makeSnippet(pg.text, norm, map, firstPos), score });
+      rawScore += score;
+      const snip = makeSnippet(pg.text, norm, map, firstPos, tokPositions);
+      // snippet giữ string (tương thích SearchView/GlobalSearch cũ) + marks riêng để highlight chuẩn
+      bookHits.push({ page: pg.page, kind: pg.kind, snippet: snip.snippet, marks: snip.marks, score });
     }
     if (bookHits.length) {
       bookHits.sort((a, b) => b.score - a.score);
-      out.push({ book, score: bookScore, hits: bookHits.slice(0, 30), totalHits: bookHits.length });
+      // Chuẩn hóa theo độ dài sách để sách 500 trang không đè sách 20 trang
+      const normScore = rawScore / (1 + Math.log10(1 + docLen / 5000));
+      out.push({ book, score: normScore, hits: bookHits.slice(0, 30), totalHits: bookHits.length });
     }
+  };
+  for (let i = 0; i < list.length; i += CONCURRENCY) {
+    if (signal?.aborted) break;
+    await Promise.all(list.slice(i, i + CONCURRENCY).map(searchOne));
   }
   out.sort((a, b) => b.score - a.score);
   return out;
 }
 
 // Build a readable snippet around the first match (positions mapped back to original text)
-function makeSnippet(original, norm, map, firstPos) {
+// Trả về { snippet, marks } — marks là [start,end) theo tọa độ SNIPPET (đã gồm '…')
+function makeSnippet(original, norm, map, firstPos, tokPositions = []) {
   const head = 60, tail = 160;
   const start = Math.max(0, firstPos - head);
   const end = Math.min(map.length, firstPos + tail);
   const orgStart = map[start];
   const orgEnd = map[end - 1] + 1;
   let s = original.slice(orgStart, orgEnd).replace(/\s+/g, ' ').trim();
-  if (orgStart > 0) s = '…' + s;
-  if (orgEnd < original.length) s = s + '…';
-  return s || original.slice(0, 240);
+  const prefix = orgStart > 0 ? '…' : '';
+  const suffix = orgEnd < original.length ? '…' : '';
+  s = prefix + s + suffix;
+  // Map từng occurrence (norm coords) → snippet coords
+  const marks = [];
+  try {
+    for (const { tok, positions } of tokPositions) {
+      for (const p of positions) {
+        if (p < start || p + tok.length > end) continue;
+        const oS = map[p];
+        const oE = map[p + tok.length - 1] + 1;
+        // chuyển về tọa độ snippet đã normalize whitespace: tìm gần đúng bằng indexOf
+        const needle = original.slice(oS, oE).replace(/\s+/g, ' ').trim();
+        if (!needle) continue;
+        const idx = s.indexOf(needle);
+        if (idx !== -1) marks.push([idx, idx + needle.length]);
+        if (marks.length >= 20) break;
+      }
+      if (marks.length >= 20) break;
+    }
+  } catch {}
+  if (!s) s = original.slice(0, 240);
+  return { snippet: s, marks };
 }

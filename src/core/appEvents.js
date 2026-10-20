@@ -55,6 +55,11 @@ export const AppEvents = {
   MISSION_PROGRESS: "sgk:mission-progress",
   MISSIONS_UPDATED: "sgk:missions-updated",
   WEBTOOLS_UPDATED: "sgk:webtools-updated",
+  // P0 • event riêng cho các domain trước đây chỉ bắn DATA_UPDATED chung
+  // (vocab/nghiên cứu/thực tập) — listener chọn lọc + cross-tab theo domain
+  VOCAB_UPDATED: "sgk:vocab-updated",
+  RESEARCH_UPDATED: "sgk:research-updated",
+  INTERNSHIP_UPDATED: "sgk:internship-updated",
   // Niche events — trước đây dispatch thẳng ra window (đã gom về bus)
   OPEN_WORD_EDITOR: "sgk:open-word-editor",
   FILTER_SUBJECT: "sgk:filter-subject",
@@ -83,6 +88,10 @@ export const DataDomains = {
   MISSIONS: "missions",
   WEBTOOLS: "webtools",
   BOOKS: "books",
+  // P0 • domain trước đây emit thiếu trường này (chỉ có source/op)
+  QUIZ: "quiz",
+  INTERNSHIP: "internship",
+  RESEARCH: "research",
 };
 
 const _directListeners = new Map(); // eventName -> Set<fn>
@@ -128,6 +137,10 @@ const DOMAIN_ALIAS_EVENTS = new Set([
   AppEvents.WHITEBOARD_UPDATED,
   AppEvents.SCAN_SAVED,
   AppEvents.WEBTOOLS_UPDATED,
+  // P0 • 3 event mới cũng sinh alias DATA_UPDATED (Dashboard/DataTools refresh)
+  AppEvents.VOCAB_UPDATED,
+  AppEvents.RESEARCH_UPDATED,
+  AppEvents.INTERNSHIP_UPDATED,
 ]);
 
 // Phát trong TAB HIỆN TẠI: direct listeners + window dispatch (legacy) + alias DATA_UPDATED.
@@ -223,6 +236,12 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
       else if (key.includes("missions")) domain = DataDomains.MISSIONS;
       else if (key.includes("activities")) domain = DataDomains.ACTIVITIES;
       else if (key.includes("questions")) domain = DataDomains.QUESTIONS;
+      // P0 • ánh xạ domain trước đây rơi vào "storage" chung
+      else if (key.includes("vocab")) domain = DataDomains.VOCAB;
+      else if (key.includes("internship")) domain = DataDomains.INTERNSHIP;
+      else if (key.includes("worksheets")) domain = DataDomains.WORKSHEETS;
+      else if (key.includes("quiz")) domain = DataDomains.QUIZ;
+      else if (key.includes("marks") || key.includes("clip") || key.includes("concept") || key.includes("evidence") || key.includes("sgk_refs") || key.includes("collection")) domain = DataDomains.RESEARCH;
       
       // Notify the app that data was updated from another tab
       appEvents.emitDataUpdated({ domain, source: "cross-tab-sync", id: key });
@@ -232,6 +251,12 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
         appEvents.emit(AppEvents.LESSON_PLAN_UPDATED, { key, source: "cross-tab-sync" });
       } else if (domain === DataDomains.WHITEBOARD) {
         appEvents.emit(AppEvents.WHITEBOARD_UPDATED, { key, source: "cross-tab-sync" });
+      } else if (domain === DataDomains.VOCAB) {
+        appEvents.emit(AppEvents.VOCAB_UPDATED, { key, source: "cross-tab-sync" });
+      } else if (domain === DataDomains.INTERNSHIP) {
+        appEvents.emit(AppEvents.INTERNSHIP_UPDATED, { key, source: "cross-tab-sync" });
+      } else if (domain === DataDomains.RESEARCH) {
+        appEvents.emit(AppEvents.RESEARCH_UPDATED, { key, source: "cross-tab-sync" });
       } else if (domain === DataDomains.SETTINGS) {
         try {
           if (e.newValue) {

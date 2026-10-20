@@ -3,6 +3,9 @@
    - Lớp: số 1-5 (nhỏ gọn)
    - Môn: expand panel thay vì dàn 20 pill
    - Màu nút khớp app: active = accent setting (var(--color-action))
+   SCOPE: chỉ .library-* / .welcome-hero — KHÔNG đè .webtoolbox-view/.wt-*
+   nên thứ tự với 22-webtoolbox.css không quan trọng.
+   Quy ước cascade toàn app: xem chú thích import trong src/main.jsx.
    ============================================================ */
 
 .library-command-center { display:flex; flex-direction:column; gap:1rem; padding:0; }

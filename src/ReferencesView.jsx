@@ -340,7 +340,7 @@ export default function ReferencesView({ books, onNavigate }) {
         <div className="panel-box mt-md" style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
           <span style={{ fontSize:12, opacity:0.7 }}>Liên kết nhanh:</span>
           <button className="btn btn-secondary btn-xs" onClick={()=>onNavigate("collections")}>Bộ sưu tập</button>
-          <button className="btn btn-secondary btn-xs" onClick={()=>onNavigate("concepts")}>Khái niệm</button>
+          <button className="btn btn-secondary btn-xs" onClick={()=>onNavigate("vocab")}>Từ vựng</button>
           <button className="btn btn-secondary btn-xs" onClick={()=>onNavigate("search")}>Tìm kiếm</button>
         </div>
       )}

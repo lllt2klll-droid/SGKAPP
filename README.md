@@ -37,7 +37,7 @@ sgk-app/
 ├── index.html
 ├── public/                # icons, audio/ui/*.wav, khbd templates
 ├── src/
-│   ├── App.jsx            # APP SHELL: state toàn cục, nav, render view (4.167 dòng)
+│   ├── App.jsx            # APP SHELL: state toàn cục, nav, render view (~4.300 dòng; đo lại: Get-Content src/App.jsx | Measure-Object -Line)
 │   ├── core/              # 8 module "single source of truth" (xem docs/ARCHITECTURE.md)
 │   ├── components/        # UI dùng chung (FileDropzone, MobileBottomNav, ReaderMobileBar)
 │   ├── khbd/              # soạn giáo án: planModel, planAi, LessonPlanView, template...
@@ -69,15 +69,17 @@ App.jsx ──► core/navigationRegistry (1 nguồn nav) ──► core/viewReg
 - **Event:** mọi module phát qua `appEvents.emit(...)`; `window.dispatchEvent` chỉ nằm trong `core/appEvents.js` (bridge cho legacy listener).
 - **Xóa sách:** `storage.removeBookData(file)` → LS per-book + IDB + `whiteboardStore.purgeBookRefs()` + purge blob ảnh mồ côi.
 
-## Trạng thái kiểm chứng (2026-10-01)
+## Trạng thái kiểm chứng (2026-10-16 — chạy lại sau đợt hoàn thiện, số liệu cũ xem docs/history/)
 
 | Kiểm tra | Kết quả |
 |---|---|
-| `npm run lint` | **0 warnings / 0 errors** (179 files, 89 rules) |
-| `npm test` | **329/329 pass**, 57 suites, 0 fail |
-| `npm run build` | OK — 1.994 modules, PWA precache **78 entries**, 0 cảnh báo |
-| `npm run test:e2e` | **24/24 pass** (5 spec: smoke + trash + backup + board-scan + cross-tab — thùng rác, hoàn tác, xuất/khôi phục file sao lưu, bảng trắng, quét ảnh, đồng bộ 2 tab) |
-| Kích thước code | `src/` 140 module không tính test (161 file `.js/.jsx`), **~66.800 dòng** |
+| `npm run lint` | **0 warnings / 0 errors** (204 files, 89 rules) |
+| `npm test` | **536/536 pass**, 75 suites, 0 fail |
+| `npm run build` | OK — PWA precache **82 entries**, 0 cảnh báo |
+| `npm run test:e2e` | Chạy khi cần (`tests/e2e`, cần dist + port 5321) |
+| Kích thước code | `src/` 146 module không tính test, **~71.000 dòng** |
+
+> Số liệu cũ (474/474, 37/37 e2e, 78 precache…) đã lỗi thời sau các đợt sửa — xem baseline gốc ở `docs/history/` chỉ để đối chiếu.
 
 > 3 file `src/core/` từng 0 importer (`storageAdapter`, `appContext`, `integration`, 471 dòng)
 > đã đối chiếu rồi chuyển sang `docs/_attic/src-core/` ngày 2026-10-01 (repo không có git).
@@ -97,7 +99,7 @@ và `App.jsx` tôn trọng setting này cho **mọi** sách (hết nhánh "sách
 | Hoàn nguyên code | giải nén `../sgk-app-backup-*.zip` đè lên `sgk-app/` |
 
 Sau thay đổi (thư viện mở 12 giây, cùng máy): **21 MB** (chỉ tải bìa trang 1 của sách đang thấy)
-thay vì 342 MB. `npm run lint` 0/0 · `npm test` 286/286 · `npm run build` OK · `test:e2e` 3/3.
+thay vì 342 MB.
 
 
 ## Tài liệu

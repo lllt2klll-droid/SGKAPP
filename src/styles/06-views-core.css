@@ -410,6 +410,75 @@
   border-color: var(--pen-blue) !important;
 }
 
+/* ── Ctrl+K filter bar + highlight + command ── */
+.gs-filterbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--background);
+  scrollbar-width: thin;
+}
+.gs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: var(--font-caption);
+  font-weight: 800;
+  color: var(--text-mid);
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.gs-chip:hover {
+  border-color: var(--pen-blue);
+  color: var(--text-dark);
+}
+.gs-chip.active {
+  background: var(--pen-blue-soft);
+  border-color: var(--pen-blue);
+  color: var(--pen-blue-deep, var(--pen-blue));
+}
+.gs-chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+.gs-chip.active .gs-chip-count {
+  background: var(--surface);
+  color: var(--pen-blue);
+  border-color: var(--pen-blue);
+}
+.gs-chip.empty {
+  opacity: 0.55;
+}
+.gs-mark {
+  background: var(--color-selection, #fef08a);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.gs-fuzzy-hit {
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 2px;
+}
+
 /* ============================================================
    Spinner / keyframes
    ============================================================ */

@@ -1,0 +1,242 @@
+/* ============================================================
+   41 — ASSISTANT PRO (Trợ lý AI: Chat + Hướng dẫn + Điều hướng)
+   Dùng 100% CSS vars của app → tự khớp Sáng/Tối + màu chủ đạo.
+   ============================================================ */
+.aia-wrap { z-index: var(--z-bubble); }
+
+/* FAB gradient + pulse khi chưa có key */
+.aia-fab.pro {
+  position: relative;
+  width: 60px; height: 60px;
+  background: linear-gradient(135deg, var(--color-action, var(--primary)) 0%, var(--color-action-strong, var(--primary-dark)) 100%) !important;
+  border: 1px solid var(--color-action, var(--primary)) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 28px rgba(37, 99, 235, .38), var(--shadow-md) !important;
+}
+.aia-fab.pro:hover { filter: brightness(1.07); transform: translateY(-1px); }
+.aia-fab.pro:active { transform: scale(.94); }
+.aia-fab-spark {
+  position: absolute; right: 6px; bottom: 6px;
+  background: rgba(255,255,255,.22); border-radius: 50%;
+  width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+}
+.aia-fab.pulse::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid var(--color-action, var(--primary));
+  animation: aiaPulse 1.8s ease-out infinite;
+}
+@keyframes aiaPulse { 0% { transform: scale(.85); opacity: .9; } 100% { transform: scale(1.18); opacity: 0; } }
+
+/* Panel */
+.aia-panel.pro {
+  width: min(452px, 94vw);
+  max-height: min(76vh, 720px);
+  /* min thắng max theo spec → màn hình thấp (landscape) sẽ tràn viewport.
+     Clamp để không bao giờ cao hơn khung nhìn. */
+  min-height: clamp(300px, 52vh, 480px);
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, .28), var(--shadow-lg);
+  overflow: hidden;
+}
+.aia-panel.pro.expanded { width: min(660px, 96vw); }
+
+/* Header gradient */
+.aia-pro-head {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .7rem .85rem;
+  background: linear-gradient(135deg, var(--color-action-soft, var(--primary-light)), var(--surface-soft));
+  border-bottom: 1px solid var(--border-color);
+  cursor: grab; user-select: none;
+}
+.aia-pro-head:active { cursor: grabbing; }
+.aia-avatar {
+  width: 38px; height: 38px; border-radius: 13px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--color-action, var(--primary)), var(--color-action-strong, var(--primary-dark)));
+  color: #fff; box-shadow: var(--shadow-sm);
+}
+.aia-pro-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.aia-pro-name { font-family: var(--font-heading); font-weight: 800; font-size: .92rem; color: var(--text-dark); display: flex; align-items: center; gap: .45rem; }
+.aia-status { font-size: .66rem; font-weight: 800; padding: .1rem .5rem; border-radius: 999px; border: 1px solid; }
+.aia-status.ok { color: var(--success-deep, #15803d); background: var(--success-soft, #dcfce7); border-color: currentColor; }
+.aia-status.warn { color: var(--warning-deep, #b45309); background: var(--warning-soft, #fef3c7); border-color: currentColor; }
+.aia-pro-sub { font-size: .7rem; color: var(--text-muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Tabs */
+.aia-tabs { display: flex; align-items: center; gap: .4rem; padding: .5rem .7rem; border-bottom: 1px solid var(--border-color); background: var(--surface); }
+.aia-tab {
+  display: flex; align-items: center; gap: .35rem;
+  border: 1px solid var(--border-color); background: var(--surface-soft);
+  color: var(--text-mid); font-weight: 800; font-size: .76rem;
+  border-radius: 999px; padding: .34rem .75rem; cursor: pointer;
+}
+.aia-tab.active { background: var(--color-action, var(--primary)); border-color: var(--color-action, var(--primary)); color: #fff; box-shadow: var(--shadow-sm); }
+.aia-tab-count { background: rgba(255,255,255,.25); border-radius: 999px; font-size: .66rem; padding: 0 .4rem; }
+.aia-tab:not(.active) .aia-tab-count { background: var(--color-action-soft, var(--primary-light)); color: var(--color-action, var(--primary)); }
+.aia-key-cta {
+  margin-left: auto; display: flex; align-items: center; gap: .3rem;
+  border: 1px dashed var(--warning-deep, #d97706); color: var(--warning-deep, #b45309);
+  background: var(--warning-soft, #fef3c7); border-radius: 999px; font-size: .7rem; font-weight: 800;
+  padding: .32rem .65rem; cursor: pointer;
+}
+
+/* Search rows */
+.aia-search-row {
+  display: flex; align-items: center; gap: .45rem;
+  padding: .45rem .7rem; border-bottom: 1px solid var(--border-color);
+  background: var(--surface-soft); color: var(--text-muted);
+}
+.aia-search-row input { flex: 1; border: none; background: transparent; outline: none; font-size: .8rem; font-weight: 600; color: var(--text-dark); }
+.aia-search-row button { border: none; background: none; cursor: pointer; color: var(--text-muted); display: flex; }
+.aia-count { flex: none; font-size: .66rem; font-weight: 800; color: var(--text-muted); background: var(--surface-alt, var(--surface-soft)); border: 1px solid var(--border-color); border-radius: 999px; padding: .05rem .45rem; }
+
+/* Welcome */
+.aia-welcome { display: flex; flex-direction: column; gap: .65rem; }
+.aia-welcome-hero {
+  display: flex; gap: .65rem; padding: .8rem;
+  background: linear-gradient(135deg, var(--color-action-soft, var(--primary-light)), var(--surface-soft));
+  border: 1px solid var(--border-color); border-radius: 15px;
+}
+.aia-welcome-hero strong { color: var(--text-dark); font-size: .86rem; }
+.aia-welcome-hero p { margin: .25rem 0 0; font-size: .79rem; color: var(--text-mid); line-height: 1.5; }
+.aia-welcome-bot {
+  width: 40px; height: 40px; border-radius: 13px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #7c3aed, #2563eb); color: #fff;
+}
+.aia-notice {
+  display: flex; align-items: center; gap: .45rem; text-align: left;
+  border: 1px dashed var(--warning-deep, #d97706); background: var(--warning-soft, #fef3c7);
+  color: #92400e; border-radius: 12px; padding: .55rem .7rem; font-size: .76rem; font-weight: 700; cursor: pointer;
+}
+.aia-qgroup-label { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); margin: .15rem 0 .3rem; }
+.aia-chips { display: flex; flex-wrap: wrap; gap: .38rem; }
+.aia-chip {
+  background: var(--surface); border: 1px solid var(--border-color);
+  border-radius: 999px; padding: .34rem .7rem; font-size: .74rem; font-weight: 600;
+  color: var(--text-mid); cursor: pointer; max-width: 100%; text-align: left;
+}
+.aia-chip:hover { border-color: var(--color-action, var(--primary)); color: var(--color-action, var(--primary)); background: var(--surface-soft); }
+.aia-chip.sm { font-size: .7rem; padding: .25rem .6rem; }
+.aia-guide-entry {
+  display: flex; align-items: center; justify-content: center; gap: .4rem;
+  border: 1px solid var(--color-action, var(--primary)); color: var(--color-action, var(--primary));
+  background: var(--surface); border-radius: 12px; padding: .55rem; font-weight: 800; font-size: .8rem; cursor: pointer;
+}
+.aia-guide-entry:hover { background: var(--color-action-soft, var(--primary-light)); }
+
+/* Messages */
+.aia-msg.bot { border-left: 3px solid var(--color-action, var(--primary)); }
+.aia-msg.user { background: linear-gradient(135deg, var(--color-action, var(--primary)), var(--color-action-strong, var(--primary-dark))); color: #fff; border-color: transparent; }
+.aia-msg.user .aia-msg-time { color: rgba(255,255,255,.75); }
+.aia-offline-tag { display: inline-block; margin-top: .35rem; font-size: .66rem; font-weight: 800; color: var(--warning-deep, #b45309); background: var(--warning-soft, #fef3c7); border-radius: 999px; padding: .1rem .5rem; }
+.aia-act-row { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; }
+.aia-goto {
+  display: inline-flex; align-items: center; gap: .3rem;
+  background: var(--color-action, var(--primary)); color: #fff; border: 1px solid var(--color-action, var(--primary));
+  border-radius: 999px; padding: .32rem .75rem; font-size: .74rem; font-weight: 800; cursor: pointer;
+}
+.aia-goto:hover { filter: brightness(1.08); }
+.aia-act-btn { display: inline-flex; align-items: center; gap: .35rem; }
+.aia-mini-link { font-size: .7rem; font-weight: 700; color: var(--color-action, var(--primary)); display: inline-flex; align-items: center; gap: .2rem; padding: .3rem .2rem; }
+.aia-msg-actions { display: flex; flex-wrap: wrap; gap: .15rem .55rem; margin-top: .4rem; padding-top: .4rem; border-top: 1px dashed var(--border-color); }
+.aia-msg-actions .aia-copy { display: inline-flex; align-items: center; gap: .25rem; }
+.aia-code { background: var(--surface-alt, var(--surface-soft)); border: 1px solid var(--border-color); border-radius: 6px; padding: 0 .35rem; font-size: .78em; }
+
+/* Markdown */
+.aia-md { display: flex; flex-direction: column; gap: .3rem; }
+.aia-md-p { margin: 0; }
+.aia-md-h3 { font-size: .95rem; margin: .4rem 0 .1rem; color: var(--text-dark); }
+.aia-md-h4 { font-size: .88rem; margin: .45rem 0 .1rem; color: var(--color-action, var(--primary)); border-bottom: 1px solid var(--border-color); padding-bottom: .2rem; }
+.aia-md-h5 { font-size: .82rem; margin: .35rem 0 .1rem; color: var(--text-dark); }
+.aia-md-ul, .aia-md-ol { margin: .15rem 0 .15rem 1.05rem; padding: 0; display: flex; flex-direction: column; gap: .2rem; }
+.aia-md-quote { margin: .2rem 0; padding: .4rem .6rem; border-left: 3px solid var(--color-action, var(--primary)); background: var(--surface-soft); border-radius: 0 8px 8px 0; color: var(--text-mid); font-size: .78rem; }
+.aia-md-hr { border: none; border-top: 1px solid var(--border-color); margin: .35rem 0; }
+
+/* Typing + follow */
+.aia-typing { display: flex; align-items: center; gap: .3rem; }
+.aia-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--color-action, var(--primary)); animation: aiaBlink 1s infinite; }
+.aia-typing span:nth-child(2) { animation-delay: .15s; } .aia-typing span:nth-child(3) { animation-delay: .3s; }
+.aia-typing em { font-style: normal; margin-left: .3rem; }
+@keyframes aiaBlink { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+.aia-follow { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; background: var(--surface-soft); border: 1px dashed var(--border-color); border-radius: 12px; padding: .5rem .6rem; }
+.aia-follow-label { font-size: .7rem; font-weight: 800; color: var(--text-muted); display: inline-flex; align-items: center; gap: .25rem; }
+
+/* Input */
+.aia-icon-btn {
+  width: 42px; height: 42px; border-radius: 12px; flex: none;
+  border: 1px solid var(--border-color); background: var(--surface); color: var(--text-mid); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.aia-icon-btn.live { background: var(--danger, #ef4444); border-color: var(--danger, #ef4444); color: #fff; animation: aiaBlink 1s infinite; }
+.aia-foot-hint { display: flex; align-items: center; gap: .3rem; padding: .3rem .9rem .55rem; font-size: .66rem; color: var(--text-muted); font-weight: 600; background: var(--surface-soft); }
+.aia-empty-note { text-align: center; font-size: .78rem; color: var(--text-muted); font-weight: 600; padding: 1rem; }
+.aia-error {
+  margin: .4rem .75rem; padding: .5rem .7rem; border-radius: 10px;
+  background: var(--red-soft, #fee2e2); border: 1px solid var(--red-action, #ef4444);
+  color: var(--red-action-deep, #b91c1c); font-size: .76rem; font-weight: 700;
+}
+
+/* Guide tab */
+.aia-guide-tab { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.aia-guide-list { flex: 1; overflow-y: auto; padding: .65rem .75rem; display: flex; flex-direction: column; gap: .5rem; background: var(--surface); }
+.aia-guide-card { border: 1px solid var(--border-color); border-radius: 14px; background: var(--surface); }
+/* KHÔNG dùng overflow:hidden ở đây: Chromium (cả GPU thật lẫn SwiftShader) nuốt paint
+   toàn bộ nội dung trong card bo góc (chỉ còn viền), bấm vẫn đổi state nhưng nhìn như chết.
+   Card không có nền con tràn góc nên không cần clip. */
+.aia-guide-card.open { border-color: var(--color-action, var(--primary)); box-shadow: var(--shadow-sm); }
+.aia-guide-head { width: 100%; display: flex; align-items: center; gap: .6rem; padding: .6rem .7rem; background: none; border: none; cursor: pointer; text-align: left; color: var(--text-dark); }
+.aia-guide-icon { width: 34px; height: 34px; border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; background: var(--color-action-soft, var(--primary-light)); }
+.aia-guide-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.aia-guide-meta strong { font-size: .82rem; }
+.aia-guide-meta small { font-size: .7rem; color: var(--text-muted); font-weight: 600; }
+.aia-guide-body { padding: 0 .75rem .7rem 3.2rem; font-size: .78rem; color: var(--text-mid); line-height: 1.55; }
+.aia-guide-body ol { margin: 0 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+.aia-appmap { border: 1px dashed var(--border-color); border-radius: 14px; padding: .65rem; background: var(--surface-soft); }
+.aia-appmap-title { font-size: .75rem; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: .35rem; margin-bottom: .5rem; }
+.aia-appmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: .4rem; }
+.aia-appmap-item {
+  display: flex; flex-direction: column; align-items: center; gap: .15rem;
+  border: 1px solid var(--border-color); background: var(--surface); border-radius: 11px;
+  padding: .5rem .3rem; cursor: pointer; font-size: 1.05rem;
+}
+.aia-appmap-item small { font-size: .64rem; font-weight: 700; color: var(--text-mid); text-align: center; line-height: 1.2; }
+.aia-appmap-item:hover { border-color: var(--color-action, var(--primary)); transform: translateY(-1px); }
+.aia-appmap-item.here { border-color: var(--color-action, var(--primary)); background: var(--color-action-soft, var(--primary-light)); box-shadow: var(--shadow-sm); }
+
+/* Banner mẹo theo màn hình đang mở */
+.aia-viewtip {
+  display: flex; align-items: flex-start; gap: .5rem;
+  margin: .55rem .7rem 0; padding: .55rem .65rem;
+  background: linear-gradient(135deg, var(--color-action-soft, var(--primary-light)), var(--surface-soft));
+  border: 1px solid var(--color-action, var(--primary)); border-radius: 13px;
+  animation: aiaViewtipIn .25s ease;
+}
+@keyframes aiaViewtipIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.aia-viewtip-icon { font-size: 1rem; line-height: 1.3; }
+.aia-viewtip-text { flex: 1; min-width: 0; font-size: .74rem; color: var(--text-mid); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.aia-viewtip-text strong { color: var(--text-dark); }
+.aia-viewtip-btns { display: flex; align-items: center; gap: .3rem; flex: none; }
+.aia-viewtip-go {
+  border: 1px solid var(--color-action, var(--primary)); background: var(--color-action, var(--primary)); color: #fff;
+  border-radius: 999px; font-size: .68rem; font-weight: 800; padding: .25rem .6rem; cursor: pointer; white-space: nowrap;
+}
+.aia-viewtip-go.ghost { background: var(--surface); color: var(--color-action, var(--primary)); }
+.aia-viewtip-x { border: none; background: none; cursor: pointer; color: var(--text-muted); display: flex; padding: .2rem; }
+
+/* Guide của màn hình hiện tại */
+.aia-guide-card.here { border-color: var(--color-action, var(--primary)); border-style: dashed; }
+.aia-here-badge {
+  display: inline-block; font-size: .62rem; font-weight: 800; color: var(--color-action, var(--primary));
+  background: var(--color-action-soft, var(--primary-light)); border-radius: 999px; padding: .05rem .45rem; margin-left: .3rem;
+  vertical-align: 1px;
+}
+
+/* Mobile */
+@media (max-width: 560px) {
+  .aia-panel.pro { width: calc(100vw - 16px); max-height: 82vh; min-height: 0; }
+  .aia-panel.pro.expanded { width: calc(100vw - 16px); }
+  .aia-pro-sub { display: none; }
+}

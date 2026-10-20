@@ -42,16 +42,15 @@ export const VIEW_REGISTRY = {
   matrix:      { id:"matrix",      label:"Ma trận",            section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../MatrixView.jsx")), breadcrumb:["WORKSPACE","Công cụ nâng cao"], mobile:true },
   inventory:   { id:"inventory",   label:"Kiểm kê",            section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../InventoryView.jsx")), breadcrumb:["WORKSPACE","Công cụ nâng cao"], mobile:true },
   langstats:   { id:"langstats",   label:"Thống kê ngôn ngữ",  section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../LangStatsView.jsx")), breadcrumb:["WORKSPACE","Công cụ nâng cao"], mobile:true },
-  concepts:    { id:"concepts",    label:"Khái niệm",          section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../ConceptsView.jsx")), breadcrumb:["WORKSPACE","Công cụ nâng cao"], mobile:true },
-  references:  { id:"references",  label:"Tài liệu tham khảo", section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../ReferencesView.jsx")), breadcrumb:["WORKSPACE","Công cụ nâng cao"], mobile:true },
-  collections: { id:"collections", label:"Bộ công cụ dữ liệu", section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../CollectionsView.jsx")), breadcrumb:["WORKSPACE","Công cụ nâng cao"], mobile:true },
+  // P2 • view "Khái niệm" đã gộp vào "Từ vựng" (tags = phân loại) — dữ liệu được migrate ở conceptsMigration.js
+  references:  { id:"references",  label:"Tài liệu tham khảo", section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../ReferencesView.jsx")), breadcrumb:["WORKSPACE","Sổ tay nghiên cứu"], mobile:true },
+  collections: { id:"collections", label:"Bộ công cụ dữ liệu", section:"WORKSPACE", sectionId:"workspace", component: lazyWithRetry(()=> import("../CollectionsView.jsx")), breadcrumb:["WORKSPACE","Sổ tay nghiên cứu"], mobile:true },
   tasks:       { id:"tasks",       label:"Nhiệm vụ",           section:"CÔNG VIỆC", sectionId:"cong-viec", component: lazyWithRetry(()=> import("../MissionsView.jsx")), breadcrumb:["CÔNG VIỆC"], mobile:true, keywords:["nhiem vu","tasks","missions","viec can lam"] },
   ideas:       { id:"ideas",       label:"Ý tưởng",            section:"CÔNG VIỆC", sectionId:"cong-viec", component: lazyWithRetry(()=> import("../IdeasView.jsx")), breadcrumb:["CÔNG VIỆC"], mobile:true },
   stats:       { id:"stats",       label:"Thống kê",           section:"CÔNG VIỆC", sectionId:"cong-viec", component: null, breadcrumb:["CÔNG VIỆC"], mobile:true }, // inline StatsView in App.jsx — depends on counts/quizHistory/favs
   webtools:    { id:"webtools",    label:"Kho Công cụ Web",    section:"KHO CÔNG CỤ", sectionId:"kho-cong-cu",component: lazyWithRetry(()=> import("../WebToolboxView.jsx")), breadcrumb:["KHO CÔNG CỤ"], mobile:true },
   datatools:   { id:"datatools",   label:"Sao lưu & Khôi phục",section:"TIỆN ÍCH", sectionId:"tien-ich", component: lazyWithRetry(()=> import("../DataToolsView.jsx")), breadcrumb:["TIỆN ÍCH"], mobile:true },
   help:        { id:"help",        label:"Trợ giúp",           section:"TIỆN ÍCH", sectionId:"tien-ich", component: lazyWithRetry(()=> import("../HelpView.jsx")), breadcrumb:["TIỆN ÍCH"], mobile:true },
-  glossary:    { id:"glossary",    label:"Từ điển",            section:"TIỆN ÍCH", sectionId:"tien-ich", component: lazyWithRetry(()=> import("../GlossaryPanel.jsx")), breadcrumb:["TIỆN ÍCH"], mobile:true },
 };
 
 export function getViewEntry(viewId) { return VIEW_REGISTRY[viewId] || null; }

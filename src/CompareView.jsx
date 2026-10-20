@@ -24,48 +24,34 @@ import {
   Columns2,
   X,
   LibraryBig,
+  Scale,
+  NotebookPen,
+  ListChecks,
+  Eraser,
 } from "lucide-react";
 import { getApiBase } from "./apiConfig";
 import { pdfjsLib } from "./pdfjs-config";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage";
 import { citationFor } from "./researchDB";
-import { exportWord, printToPdf, escapeHtml, nl2br } from "./exportDoc";
+import { exportWord, printToPdf } from "./exportDoc";
+import {
+  cmpNoteKeyFor,
+  groupBooks,
+  NOTE_TEMPLATE,
+  copyTextFallback,
+  noteSnippetFor,
+  shortTitle,
+  pageDiffOf,
+  totalDiffOf,
+  buildReportText,
+  buildReportTableHtml,
+  buildPrintHtml,
+} from "./compareUtils";
 import SampleButton from "./SampleButton";
 import { fillSampleCompare } from "./sampleData";
-import DataTable from "./DataTable";
 import { clampPage } from "./reader/pageNavigation";
 
 const API_BASE = getApiBase();
-
-// Key ghi chú theo cặp sách, không phụ thuộc thứ tự A/B để swap không mất note.
-// encodeURIComponent để filename chứa "__" không gây trùng key giữa các cặp khác nhau.
-function cmpNoteKeyFor(a, b) {
-  if (a && b) return `sgk_cmpnote_${[a, b].sort().map(encodeURIComponent).join("__")}`;
-  return `sgk_cmpnote_${encodeURIComponent(a || b)}`;
-}
-
-// Gom sách theo "Lớp X · Môn" để dropdown dễ chọn với người dùng phổ thông.
-// Sách thiếu thông tin vào nhóm "Chưa phân loại".
-function groupBooks(list) {
-  const map = new Map();
-  for (const b of list) {
-    const gRaw = b.grade ?? b.lop;
-    const gNum = Number(gRaw);
-    const s = (b.subject || "").trim();
-    const label = Number.isFinite(gNum) && String(gRaw).trim() !== ""
-      ? `Lớp ${gNum}${s ? " · " + s : ""}`
-      : (s || "Chưa phân loại");
-    const gradeSort = Number.isFinite(gNum) ? gNum : 999;
-    if (!map.has(label)) map.set(label, { label, gradeSort, items: [] });
-    map.get(label).items.push(b);
-  }
-  const groups = [...map.values()];
-  groups.sort((a, b) => a.gradeSort - b.gradeSort || a.label.localeCompare(b.label, "vi"));
-  groups.forEach((g) => g.items.sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "vi")));
-  return groups;
-}
-
-const NOTE_TEMPLATE = `Điểm GIỐNG nhau:\n- \nĐiểm KHÁC nhau:\n- \nNhận xét / đề xuất:\n- `;
 
 // Ô gõ số trang rồi Enter để nhảy tới — cho người dùng phổ thông khỏi bấm
 // từng trang. Tự đồng bộ khi trang đổi từ bên kia (chế độ Song song).
@@ -105,6 +91,7 @@ function CompareSide({
   bookGroups,
   hasBooks,
   onPickBook,
+  onClearBook,
   doc,
   page,
   onPrev,
@@ -121,92 +108,126 @@ function CompareSide({
   loading,
 }) {
   const displayPage = doc ? clampPage(page, numPages) : page;
+  const pct = doc && numPages > 0 ? Math.round((displayPage / numPages) * 100) : 0;
+  const isA = label === "A";
   return (
-    <div className="cmp-side">
-      <div className="cmp-head">
-        <span
-          className={`cmp-tag ${label === "A" ? "cmp-tag-a" : "cmp-tag-b"}`}
-          title={label === "A" ? "Sách bên trái" : "Sách bên phải"}
-        >
-          {label}
-        </span>
-        <select
-          className="sort-select cmp-book-select"
-          value={book ? book.filename : ""}
-          onChange={(e) => onPickBook(e.target.value)}
-          aria-label={`Chọn sách cho bên ${sideName}`}
-        >
-          <option value="">— Sách bên {sideName} —</option>
-          {bookGroups.map((g) => (
-            <optgroup key={g.label} label={g.label}>
-              {g.items.map((b) => (
-                <option key={b.filename} value={b.filename}>
-                  {b.title}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        <div className="cmp-nav">
-          <button
-            className="btn-icon"
-            onClick={onFirst}
-            disabled={!doc || displayPage <= 1}
-            title="Về trang đầu"
-            aria-label="Về trang đầu"
+    <div className={`cmp-side cmp-side-v2 ${isA ? "cmp-side-a" : "cmp-side-b"}`}>
+      <div className="cmp-head-v2">
+        <div className="cmp-bookline">
+          <span
+            className={`cmp-badge ${isA ? "cmp-badge-a" : "cmp-badge-b"}`}
+            title={isA ? "Sách bên trái (A)" : "Sách bên phải (B)"}
           >
-            <ChevronsLeft size={17} />
-          </button>
-          <button
-            className="btn-icon"
-            onClick={onPrev}
-            disabled={!doc || displayPage <= 1}
-            title={linked ? "Trang trước (← khi bật Song song)" : "Trang trước"}
-            aria-label="Trang trước"
-          >
-            <ChevronLeft size={17} />
-          </button>
-          <span className="cmp-pagenum" title={doc ? `Đang xem trang ${displayPage} / ${numPages}` : "Chưa chọn sách"}>
-            tr. <PageInput page={displayPage} disabled={!doc} onJump={onJump} /> /{" "}
-            {doc ? numPages : "—"}
+            {label}
           </span>
-          <button
-            className="btn-icon"
-            onClick={onNext}
-            disabled={!doc || displayPage >= numPages}
-            title={linked ? "Trang sau (→ khi bật Song song)" : "Trang sau"}
-            aria-label="Trang sau"
-          >
-            <ChevronRight size={17} />
-          </button>
-          <button
-            className="btn-icon"
-            onClick={onLast}
-            disabled={!doc || displayPage >= numPages}
-            title="Tới trang cuối"
-            aria-label="Tới trang cuối"
-          >
-            <ChevronsRight size={17} />
-          </button>
+          <div className="cmp-bookmeta">
+            <select
+              className="cmp-book-select-v2"
+              value={book ? book.filename : ""}
+              onChange={(e) => onPickBook(e.target.value)}
+              aria-label={`Chọn sách cho bên ${sideName}`}
+              title={book ? book.title : `Chọn sách cho bên ${sideName}`}
+            >
+              <option value="">— Chọn sách bên {sideName} —</option>
+              {bookGroups.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.items.map((b) => (
+                    <option key={b.filename} value={b.filename}>
+                      {b.title}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <span className="cmp-book-sub">
+              {doc ? (
+                <>{numPages} trang • {pct}% đã xem</>
+              ) : book ? (
+                <>Đang mở sách…</>
+              ) : (
+                <>Chưa chọn sách</>
+              )}
+            </span>
+          </div>
+          {book ? (
+            <button
+              className="cmp-clear-btn"
+              onClick={onClearBook}
+              title={`Bỏ chọn sách bên ${sideName}`}
+              aria-label={`Bỏ chọn sách bên ${sideName}`}
+            >
+              <X size={14} />
+            </button>
+          ) : null}
+        </div>
+        <div className="cmp-navline">
+          <div className="cmp-nav-v2" role="group" aria-label={`Điều hướng trang bên ${sideName}`}>
+            <button
+              className="cmp-nav-btn"
+              onClick={onFirst}
+              disabled={!doc || displayPage <= 1}
+              title="Về trang đầu"
+              aria-label="Về trang đầu"
+            >
+              <ChevronsLeft size={16} />
+            </button>
+            <button
+              className="cmp-nav-btn"
+              onClick={onPrev}
+              disabled={!doc || displayPage <= 1}
+              title={linked ? "Trang trước (← khi bật Song song)" : "Trang trước"}
+              aria-label="Trang trước"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="cmp-pagenum-v2" title={doc ? `Đang xem trang ${displayPage} / ${numPages}` : "Chưa chọn sách"}>
+              <span className="cmp-tr">tr.</span>
+              <PageInput page={displayPage} disabled={!doc} onJump={onJump} />
+              <span className="cmp-total">/ {doc ? numPages : "—"}</span>
+            </span>
+            <button
+              className="cmp-nav-btn"
+              onClick={onNext}
+              disabled={!doc || displayPage >= numPages}
+              title={linked ? "Trang sau (→ khi bật Song song)" : "Trang sau"}
+              aria-label="Trang sau"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              className="cmp-nav-btn"
+              onClick={onLast}
+              disabled={!doc || displayPage >= numPages}
+              title="Tới trang cuối"
+              aria-label="Tới trang cuối"
+            >
+              <ChevronsRight size={16} />
+            </button>
+          </div>
+          <div className="cmp-progress" aria-hidden="true">
+            <div className={`cmp-progress-fill ${isA ? "fill-a" : "fill-b"}`} style={{ width: `${pct}%` }} />
+          </div>
         </div>
       </div>
-      {error && <div className="cmp-error">{error}</div>}
-      <div className="cmp-canvas-wrap cmp-canvas-relative" ref={wrapRef}>
+      {error && <div className="cmp-error-v2">{error}</div>}
+      <div className="cmp-canvas-wrap cmp-canvas-relative cmp-canvas-v2" ref={wrapRef}>
         {empty ? (
-          <div className="cmp-empty">
+          <div className="cmp-empty-v2">
             {!hasBooks ? (
               <>
-                <LibraryBig size={30} />
-                <p>Thư viện chưa có sách nào.<br />Hãy thêm sách PDF ở trang Thư viện trước.</p>
+                <span className="cmp-empty-icon"><LibraryBig size={28} /></span>
+                <p className="cmp-empty-title">Thư viện chưa có sách nào</p>
+                <p className="cmp-empty-desc">Hãy thêm sách PDF ở trang Thư viện trước, rồi quay lại so sánh.</p>
               </>
             ) : (
               <>
-                <BookOpen size={30} />
-                <p>
-                  Bước 1: chọn <b>sách bên {sideName}</b> ở menu phía trên 👆
-                  <br />
-                  Bước 2: lật trang, ghi nhận xét rồi xuất biên bản Word/PDF.
-                </p>
+                <span className="cmp-empty-icon"><BookOpen size={28} /></span>
+                <p className="cmp-empty-title">Bên {label} đang trống</p>
+                <ol className="cmp-empty-steps">
+                  <li><b>1.</b> Chọn <b>sách bên {sideName}</b> ở menu phía trên</li>
+                  <li><b>2.</b> Lật trang để đối chiếu nội dung</li>
+                  <li><b>3.</b> Ghi nhận xét rồi xuất biên bản</li>
+                </ol>
               </>
             )}
           </div>
@@ -216,8 +237,11 @@ function CompareSide({
             {loading && (
               <div className="cmp-loading cmp-loading-overlay" aria-live="polite">
                 <div className="spinner spinner-sm" />
-                <p>Đang tải trang...</p>
+                <p>Đang tải trang {displayPage}…</p>
               </div>
+            )}
+            {doc && !loading && (
+              <span className="cmp-page-float">tr. {displayPage} / {numPages}</span>
             )}
           </>
         )}
@@ -688,37 +712,19 @@ export default function CompareView({
     } catch (e) { console.warn("[CompareView] safeSetJSON exception " + noteKey + ":", e); }
   };
 
-  const copyTextFallback = (text) => {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      ta.remove();
-      return ok;
-    } catch {
-      return false;
-    }
-  };
-
   const copyReport = async () => {
     if (!bookA || !bookB) return;
     const displayA = docA ? clampPage(pageA, docA.numPages) : pageA;
     const displayB = docB ? clampPage(pageB, docB.numPages) : pageB;
-    const lines = [
-      `BIÊN BẢN SO SÁNH SÁCH`,
-      `A: ${bookA.title} — trang ${displayA}`,
-      `B: ${bookB.title} — trang ${displayB}`,
-      "",
-    ];
-    if (note.trim()) lines.push(`GHI CHÚ SO SÁNH:\n${note}`, "");
-    lines.push(
-      `TRÍCH DẪN:\nA: ${citationFor(bookA, displayA)}\nB: ${citationFor(bookB, displayB)}`,
-    );
-    const text = lines.join("\n");
+    const text = buildReportText({
+      titleA: bookA.title,
+      titleB: bookB.title,
+      displayA,
+      displayB,
+      note,
+      citationA: citationFor(bookA, displayA),
+      citationB: citationFor(bookB, displayB),
+    });
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -852,22 +858,15 @@ export default function CompareView({
     if (!bookA || !bookB) return;
     const displayA = docA ? clampPage(pageA, docA.numPages) : pageA;
     const displayB = docB ? clampPage(pageB, docB.numPages) : pageB;
-    const rows = [
-      ["", "Sách A", "Sách B"],
-      ["Tên sách", bookA.title, bookB.title],
-      [
-        "Trang so sánh",
-        String(displayA),
-        String(displayB),
-      ],
-    ];
-    let html = "<table>";
-    rows.forEach((r, i) => {
-      html += `<tr>${r.map((c) => (i === 0 ? `<th>${escapeHtml(c)}</th>` : `<td>${escapeHtml(c)}</td>`)).join("")}</tr>`;
+    const html = buildReportTableHtml({
+      titleA: bookA.title,
+      titleB: bookB.title,
+      displayA,
+      displayB,
+      note,
+      citationA: citationFor(bookA, displayA),
+      citationB: citationFor(bookB, displayB),
     });
-    html += "</table>";
-    if (note.trim()) html += `<h2>Ghi chú so sánh</h2>${nl2br(note)}`;
-    html += `<h3>Trích dẫn</h3><blockquote>A: ${escapeHtml(citationFor(bookA, displayA))}</blockquote><blockquote>B: ${escapeHtml(citationFor(bookB, displayB))}</blockquote><hr><small>Xuất lúc ${new Date().toLocaleString("vi-VN")}</small>`;
     exportWord(`So sánh — ${bookA.title} vs ${bookB.title}`, html);
   };
 
@@ -877,9 +876,15 @@ export default function CompareView({
     const displayB = docB ? clampPage(pageB, docB.numPages) : pageB;
     printToPdf(
       `So sánh — ${bookA.title} vs ${bookB.title}`,
-      `<h1>Biên bản so sánh sách</h1><div class="meta">${escapeHtml(bookA.title)} (tr. ${displayA}) • ${escapeHtml(bookB.title)} (tr. ${displayB})</div>` +
-        (note.trim() ? `<h2>Ghi chú so sánh</h2>${nl2br(note)}` : "") +
-        `<h2>Trích dẫn</h2><blockquote>A: ${escapeHtml(citationFor(bookA, displayA))}</blockquote><blockquote>B: ${escapeHtml(citationFor(bookB, displayB))}</blockquote>`,
+      buildPrintHtml({
+        titleA: bookA.title,
+        titleB: bookB.title,
+        displayA,
+        displayB,
+        note,
+        citationA: citationFor(bookA, displayA),
+        citationB: citationFor(bookB, displayB),
+      }),
     );
   };
 
@@ -898,165 +903,164 @@ export default function CompareView({
     setNote((prev) => (prev.trim() ? prev.replace(/\s+$/, "") + "\n\n" + NOTE_TEMPLATE : NOTE_TEMPLATE));
   }, []);
 
-  const noteSnippet = note.trim()
-    ? note.replace(/\s+/g, " ").trim().slice(0, 96) +
-      (note.replace(/\s+/g, " ").trim().length > 96 ? "…" : "")
-    : "Chưa có ghi chú — bấm để mở và ghi nhận điểm giống – khác của hai bản.";
+  const noteSnippet = noteSnippetFor(note);
+
+  const clearA = useCallback(() => {
+    setFileA(""); setDocA(null); setPageA(1); setErrA("");
+  }, []);
+  const clearB = useCallback(() => {
+    setFileB(""); setDocB(null); setPageB(1); setErrB("");
+  }, []);
+  const clearNote = useCallback(() => {
+    if (!window.confirm("Xóa toàn bộ ghi chú của cặp sách này?")) return;
+    setNote("");
+    if (noteKey) {
+      try { safeSetJSON(noteKey, ""); } catch (e) { console.warn("[CompareView] clear note failed", e); }
+    }
+  }, [noteKey]);
+
+  const displayA = docA ? clampPage(pageA, docA.numPages) : pageA;
+  const displayB = docB ? clampPage(pageB, docB.numPages) : pageB;
+  const totalA = docA ? docA.numPages : 0;
+  const totalB = docB ? docB.numPages : 0;
+  const pageDiff = bookA && bookB && docA && docB ? pageDiffOf(true, displayA, displayB) : null;
+  const totalDiff = totalDiffOf(totalA, totalB);
+  const titleA = String(bookA?.title || "");
+  const titleB = String(bookB?.title || "");
+  const shortA = shortTitle(titleA);
+  const shortB = shortTitle(titleB);
+  const ready = !!(bookA && bookB);
+
+  const runSample = () => {
+    const s = fillSampleCompare(bookList);
+    if (!s) {
+      alert("Cần ít nhất 2 cuốn sách trong thư viện để so sánh.");
+      return;
+    }
+    setFileA(s.fileA);
+    setFileB(s.fileB);
+    setPageA(clampPage(s.pageA, 9999));
+    setPageB(clampPage(s.pageB, 9999));
+    setNote(s.note);
+    setNoteOpen(true);
+    const k = cmpNoteKeyFor(s.fileA, s.fileB);
+    try {
+      const res = safeSetJSON(k, s.note);
+      if (!res.ok) {
+        if (res.quota) console.warn("[safeStorage] QuotaExceededError on " + k + ": không thể lưu do bộ nhớ đầy");
+        else console.warn("[CompareView] safeSetJSON failed for " + k + ":", res.error);
+      }
+    } catch (e) { console.warn("[CompareView] safeSetJSON exception " + k + ":", e); }
+    alert(
+      "Đã mở mẫu so sánh 2 trang cùng một nội dung và ghi sẵn ghi chú. Bạn có thể chỉnh sửa ghi chú rồi xuất biên bản.",
+    );
+  };
 
   return (
-    <div className="cmp-root">
-      <div className="cmp-toolbar">
-        <div className="cmp-toolbar-group">
-          <ArrowLeftRight size={16} />
-          <span className="ui-s-ce0242">So sánh sách</span>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={toggleLinked}
-            title="Bật: hai bên luôn cùng số trang. Tắt: lật trang độc lập từng bên. (Ctrl+L)"
-          >
-            {linked ? <Link2 size={13} /> : <Unlink size={13} />}{" "}
-            {linked ? "Chuyển trang song song" : "Trang độc lập"}
-          </button>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={swapSides}
-            disabled={!bookA && !bookB}
-            title={
-              !bookA && !bookB
-                ? "Chọn 2 sách rồi thử lại"
-                : "Đổi vị trí hai bên trái ⇄ phải (Ctrl+S)"
-            }
-          >
-            <ArrowRightLeft size={13} /> Đổi bên
-          </button>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={syncPages}
-            disabled={!docA || !docB}
-            title={
-              !docA || !docB
-                ? "Mở 2 sách rồi thử lại"
-                : "Cho bên phải về cùng số trang với bên trái"
-            }
-          >
-            <Equal size={13} /> Về cùng trang
-          </button>
-          <SampleButton
-            onRun={() => {
-              const s = fillSampleCompare(bookList);
-              if (!s) {
-                alert("Cần ít nhất 2 cuốn sách trong thư viện để so sánh.");
-                return;
-              }
-              setFileA(s.fileA);
-              setFileB(s.fileB);
-              setPageA(clampPage(s.pageA, 9999));
-              setPageB(clampPage(s.pageB, 9999));
-              setNote(s.note);
-              setNoteOpen(true);
-              const k = cmpNoteKeyFor(s.fileA, s.fileB);
-              try {
-                const res = safeSetJSON(k, s.note);
-                if (!res.ok) {
-                  if (res.quota) console.warn("[safeStorage] QuotaExceededError on " + k + ": không thể lưu do bộ nhớ đầy");
-                  else console.warn("[CompareView] safeSetJSON failed for " + k + ":", res.error);
-                }
-              } catch (e) { console.warn("[CompareView] safeSetJSON exception " + k + ":", e); }
-              alert(
-                "Đã mở mẫu so sánh 2 trang cùng một nội dung và ghi sẵn ghi chú. Bạn có thể chỉnh sửa ghi chú rồi xuất biên bản.",
-              );
-            }}
-            disabled={bookList.length < 2}
-          />
+    <div className="cmp-root cmp-root-v2">
+      <div className="cmp-toolbar-v2">
+        <div className="cmp-title-block">
+          <span className="cmp-title-icon"><ArrowLeftRight size={16} /></span>
+          <div className="cmp-title-text">
+            <strong>So sánh sách</strong>
+            <small>{ready ? `${shortA}  ⇄  ${shortB}` : "Chọn 2 sách để bắt đầu đối chiếu"}</small>
+          </div>
+          <span className={`cmp-ready-pill ${ready ? "on" : ""}`}>{ready ? "Đã sẵn sàng" : "Chưa đủ 2 sách"}</span>
         </div>
-        <div className="cmp-toolbar-group">
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={() => setStacked((s) => !s)}
-            title={stacked ? "Chuyển sang xem 2 sách cạnh nhau (trái–phải)" : "Chuyển sang xem 2 sách chồng lên nhau (trên–dưới), dễ dùng trên điện thoại"}
-          >
-            {stacked ? <Columns2 size={13} /> : <Rows2 size={13} />}{" "}
-            {stacked ? "Xem ngang" : "Xem dọc"}
-          </button>
-          <button
-            className="btn-icon"
-            onClick={() => zoomBy(-0.1)}
-            disabled={zoom <= 0.5}
-            title="Thu nhỏ (↓)"
-          >
-            <ZoomOut size={16} />
-          </button>
-          <button
-            className="cmp-pagenum cmp-zoom-reset"
-            onClick={() => setZoom(1)}
-            disabled={zoom === 1}
-            title="Bấm để về cỡ vừa khung (100%)"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <button
-            className="btn-icon"
-            onClick={() => zoomBy(0.1)}
-            disabled={zoom >= 2}
-            title="Phóng to (↑)"
-          >
-            <ZoomIn size={16} />
-          </button>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={copyReport}
-            disabled={!bookA || !bookB}
-            title={
-              !bookA || !bookB
-                ? "Chọn 2 sách rồi thử lại"
-                : copyFailed
-                  ? "Không chép được — trình duyệt chặn khay nhớ tạm"
-                  : "Sao chép biên bản so sánh vào khay nhớ tạm"
-            }
-          >
-            {copied ? <Check size={13} /> : <Copy size={13} />}{" "}
-            {copied ? "Đã chép" : copyFailed ? "Chép thất bại" : "Biên bản"}
-          </button>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={exportReport}
-            disabled={!bookA || !bookB}
-            title={
-              !bookA || !bookB
-                ? "Chọn 2 sách rồi thử lại"
-                : "Tải biên bản so sánh (kèm ghi chú) về file Word"
-            }
-          >
-            <FileText size={13} /> Tải Word
-          </button>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={doPrint}
-            disabled={!bookA || !bookB}
-            title={
-              !bookA || !bookB
-                ? "Chọn 2 sách rồi thử lại"
-                : "Mở bản in để in ra giấy hoặc lưu thành PDF"
-            }
-          >
-            <Printer size={13} /> In / PDF
-          </button>
+        <div className="cmp-controls">
+          <div className="cmp-seg" role="tablist" aria-label="Chế độ chuyển trang">
+            <button
+              role="tab"
+              aria-selected={linked}
+              className={`cmp-seg-btn ${linked ? "active" : ""}`}
+              onClick={() => { if (!linked) toggleLinked(); }}
+              title="Bật: hai bên luôn cùng số trang (Ctrl+L)"
+            >
+              <Link2 size={13} /> Song song
+            </button>
+            <button
+              role="tab"
+              aria-selected={!linked}
+              className={`cmp-seg-btn ${!linked ? "active" : ""}`}
+              onClick={() => { if (linked) toggleLinked(); }}
+              title="Tắt: lật trang độc lập từng bên (Ctrl+L)"
+            >
+              <Unlink size={13} /> Độc lập
+            </button>
+          </div>
+          <div className="cmp-group">
+            <button
+              className="cmp-btn"
+              onClick={swapSides}
+              disabled={!bookA && !bookB}
+              title={!bookA && !bookB ? "Chọn 2 sách rồi thử lại" : "Đổi vị trí hai bên (Ctrl+S)"}
+            >
+              <ArrowRightLeft size={13} /> <span>Đổi bên</span>
+            </button>
+            <button
+              className="cmp-btn"
+              onClick={syncPages}
+              disabled={!docA || !docB}
+              title={!docA || !docB ? "Mở 2 sách rồi thử lại" : "Cho bên phải về cùng số trang với bên trái"}
+            >
+              <Equal size={13} /> <span>Về cùng trang</span>
+            </button>
+            <button
+              className="cmp-btn"
+              onClick={() => setStacked((s) => !s)}
+              title={stacked ? "Chuyển sang xem 2 sách cạnh nhau (trái–phải)" : "Chuyển sang xem chồng lên nhau (trên–dưới), dễ dùng trên điện thoại"}
+            >
+              {stacked ? <Columns2 size={13} /> : <Rows2 size={13} />}{" "}
+              <span>{stacked ? "Xem ngang" : "Xem dọc"}</span>
+            </button>
+          </div>
+          <span className="cmp-vdiv" aria-hidden="true" />
+          <div className="cmp-group cmp-zoom-group">
+            <button className="cmp-icon-btn" onClick={() => zoomBy(-0.1)} disabled={zoom <= 0.5} title="Thu nhỏ (↓)" aria-label="Thu nhỏ">
+              <ZoomOut size={15} />
+            </button>
+            <button className="cmp-zoom-pill" onClick={() => setZoom(1)} disabled={zoom === 1} title="Bấm để về cỡ vừa khung (100%)">
+              {Math.round(zoom * 100)}%
+            </button>
+            <button className="cmp-icon-btn" onClick={() => zoomBy(0.1)} disabled={zoom >= 2} title="Phóng to (↑)" aria-label="Phóng to">
+              <ZoomIn size={15} />
+            </button>
+          </div>
+          <span className="cmp-vdiv" aria-hidden="true" />
+          <div className="cmp-group">
+            <SampleButton onRun={runSample} disabled={bookList.length < 2} />
+            <button
+              className="cmp-btn"
+              onClick={copyReport}
+              disabled={!ready}
+              title={!ready ? "Chọn 2 sách rồi thử lại" : copyFailed ? "Không chép được — trình duyệt chặn khay nhớ tạm" : "Sao chép biên bản so sánh vào khay nhớ tạm"}
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}{" "}
+              <span>{copied ? "Đã chép" : copyFailed ? "Chép thất bại" : "Biên bản"}</span>
+            </button>
+            <button className="cmp-btn" onClick={exportReport} disabled={!ready} title={!ready ? "Chọn 2 sách rồi thử lại" : "Tải biên bản so sánh (kèm ghi chú) về file Word"}>
+              <FileText size={13} /> <span>Tải Word</span>
+            </button>
+            <button className="cmp-btn cmp-btn-primary" onClick={doPrint} disabled={!ready} title={!ready ? "Chọn 2 sách rồi thử lại" : "Mở bản in để in ra giấy hoặc lưu thành PDF"}>
+              <Printer size={13} /> <span>In / PDF</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {!hintOff && (
-        <div className="cmp-hint" role="note">
-          <span>
-            💡 <b>Mẹo:</b> bật <b>«Song song»</b> để lật 2 bên cùng lúc • gõ <b>số trang rồi Enter</b> để
-            nhảy tới trang • <b>ghi chú tự lưu</b> theo từng cặp sách • app <b>nhớ cặp sách</b> đang mở.
+        <div className="cmp-hint-v2" role="note">
+          <span className="cmp-hint-ico">💡</span>
+          <span className="cmp-hint-txt">
+            Bật <b>Song song</b> để lật 2 bên cùng lúc • gõ <b>số trang rồi Enter</b> để nhảy tới trang • <b>ghi chú tự lưu</b> theo từng cặp sách • phím tắt <kbd>←</kbd><kbd>→</kbd> lật trang, <kbd>Ctrl</kbd>+<kbd>L</kbd> đổi chế độ, <kbd>Ctrl</kbd>+<kbd>S</kbd> đổi bên
           </span>
-          <button className="btn-icon" onClick={dismissHint} title="Ẩn mẹo này" aria-label="Ẩn mẹo này">
-            <X size={14} />
+          <button className="cmp-icon-btn sm" onClick={dismissHint} title="Ẩn mẹo này" aria-label="Ẩn mẹo này">
+            <X size={13} />
           </button>
         </div>
       )}
 
-      <div ref={stageRef} className={`cmp-stage ${syncAnimating ? "cmp-sync-anim" : ""} ${stacked ? "cmp-stage-stacked" : ""}`} style={stacked ? undefined : { gridTemplateColumns: `minmax(0, ${splitRatio}fr) 52px minmax(0, ${100 - splitRatio}fr)` }}>
+      <div ref={stageRef} className={`cmp-stage cmp-stage-v2 ${syncAnimating ? "cmp-sync-anim" : ""} ${stacked ? "cmp-stage-stacked" : ""}`} style={stacked ? undefined : { gridTemplateColumns: `minmax(0, ${splitRatio}fr) 64px minmax(0, ${100 - splitRatio}fr)` }}>
         <CompareSide
           label="A"
           sideName="trái (A)"
@@ -1064,6 +1068,7 @@ export default function CompareView({
           bookGroups={bookGroups}
           hasBooks={bookList.length > 0}
           onPickBook={pickA}
+          onClearBook={clearA}
           doc={docA}
           page={pageA}
           onPrev={() => goA(-1)}
@@ -1081,25 +1086,25 @@ export default function CompareView({
             wraps.current.A = el;
           }}
         />
-        <div className="cmp-swap" style={{ position:"relative" }}>
-          <span
-            className={`cmp-link-chip ${linked ? "cmp-link-on" : "cmp-link-off"}`}
-          >
+        <div className="cmp-mid">
+          <span className={`cmp-link-chip-v2 ${linked ? "on" : "off"}`}>
+            <span className="dot" aria-hidden="true" />
             {linked ? <Link2 size={11} /> : <Unlink size={11} />}{" "}
             {linked ? "Song song" : "Độc lập"}
           </span>
           <button
-            className="cmp-swap-btn"
+            className="cmp-swap-btn-v2"
             onClick={swapSides}
             disabled={!bookA && !bookB}
             title={stacked ? "Đổi vị trí hai bên trên ⇄ dưới (Ctrl+S)" : "Đổi vị trí hai bên trái ⇄ phải (Ctrl+S)"}
+            aria-label="Đổi bên A và B"
           >
             <ArrowRightLeft size={16} />
           </button>
-          <span className="cmp-pagenum">VS</span>
+          <span className="cmp-vs">VS</span>
           {!stacked && (
           <div
-            className="cmp-split-resizer"
+            className="cmp-split-resizer-v2"
             onMouseDown={onSplitDragStart}
             onTouchStart={onSplitDragStart}
             onDoubleClick={resetSplit}
@@ -1108,7 +1113,7 @@ export default function CompareView({
               else if (e.key === "ArrowRight") { e.preventDefault(); setSplitRatio((r) => Math.min(75, r + 2)); }
               else if (e.key === "Home") { e.preventDefault(); resetSplit(); }
             }}
-            title="Kéo để đổi tỉ lệ 2 bên, double-click để cân bằng"
+            title="Kéo để đổi tỉ lệ 2 bên, double-click để cân bằng 50/50"
             role="separator"
             aria-orientation="vertical"
             aria-label="Điều chỉnh tỉ lệ 2 bên"
@@ -1116,7 +1121,9 @@ export default function CompareView({
             aria-valuemax={75}
             aria-valuenow={splitRatio}
             tabIndex={0}
-          />
+          >
+            <span className="grip" aria-hidden="true"><i /><i /><i /></span>
+          </div>
           )}
         </div>
         <CompareSide
@@ -1126,6 +1133,7 @@ export default function CompareView({
           bookGroups={bookGroups}
           hasBooks={bookList.length > 0}
           onPickBook={pickB}
+          onClearBook={clearB}
           doc={docB}
           page={pageB}
           onPrev={() => goB(-1)}
@@ -1146,108 +1154,115 @@ export default function CompareView({
       </div>
 
       {(bookA || bookB) && (
-        <div className="stat-section mt-md">
-          <h3 className="ui-s-446672">Tóm tắt so sánh</h3>
-          <DataTable
-            columns={[
-              {
-                key: "tieuChi",
-                label: "Tiêu chí",
-                sortable: true,
-                render: (v) => <span className="cell-clamp">{v}</span>,
-              },
-              {
-                key: "sachA",
-                label: "Sách A",
-                sortable: true,
-                render: (v) => (
-                  <span className="cell-clamp ui-s-e52491">{v}</span>
-                ),
-              },
-              {
-                key: "sachB",
-                label: "Sách B",
-                sortable: true,
-                render: (v) => (
-                  <span className="cell-clamp ui-s-e52491">{v}</span>
-                ),
-              },
-            ]}
-            data={[
-              {
-                id: "ten",
-                tieuChi: "Tên sách",
-                sachA: bookA ? bookA.title : "—",
-                sachB: bookB ? bookB.title : "—",
-              },
-              {
-                id: "trang",
-                tieuChi: "Trang đang xem",
-                sachA: bookA ? String(docA ? clampPage(pageA, docA.numPages) : pageA) : "—",
-                sachB: bookB ? String(docB ? clampPage(pageB, docB.numPages) : pageB) : "—",
-              },
-              {
-                id: "tongsotrang",
-                tieuChi: "Tổng số trang",
-                sachA: docA ? String(docA.numPages) : "—",
-                sachB: docB ? String(docB.numPages) : "—",
-              },
-              {
-                id: "trich",
-                tieuChi: "Trích dẫn",
-                sachA: bookA ? citationFor(bookA, docA ? clampPage(pageA, docA.numPages) : pageA) : "—",
-                sachB: bookB ? citationFor(bookB, docB ? clampPage(pageB, docB.numPages) : pageB) : "—",
-              },
-            ]}
-            keyField="id"
-            emptyText="Chưa chọn đủ 2 sách"
-          />
-        </div>
+        <section className="cmp-summary" aria-label="Tóm tắt so sánh">
+          <div className="cmp-summary-head">
+            <h3><Scale size={15} /> Tóm tắt so sánh</h3>
+            <div className="cmp-summary-pills">
+              <span className={`cmp-pill ${linked ? "green" : "gray"}`}>{linked ? "Song song" : "Độc lập"}</span>
+              {pageDiff != null && (
+                <span className={`cmp-pill ${pageDiff === 0 ? "green" : "amber"}`}>
+                  {pageDiff === 0 ? "Đang cùng trang" : `Lệch ${pageDiff} trang`}
+                </span>
+              )}
+              {totalDiff != null && totalDiff !== 0 && (
+                <span className="cmp-pill blue">Chênh {totalDiff} trang tổng</span>
+              )}
+              <span className="cmp-pill gray">{ready ? "2 / 2 sách" : "1 / 2 sách"}</span>
+            </div>
+          </div>
+          <div className="cmp-summary-table" role="table" aria-label="Bảng tóm tắt so sánh">
+            <div className="cmp-summary-row cmp-summary-headrow" role="row">
+              <span role="columnheader">Tiêu chí</span>
+              <span role="columnheader"><i className="mini-badge a">A</i> Sách A</span>
+              <span role="columnheader"><i className="mini-badge b">B</i> Sách B</span>
+            </div>
+            <div className="cmp-summary-row" role="row">
+              <span className="crit" role="cell">Tên sách</span>
+              <span role="cell" className="val" title={bookA?.title || ""}>{bookA ? bookA.title : "—"}</span>
+              <span role="cell" className="val" title={bookB?.title || ""}>{bookB ? bookB.title : "—"}</span>
+            </div>
+            <div className="cmp-summary-row" role="row">
+              <span className="crit" role="cell">Trang đang xem</span>
+              <span role="cell">
+                <strong className="page-big a-t">{bookA ? displayA : "—"}</strong>
+                {totalA > 0 && <small className="muted"> / {totalA} ({Math.round((displayA / totalA) * 100)}%)</small>}
+              </span>
+              <span role="cell">
+                <strong className="page-big b-t">{bookB ? displayB : "—"}</strong>
+                {totalB > 0 && <small className="muted"> / {totalB} ({Math.round((displayB / totalB) * 100)}%)</small>}
+              </span>
+            </div>
+            <div className="cmp-summary-row" role="row">
+              <span className="crit" role="cell">Tổng số trang</span>
+              <span role="cell">{totalA || "—"}</span>
+              <span role="cell">
+                {totalB || "—"}
+                {totalDiff != null && totalDiff !== 0 && <em className="diff-tag">±{totalDiff}</em>}
+              </span>
+            </div>
+            <div className="cmp-summary-row" role="row">
+              <span className="crit" role="cell">Trích dẫn</span>
+              <span role="cell" className="cite">{bookA ? citationFor(bookA, displayA) : "—"}</span>
+              <span role="cell" className="cite">{bookB ? citationFor(bookB, displayB) : "—"}</span>
+            </div>
+          </div>
+        </section>
       )}
 
-      <div className="cmp-note">
-        <div
-          className="cmp-note-bar"
+      <section className={`cmp-note-card ${noteOpen ? "open" : ""}`} aria-label="Ghi chú so sánh">
+        <button
+          className="cmp-note-head"
           onClick={() => setNoteOpen((o) => !o)}
+          aria-expanded={noteOpen}
           title="Mở/đóng ghi chú so sánh — tự lưu theo cặp sách"
         >
-          <strong>📝 Ghi chú so sánh</strong>
+          <span className="cmp-note-ico"><NotebookPen size={15} /></span>
+          <span className="cmp-note-title">
+            <strong>Ghi chú so sánh</strong>
+            <small>
+              <span className="autosave-dot" aria-hidden="true" />
+              Tự lưu theo cặp sách • {note.trim() ? `${note.trim().length} ký tự` : "chưa có nội dung"}
+            </small>
+          </span>
           <span className="cmp-note-snippet">{noteSnippet}</span>
           {noteOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-        </div>
+        </button>
         {noteOpen && (
-          <div className="cmp-note-body">
+          <div className="cmp-note-body-v2">
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onBlur={saveNote}
-              placeholder="Ghi nhận điểm giống – khác, cách triển khai nội dung, độ phù hợp… (tự lưu theo cặp sách)"
+              rows={6}
+              placeholder={"Điểm GIỐNG nhau:\n- …\n\nĐiểm KHÁC nhau:\n- …\n\nNhận xét / đề xuất:\n- …\n\n(tự lưu theo cặp sách)"}
+              aria-label="Nội dung ghi chú so sánh"
             />
-            <div className="cmp-note-actions">
-              <button className="btn btn-secondary btn-xs" onClick={saveNote}>
-                💾 Lưu ghi chú
-              </button>
-              <button
-                className="btn btn-secondary btn-xs"
-                onClick={insertNoteTemplate}
-                title="Chèn khung mẫu Giống nhau / Khác nhau / Đề xuất vào ghi chú"
-              >
-                <Plus size={13} /> Chèn mẫu nhận xét
-              </button>
-              <button
-                className="btn btn-secondary btn-xs"
-                onClick={copyReport}
-                disabled={!bookA || !bookB}
-              >
-                Chép biên bản so sánh
-              </button>
-              <span className="ui-s-da4293">
-                Ghi chú tự lưu theo từng cặp sách
-              </span>
+            <div className="cmp-note-foot">
+              <div className="cmp-note-btns">
+                <button className="cmp-btn" onClick={saveNote} title="Lưu ghi chú ngay">
+                  <Check size={13} /> <span>Lưu</span>
+                </button>
+                <button
+                  className="cmp-btn"
+                  onClick={insertNoteTemplate}
+                  title="Chèn khung mẫu Giống nhau / Khác nhau / Đề xuất vào ghi chú"
+                >
+                  <Plus size={13} /> <span>Chèn mẫu</span>
+                </button>
+                <button className="cmp-btn" onClick={copyReport} disabled={!ready} title="Chép biên bản so sánh">
+                  <Copy size={13} /> <span>Chép biên bản</span>
+                </button>
+                {note.trim() && (
+                  <button className="cmp-btn danger" onClick={clearNote} title="Xóa ghi chú của cặp sách này">
+                    <Eraser size={13} /> <span>Xóa</span>
+                  </button>
+                )}
+              </div>
+              <span className="cmp-note-hint"><ListChecks size={12} /> Mẹo: ghi 3 ý Giống – Khác – Đề xuất rồi xuất Word/PDF.</span>
             </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

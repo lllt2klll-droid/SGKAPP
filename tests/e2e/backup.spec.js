@@ -196,9 +196,16 @@ test("F2 • Xuất file sao lưu → tải về JSON hợp lệ, có sgk_favs",
 test("F3 • Xóa toàn bộ dữ liệu: tự tải file khẩn trước, sgk_favs sạch", async () => {
   await gotoDataTools();
 
+  const wipeBtn = backupCard().locator("button", { hasText: "Xóa toàn bộ dữ liệu" });
+  // Luồng an toàn mới: bấm lần 1 để arm (hiện cảnh báo), bấm lần 2 trong 8s để thực thi
+  await wipeBtn.click();
+  await page.waitForSelector(".dt-msg.err", { timeout: 10000 });
+  const armedBtn = backupCard().locator("button", { hasText: "XÓA HẾT" });
+  assert.equal(await armedBtn.count(), 1, "bấm lần 1 phải chuyển nút sang trạng thái armed");
+
   const navP = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20000 });
   const dlP = page.waitForEvent("download", { timeout: 20000 });
-  await backupCard().locator("button", { hasText: "Xóa toàn bộ dữ liệu" }).click();
+  await armedBtn.click();
 
   const rec = await dlP;
   assert.match(

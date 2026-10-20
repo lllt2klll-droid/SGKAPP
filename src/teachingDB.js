@@ -2,11 +2,13 @@
 // library, worksheets, question bank. Everything is local + offline. ──
 import { makeId, now } from "./storage.js";
 import { safeGetJSON, safeSetJSON } from "./safeStorage.js";
-import { appEvents, AppEvents } from "./core/appEvents.js";
-function notifyDataUpdated(detail){
-  const d = detail||{source:"teachingDB"};
-  try{ appEvents.emit(AppEvents.DATA_UPDATED, d); }catch(e){ console.warn("[teachingDB] appEvents emit failed", e); }
-  // legacy window dispatch kept via appEvents (also fires synthetic storage)
+import { appEvents, AppEvents, DataDomains } from "./core/appEvents.js";
+// P0 • bắn event domain riêng (tự sinh alias DATA_UPDATED cho Dashboard/DataTools
+// + đi qua BroadcastChannel sang tab khác). Chỉ bắn 1 event/op — alias lo generic,
+// không bắn thêm generic trực tiếp để tránh refresh 2 lần (đúng luật MODEL A).
+function emitDomain(eventName, domain, extra = {}) {
+  try { appEvents.emit(eventName, { source: "teachingDB", domain, ...extra }); }
+  catch (e) { console.warn("[teachingDB] emitDomain failed", eventName, e); }
 }
 // ── safeStorage helpers (audit) ──
 function _getListSafe(key){ return safeGetJSON(key, [], Array.isArray); }
@@ -61,18 +63,20 @@ export function addActivity(a) {
       : [],
     at: now(),
   };
-  _saveSafe(ACT_KEY, _addItemSafe(ACT_KEY, item));
+  if (!_saveSafe(ACT_KEY, _addItemSafe(ACT_KEY, item))) {
+    throw new Error("Không lưu được hoạt động (bộ nhớ đầy). Hãy dọn Thùng rác/Dữ liệu rồi thử lại.");
+  }
   try {
     emitActivityCreated(item.id);
   } catch (e) { console.warn("[teachingDB] operation failed", e); }
-  notifyDataUpdated({source:"teachingDB", op:"addActivity", id:item.id});
+  emitDomain(AppEvents.ACTIVITY_UPDATED, DataDomains.ACTIVITIES, { op: "addActivity", id: item.id });
   return item;
 }
 export function updateActivity(id, patch) {
   const list = _getListSafe(ACT_KEY);
   const item = list.find((x) => x.id === id);
   if (item) {
-    _saveSafe(
+    const ok = _saveSafe(
       ACT_KEY,
       list.map((x) =>
         x.id === id
@@ -85,15 +89,29 @@ export function updateActivity(id, patch) {
           : x,
       ),
     );
-    notifyDataUpdated({source:"teachingDB", op:"updateActivity", id});
+    if (!ok) throw new Error("Không lưu được thay đổi (bộ nhớ đầy).");
+    emitDomain(AppEvents.ACTIVITY_UPDATED, DataDomains.ACTIVITIES, { op: "updateActivity", id });
   }
 }
 export function deleteActivity(id) {
+  // Xóa = chuyển vào Thùng rác (nhất quán với deleteQuestion)
+  try {
+    const a = _getListSafe(ACT_KEY).find((x) => x && x.id === id);
+    if (a) moveToTrash({ type: TRASH_TYPE.ACTIVITY, label: a.name || "Hoạt động", payload: a });
+  } catch {}
   _saveSafe(
     ACT_KEY,
     _getListSafe(ACT_KEY).filter((a) => a.id !== id),
   );
-  notifyDataUpdated({source:"teachingDB", op:"deleteActivity", id});
+  emitDomain(AppEvents.ACTIVITY_UPDATED, DataDomains.ACTIVITIES, { op: "deleteActivity", id });
+}
+export function restoreActivity(a) {
+  if (!a || typeof a !== "object" || !a.id) return false;
+  const list = _getListSafe(ACT_KEY);
+  if (list.some((x) => x && x.id === a.id)) return true;
+  const ok = _saveSafe(ACT_KEY, [a, ...list]);
+  if (ok) emitDomain(AppEvents.ACTIVITY_UPDATED, DataDomains.ACTIVITIES, { op: "restoreActivity", id: a.id });
+  return ok;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -151,8 +169,9 @@ function migrateQuestionsOnRead(list) {
       }
     } catch (e) { console.warn("[teachingDB] migrateQuestionsOnRead save failed", e); }
   } else if (needsRepair) {
-    // Only normalization changes, no invalid — safe to persist
-    try { const resM=safeSetJSON(QB_KEY, valid); if(!resM.ok) console.warn("[teachingDB] normalize save failed", resM); } catch (e) { console.warn("[teachingDB] normalize save failed", e); }
+    // Chỉ khác biệt chuẩn hóa (không có invalid): KHÔNG ghi ngay lúc đọc để
+    // tránh race đa tab (tab A đọc → ghi → tab B đọc bản cũ → ghi đè).
+    // Việc chuẩn hóa sẽ được persist ở lần ghi tường minh tiếp theo.
   }
   return valid;
 }
@@ -210,9 +229,11 @@ export function addQuestion(q) {
   if (item.type === 'fill') { item.options = undefined; item.correctIndex = undefined; item.answerGuide = undefined; }
   if (item.type === 'essay') { item.options = undefined; item.correctIndex = undefined; }
 
-  _saveSafe(QB_KEY, _addItemSafe(QB_KEY, item));
+  if (!_saveSafe(QB_KEY, _addItemSafe(QB_KEY, item))) {
+    throw new Error("Không lưu được câu hỏi (bộ nhớ đầy). Hãy dọn Thùng rác/Dữ liệu rồi thử lại.");
+  }
   try { emitQuestionCreated(item.id); } catch (e) { console.warn("[teachingDB] operation failed", e); }
-  notifyDataUpdated({source:"teachingDB", op:"addQuestion", id:item.id});
+  emitDomain(AppEvents.QUESTION_UPDATED, DataDomains.QUESTIONS, { op: "addQuestion", id: item.id });
   return item;
 }
 export function updateQuestion(id, patch) {
@@ -227,8 +248,10 @@ export function updateQuestion(id, patch) {
   if (final.type === 'mc') { final.answer = undefined; final.answerGuide = undefined; }
   if (final.type === 'fill') { final.options = undefined; final.correctIndex = undefined; final.answerGuide = undefined; }
   if (final.type === 'essay') { final.options = undefined; final.correctIndex = undefined; }
-  _saveSafe(QB_KEY, _updateItemSafe(QB_KEY, id, final));
-  notifyDataUpdated({source:"teachingDB", op:"updateQuestion", id});
+  if (!_saveSafe(QB_KEY, _updateItemSafe(QB_KEY, id, final))) {
+    throw new Error("Không lưu được thay đổi câu hỏi (bộ nhớ đầy).");
+  }
+  emitDomain(AppEvents.QUESTION_UPDATED, DataDomains.QUESTIONS, { op: "updateQuestion", id });
 }
 export function deleteQuestion(id) {
   // A2 • Xóa = chuyển vào Thùng rác (giữ 30 ngày)
@@ -250,9 +273,14 @@ export function deleteQuestion(id) {
     });
     if (wChanged) _saveSafe(WS_KEY, updatedWs);
   } catch (e) { console.warn("[teachingDB] operation failed", e); }
-  notifyDataUpdated({source:"teachingDB", op:"deleteQuestion", id});
+  emitDomain(AppEvents.QUESTION_UPDATED, DataDomains.QUESTIONS, { op: "deleteQuestion", id });
 }
 export function clearQuestions() {
+  // Xóa toàn bộ: đưa cả lô vào Thùng rác trước để còn khôi phục (trước đây mất hẳn)
+  try {
+    const all = _getListSafe(QB_KEY);
+    if (all.length) moveToTrash({ type: TRASH_TYPE.QUESTION, label: `Toàn bộ ${all.length} câu hỏi`, meta: { bulk: true, count: all.length }, payload: { items: all } });
+  } catch {}
   _saveSafe(QB_KEY, []);
   // (Kho KHBD cũ đã xóa — không còn cascade questionLinks.)
   try {
@@ -260,16 +288,23 @@ export function clearQuestions() {
     const updatedWs = wss.map(ws=> Array.isArray(ws.questions) && ws.questions.length ? { ...ws, questions: [], updatedAt: now() } : ws);
     _saveSafe(WS_KEY, updatedWs);
   } catch (e) { console.warn("[teachingDB] operation failed", e); }
-  notifyDataUpdated({source:"teachingDB", op:"clearQuestions"});
+  emitDomain(AppEvents.QUESTION_UPDATED, DataDomains.QUESTIONS, { op: "clearQuestions" });
 }
 
 // A2 • Khôi phục 1 câu hỏi từ Thùng rác — trả về true nếu đã chèn lại
+// payload có thể là 1 question hoặc { items: [...] } khi xóa toàn bộ
 export function restoreQuestion(q) {
-  if (!q || typeof q !== "object" || !q.id) return false;
+  const items = Array.isArray(q?.items) ? q.items : [q];
+  const valid = items.filter((x) => x && typeof x === "object" && x.id);
+  if (!valid.length) return false;
   const list = _getListSafe(QB_KEY);
-  if (list.some((x) => x && x.id === q.id)) return true;
-  const ok = _saveSafe(QB_KEY, [q, ...list]);
-  if (ok) notifyDataUpdated({ source: "teachingDB", op: "restoreQuestion", id: q.id });
+  const ids = new Set(list.map((x) => x && x.id));
+  const merged = [...list];
+  for (const x of valid) {
+    if (!ids.has(x.id)) { merged.unshift(x); ids.add(x.id); }
+  }
+  const ok = _saveSafe(QB_KEY, merged);
+  if (ok) emitDomain(AppEvents.QUESTION_UPDATED, DataDomains.QUESTIONS, { op: "restoreQuestion", id: valid[0]?.id });
   return ok;
 }
 
@@ -296,19 +331,34 @@ export function saveWorksheet(ws) {
   let next;
   if (idx >= 0) next = list.map((w) => (w.id === ws.id ? fresh : w));
   else next = [fresh, ...list];
-  _saveSafe(WS_KEY, next);
+  if (!_saveSafe(WS_KEY, next)) {
+    throw new Error("Không lưu được phiếu (bộ nhớ đầy). Hãy dọn Thùng rác/Dữ liệu rồi thử lại.");
+  }
   if (isNew) {
     try {
       emitWorksheetCreated(fresh.id);
     } catch (e) { console.warn("[teachingDB] operation failed", e); }
   }
-  notifyDataUpdated({source:"teachingDB", op:"saveWorksheet", id:fresh.id, isNew});
+  emitDomain(AppEvents.WORKSHEET_UPDATED, DataDomains.WORKSHEETS, { op: "saveWorksheet", id: fresh.id, isNew });
   return fresh;
 }
 export function deleteWorksheet(id) {
+  // Xóa = chuyển vào Thùng rác để khôi phục được
+  try {
+    const w = _getListSafe(WS_KEY).find((x) => x && x.id === id);
+    if (w) moveToTrash({ type: TRASH_TYPE.WORKSHEET, label: w.title || "Phiếu học tập", payload: w });
+  } catch {}
   _saveSafe(
     WS_KEY,
     _getListSafe(WS_KEY).filter((w) => w.id !== id),
   );
-  notifyDataUpdated({source:"teachingDB", op:"deleteWorksheet", id});
+  emitDomain(AppEvents.WORKSHEET_UPDATED, DataDomains.WORKSHEETS, { op: "deleteWorksheet", id });
+}
+export function restoreWorksheet(w) {
+  if (!w || typeof w !== "object" || !w.id) return false;
+  const list = _getListSafe(WS_KEY);
+  if (list.some((x) => x && x.id === w.id)) return true;
+  const ok = _saveSafe(WS_KEY, [w, ...list]);
+  if (ok) emitDomain(AppEvents.WORKSHEET_UPDATED, DataDomains.WORKSHEETS, { op: "restoreWorksheet", id: w.id });
+  return ok;
 }

@@ -31,7 +31,8 @@ import {
 } from "./storage";
 import { getMergedTocBooks, getCustomTocBooks, upsertTocBook, deleteCustomTocBook } from "./tocData";
 import { getPlans as getKhbdPlans, savePlan as saveKhbdPlan, clearLegacyData, hasLegacyData } from "./khbd/planModel";
-import { restoreQuestion } from "./teachingDB";
+import { restoreQuestion, restoreActivity, restoreWorksheet } from "./teachingDB";
+import { restoreIdea } from "./personalDB";
 import { restoreVocabEntries } from "./userdata";
 import {
   listTrash,
@@ -126,6 +127,9 @@ export default function DataToolsView() {
               : [];
         restoreVocabEntries(entries);
       }
+      else if (taken.type === TRASH_TYPE.ACTIVITY) restoreActivity(taken.payload);
+      else if (taken.type === TRASH_TYPE.WORKSHEET) restoreWorksheet(taken.payload);
+      else if (taken.type === TRASH_TYPE.IDEA) restoreIdea(taken.payload);
       // Sách: file PDF chưa bị xóa — đưa ra khỏi thùng rác là App tự nạp lại thư viện
     } catch (e) {
       setMsg({ kind: "err", text: `Khôi phục lỗi: ${e.message}` });
@@ -243,8 +247,17 @@ export default function DataToolsView() {
     }
   };
 
+  const IMPORT_MAX_BYTES = 200 * 1024 * 1024;
   const doImport = (file) => {
     if (!file) return;
+    if (file.size > IMPORT_MAX_BYTES) {
+      setMsg({ kind: "err", text: `File quá lớn (${(file.size / 1048576).toFixed(0)}MB > 200MB). Hãy dùng file sao lưu nhỏ hơn.` });
+      return;
+    }
+    if (!/\.json$/i.test(file.name || "") && file.type !== "application/json") {
+      setMsg({ kind: "err", text: "File sao lưu phải là .json (xuất từ nút Sao lưu)." });
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result || "");
@@ -271,43 +284,84 @@ export default function DataToolsView() {
       });
       return;
     }
+    setImporting(true);
+    setProgress(10);
+    // Tiến trình thật theo giai đoạn (không còn 20→60→100 giả bằng timeout)
+    const tick = setInterval(() => {
+      setProgress((p) => (p < 90 ? p + 5 : p));
+    }, 400);
     try {
       const res = await importBackup(pendingText);
+      clearInterval(tick);
+      setProgress(95);
       const indexedMsg =
         res.indexedCount > 0 ? ` (${res.indexedCount} mục IndexedDB)` : "";
       setPreview(null);
       setPendingText(null);
+      // Xác minh thật: đối chiếu key trong backup với localStorage sau khôi phục
       let verifyOk = false;
+      let verifyDetail = "";
       try {
-        const sampleKeys = Object.keys(res).length > 0;
-        verifyOk = sampleKeys;
+        const payload = JSON.parse(pendingText);
+        const keys = Object.keys(payload?.data || {});
+        const missing = keys.filter((k) => {
+          try { return localStorage.getItem(k) == null; } catch { return true; }
+        });
+        verifyOk = missing.length === 0 && res.count === res.total;
+        verifyDetail = missing.length
+          ? `thiếu ${missing.length} key (${missing.slice(0, 3).join(", ")})`
+          : res.count !== res.total
+            ? `chỉ áp dụng ${res.count}/${res.total}`
+            : "đủ key";
       } catch {
-        verifyOk = true;
+        verifyOk = res.count > 0;
+        verifyDetail = "không đối chiếu được key";
       }
+      setProgress(100);
       setMsg({
-        kind: "ok",
-        text: `Khôi phục xong: ${res.count}/${res.total} mục hợp lệ${indexedMsg}. Xác minh: ${verifyOk ? "đạt" : "cảnh báo"}. Ứng dụng sẽ tự tải lại…`,
+        kind: verifyOk ? "ok" : "err",
+        text: verifyOk
+          ? `Khôi phục xong: ${res.count}/${res.total} mục hợp lệ${indexedMsg}. Xác minh: đạt. Ứng dụng sẽ tự tải lại…`
+          : `Khôi phục xong nhưng xác minh CẢNH BÁO (${verifyDetail}). Hãy kiểm tra dữ liệu trước khi tiếp tục.`,
       });
-      setImporting(true);
-      setProgress(20);
-      setTimeout(() => setProgress(60), 300);
+      if (!verifyOk) { setImporting(false); return; }
       setTimeout(() => {
-        setProgress(100);
         location.reload();
       }, 900);
     } catch (e) {
+      clearInterval(tick);
+      setImporting(false);
+      setProgress(0);
       setMsg({ kind: "err", text: `Không khôi phục được: ${uiMessage(e, "không rõ nguyên nhân")}` });
       setPreview(null);
     }
   };
 
+  const [wipeArmed, setWipeArmed] = useState(false);
+  useEffect(() => {
+    if (!wipeArmed) return;
+    const t = setTimeout(() => setWipeArmed(false), 8000);
+    return () => clearTimeout(t);
+  }, [wipeArmed]);
   const doWipe = async () => {
-    if (
-      !confirm(
-        "Xóa TOÀN BỘ dữ liệu của ứng dụng (đánh dấu sách, từ vựng, ghi chú, thẻ, bộ sưu tập, giáo án, phiếu, câu hỏi…)? Không thể phục hồi được.",
-      )
-    )
+    // Xóa toàn bộ: bấm 2 lần cách nhau <8s thay vì 1 confirm (tránh bấm nhầm),
+    // và bắt buộc đã sao lưu trước đó.
+    if (!wipeArmed) {
+      setWipeArmed(true);
+      setMsg({
+        kind: "err",
+        text: lastBackup
+          ? "Bấm “Xóa toàn bộ dữ liệu” LẦN NỮA trong 8 giây để xác nhận (không thể phục hồi)."
+          : "Chưa thấy bản sao lưu nào. Hãy bấm “Sao lưu” trước, rồi bấm “Xóa toàn bộ” 2 lần để xác nhận.",
+      });
       return;
+    }
+    if (!lastBackup) {
+      setMsg({ kind: "err", text: "Hãy sao lưu trước khi xóa toàn bộ dữ liệu." });
+      setWipeArmed(false);
+      return;
+    }
+    setWipeArmed(false);
     try {
       const result = await wipeAppData();
       setMsg({
@@ -450,7 +504,7 @@ export default function DataToolsView() {
           </div>
           <div className="dt-actions">
             <button className="btn btn-primary" onClick={doExport}><Download size={15} /> Xuất file sao lưu (.json)</button>
-            <button className="btn btn-ghost" onClick={doWipe} style={{ color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.22)' }}><Trash2 size={15} /> Xóa toàn bộ dữ liệu</button>
+            <button className="btn btn-ghost" onClick={doWipe} style={{ color: 'var(--danger)', borderColor: wipeArmed ? 'var(--danger)' : 'rgba(220,38,38,0.22)', background: wipeArmed ? 'rgba(220,38,38,0.08)' : undefined }}><Trash2 size={15} /> {wipeArmed ? "Bấm lần nữa để XÓA HẾT (8s)" : "Xóa toàn bộ dữ liệu"}</button>
           </div>
           <FileDropzone
             accept=".json,application/json"

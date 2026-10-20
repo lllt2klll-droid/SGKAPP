@@ -1,4 +1,7 @@
-/* ── Mục Từ vựng (sổ tay): toolbar, tab, thống kê, form, chip ── */
+/* ── Mục Từ vựng (sổ tay): hero, tab, toolbar, bảng, thống kê, form ──
+   Thiết kế đồng bộ với các module mới (Ngân hàng câu hỏi, Thực tập):
+   hero gradient + pill số liệu + tab segmented + toolbar dạng thẻ.
+   Dùng token var(--*) — an toàn cho cả light & dark. */
 
 .vocab-view {
   display: flex;
@@ -6,10 +9,132 @@
   gap: var(--space-12, 0.75rem);
 }
 
+/* ── Hero header ─────────────────────────────────────────── */
+.vocab-head {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-action, var(--primary)) 12%, transparent),
+      color-mix(in srgb, var(--secondary) 10%, transparent) 60%,
+      transparent
+    );
+}
+
+.vocab-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vocab-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.vocab-title-ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--btn-primary-text, #fff);
+  background: linear-gradient(135deg, var(--color-action, var(--primary)), var(--secondary));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-action, var(--primary)) 35%, transparent);
+}
+
+.vocab-level-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--color-action, var(--primary)) 48%, transparent);
+  background: var(--color-action-soft, var(--primary-light));
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.vocab-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.vocab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-mid);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+button.vocab-pill {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+button.vocab-pill:hover {
+  border-color: var(--color-action, var(--primary));
+  transform: translateY(-1px);
+}
+
+.vocab-pill.ok {
+  background: var(--success-soft);
+  color: var(--success-deep);
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border-color));
+}
+
+.vocab-pill.warn {
+  background: var(--warning-soft);
+  color: var(--warning-deep);
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border-color));
+}
+
+.vocab-pill.warn:hover {
+  border-color: var(--warning);
+}
+
+.vocab-pill.warn.calm {
+  background: var(--surface);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.vocab-pill.hot {
+  background: var(--color-action-soft, var(--primary-light));
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
+  border-color: color-mix(in srgb, var(--color-action, var(--primary)) 38%, var(--border-color));
+}
+
+/* ── Tab segmented ───────────────────────────────────────── */
 .vocab-tabs {
   display: flex;
   align-items: center;
-  gap: var(--space-8, 0.5rem);
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -17,7 +142,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0.4rem 0.85rem;
+  padding: 0.4rem 0.9rem;
   border: 1px solid var(--border-color);
   border-radius: 999px;
   background: var(--surface);
@@ -25,18 +150,19 @@
   font-size: var(--font-button, 0.86rem);
   font-weight: var(--font-semibold, 600);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .vocab-tab:hover {
-  border-color: var(--primary);
-  color: var(--text-dark);
+  border-color: var(--color-action, var(--primary));
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
 }
 
 .vocab-tab.active {
-  background: var(--primary-light, rgba(96, 165, 250, 0.14));
-  border-color: var(--primary);
-  color: var(--text-dark);
+  background: var(--color-action, var(--primary));
+  border-color: var(--color-action, var(--primary));
+  color: var(--btn-primary-text, #fff);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--color-action, var(--primary)) 32%, transparent);
 }
 
 .vocab-tabs-spacer {
@@ -51,17 +177,48 @@
   color: var(--text-muted);
 }
 
-/* ── Toolbar ─────────────────────────────────────────────── */
+/* ── Toolbar (dạng thẻ, đồng bộ .bm-toolbar / .qbx-*) ────── */
 .vocab-toolbar {
   align-items: flex-start;
   gap: var(--space-8, 0.5rem);
   flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 11px 13px;
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.04));
 }
 
 .vocab-toolbar .data-table-toolbar-left,
 .vocab-toolbar .data-table-toolbar-right {
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.vocab-search {
+  flex: 1 1 220px;
+  min-width: min(240px, 100%);
+  max-width: 360px;
+}
+
+.vocab-search .search-input {
+  padding: 0.5rem 2.2rem 0.5rem 2.1rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.vocab-search .search-input:focus {
+  border-color: var(--color-action, var(--primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-action, var(--primary)) 16%, transparent);
+}
+
+.vocab-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .vocab-filter-chip {
@@ -73,20 +230,88 @@
   border-radius: 999px;
   background: var(--surface);
   color: var(--text-mid);
+  font-family: inherit;
   font-size: var(--font-caption, 0.76rem);
   font-weight: var(--font-semibold, 600);
   cursor: pointer;
   white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .vocab-filter-chip:hover {
-  border-color: var(--primary);
+  border-color: var(--color-action, var(--primary));
   color: var(--text-dark);
 }
 
 .vocab-filter-chip.on {
-  background: var(--primary-light, rgba(96, 165, 250, 0.14));
-  border-color: var(--primary);
+  background: var(--color-action-soft, var(--primary-light));
+  border-color: var(--color-action, var(--primary));
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
+}
+
+.vocab-filter-chip.warn {
+  background: var(--warning-soft);
+  color: var(--warning-deep);
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border-color));
+}
+
+/* ── Nút AI giải nghĩa (gradient nổi bật) ───────────────── */
+.vocab-ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--color-action, var(--primary)), var(--secondary));
+  color: var(--btn-primary-text, #fff);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--color-action, var(--primary)) 30%, transparent);
+  transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+.vocab-ai-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-action, var(--primary)) 40%, transparent);
+}
+
+.vocab-ai-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.vocab-ai-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.vocab-ai-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--primary));
+  outline-offset: 2px;
+}
+
+/* ── Thanh thao tác khi chọn nhiều dòng ─────────────────── */
+.vocab-selbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-action, var(--primary)) 34%, var(--border-color));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-action, var(--primary)) 9%, var(--surface));
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
+}
+
+.vocab-selbar b {
   color: var(--text-dark);
 }
 
@@ -95,12 +320,34 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0.4rem 0.7rem;
-  border: 1px dashed var(--primary);
-  border-radius: 8px;
-  background: var(--primary-light, rgba(96, 165, 250, 0.14));
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--color-action, var(--primary));
+  border-radius: 10px;
+  background: var(--color-action-soft, var(--primary-light));
   font-size: var(--font-caption, 0.76rem);
   color: var(--text-dark);
+}
+
+.vocab-progress-text {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.vocab-progress-track {
+  flex: 1 1 120px;
+  min-width: 80px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+
+.vocab-progress-track > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-action, var(--primary)), var(--secondary));
+  transition: width 0.25s ease;
 }
 
 .vocab-error {
@@ -127,22 +374,23 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--border-strong, #334155);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .vocab-select-btn:hover {
-  border-color: var(--primary);
-  color: var(--text-dark);
+  border-color: var(--color-action, var(--primary));
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
 }
 
 .vocab-select-btn.on {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--btn-primary-text);
+  background: var(--color-action, var(--primary));
+  border-color: var(--color-action, var(--primary));
+  color: var(--btn-primary-text, #fff);
 }
 
 .vocab-word-cell {
@@ -153,6 +401,7 @@
 .vocab-meaning-cell {
   display: inline-block;
   max-width: 100%;
+  white-space: pre-line;
   cursor: text;
 }
 
@@ -169,10 +418,16 @@
   padding: 0.15rem 0.5rem;
   border: 1px dashed var(--warning);
   border-radius: 999px;
-  background: var(--warning-light, rgba(251, 191, 36, 0.14));
-  color: var(--text-dark);
+  background: var(--warning-soft);
+  color: var(--warning-deep);
+  font-family: inherit;
   font-size: var(--font-caption, 0.72rem);
+  font-weight: 700;
   cursor: pointer;
+}
+
+.vocab-missing-cell:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning) 22%, var(--surface));
 }
 
 .vocab-missing-cell:disabled {
@@ -189,13 +444,22 @@
 .vocab-tag-chip {
   display: inline-flex;
   align-items: center;
-  padding: 0.08rem 0.45rem;
+  gap: 4px;
+  padding: 0.1rem 0.5rem;
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: var(--surface-soft, #172033);
+  background: var(--surface-soft);
   color: var(--text-mid);
+  font-family: inherit;
   font-size: 0.7rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.vocab-tag-chip b {
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
+  font-weight: 800;
 }
 
 .vocab-tag-chip:hover {
@@ -204,81 +468,201 @@
 }
 
 .vocab-tag-chip.on {
-  background: var(--secondary-light, rgba(167, 139, 250, 0.14));
+  background: var(--secondary-light);
   border-color: var(--secondary);
   color: var(--text-dark);
 }
 
+.vocab-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* ── Trạng thái trống ────────────────────────────────────── */
+.vocab-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.vocab-empty-ic {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-action-soft, var(--primary-light)), var(--secondary-light));
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
+}
+
+.vocab-empty-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.vocab-empty-hint {
+  margin: 0;
+  max-width: 560px;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
 .vocab-empty-actions {
   display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
   justify-content: center;
-  margin-top: var(--space-16, 1rem);
+  margin-top: 4px;
 }
 
 /* ── Tab Thống kê ────────────────────────────────────────── */
 .vocab-stats {
   display: flex;
   flex-direction: column;
-  gap: var(--space-24, 1.5rem);
+  gap: var(--space-12, 0.75rem);
 }
 
-.vocab-stat-cards {
+.vocab-kpis {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-12, 0.75rem);
 }
 
-.vocab-stat-card {
+.vocab-kpi {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 0.85rem 1rem;
+  gap: 2px;
+  padding: 13px 15px;
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface);
   text-align: left;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-.vocab-stat-card.clickable {
-  cursor: pointer;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+.vocab-kpi-ic {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  background: var(--color-action-soft, var(--primary-light));
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
 }
 
-.vocab-stat-card.clickable:hover {
-  border-color: var(--warning);
-  transform: translateY(-1px);
+.vocab-kpi.ok .vocab-kpi-ic {
+  background: var(--success-soft);
+  color: var(--success-deep);
 }
 
-.vocab-stat-value {
-  font-size: 1.5rem;
+.vocab-kpi.warn .vocab-kpi-ic {
+  background: var(--warning-soft);
+  color: var(--warning-deep);
+}
+
+.vocab-kpi.violet .vocab-kpi-ic {
+  background: var(--secondary-light);
+  color: var(--secondary);
+}
+
+.vocab-kpi-value {
+  font-size: 1.45rem;
   font-weight: var(--font-extrabold, 800);
   color: var(--text-dark);
-  line-height: var(--leading-tight, 1.25);
+  line-height: 1.15;
 }
 
-.vocab-stat-label {
-  font-size: var(--font-caption, 0.76rem);
+.vocab-kpi-label {
+  font-size: var(--font-caption, 0.74rem);
+  font-weight: 600;
   color: var(--text-muted);
 }
 
-.vocab-stat-section {
+.vocab-kpi.clickable {
+  cursor: pointer;
+}
+
+.vocab-kpi.clickable:hover {
+  border-color: var(--warning);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.08));
+}
+
+.vocab-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-8, 0.5rem);
+  padding: 13px 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--surface);
 }
 
-.vocab-stat-section h4 {
+.vocab-panel h4,
+.vocab-panel-title {
   margin: 0;
-  font-size: var(--font-h3, 1rem);
+  font-size: 0.95rem;
+  font-weight: 800;
   color: var(--text-dark);
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-.vocab-stat-head {
+.vocab-panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8, 0.5rem);
   flex-wrap: wrap;
+}
+
+.vocab-panel-note {
+  margin: 0;
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-muted);
+}
+
+.vocab-panel-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vocab-coverage-pct {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--color-action-strong, var(--color-action, var(--primary)));
+}
+
+.vocab-coverage {
+  height: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.vocab-coverage > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-action, var(--primary)), var(--secondary));
+  transition: width 0.3s ease;
 }
 
 .vocab-range {
@@ -311,7 +695,7 @@ button.vocab-bar-row {
 }
 
 button.vocab-bar-row:hover {
-  background: var(--primary-light, rgba(96, 165, 250, 0.14));
+  background: var(--color-action-soft, var(--primary-light));
 }
 
 .vocab-bar-label {
@@ -326,7 +710,7 @@ button.vocab-bar-row:hover {
   display: block;
   height: 14px;
   border-radius: 999px;
-  background: var(--surface-soft, #172033);
+  background: var(--surface-soft);
   overflow: hidden;
 }
 
@@ -334,7 +718,7 @@ button.vocab-bar-row:hover {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--primary);
+  background: var(--color-action, var(--primary));
   transition: width 0.3s ease;
 }
 
@@ -378,14 +762,14 @@ button.vocab-bar-row:hover {
   max-width: 34px;
   min-height: 4px;
   border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, var(--primary), var(--secondary));
+  background: linear-gradient(180deg, var(--color-action, var(--primary)), var(--secondary));
   transition: height 0.3s ease;
 }
 
 .vocab-day-bar span {
   font-size: 0.62rem;
   font-weight: var(--font-bold, 700);
-  color: var(--text-dark);
+  color: var(--btn-primary-text, #fff);
   padding-top: 2px;
 }
 
@@ -395,10 +779,74 @@ button.vocab-bar-row:hover {
   white-space: nowrap;
 }
 
+.vocab-tagcloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .vocab-stat-actions {
   display: flex;
   gap: var(--space-8, 0.5rem);
   flex-wrap: wrap;
+}
+
+/* ── (Dùng chung) Thẻ thống kê cho Đánh dấu & Ghi chú ────── */
+.vocab-stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-12, 0.75rem);
+}
+
+.vocab-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: left;
+  font-family: inherit;
+}
+
+.vocab-stat-card.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vocab-stat-card.clickable:hover {
+  border-color: var(--color-action, var(--primary));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.08));
+}
+
+.vocab-stat-value {
+  font-size: 1.5rem;
+  font-weight: var(--font-extrabold, 800);
+  color: var(--text-dark);
+  line-height: var(--leading-tight, 1.25);
+}
+
+.vocab-stat-label {
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-muted);
+}
+
+.vocab-stat-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8, 0.5rem);
+  padding: 13px 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.vocab-stat-section h4 {
+  margin: 0;
+  font-size: var(--font-h3, 1rem);
+  color: var(--text-dark);
 }
 
 /* ── Form thêm / sửa ─────────────────────────────────────── */
@@ -441,10 +889,24 @@ button.vocab-bar-row:hover {
   flex-wrap: wrap;
 }
 
+/* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .vocab-head {
+    padding: 12px 13px;
+  }
+
+  .vocab-pills {
+    margin-left: 0;
+  }
+
   .vocab-toolbar .data-table-toolbar-right {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .vocab-search {
+    max-width: none;
+    width: 100%;
   }
 
   .vocab-form-row {

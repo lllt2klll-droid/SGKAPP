@@ -2,7 +2,9 @@
   "name": "sgk-app",
   "private": true,
   "version": "0.0.0",
-  "author": "Nguyá»…n Tuáº¥n",
+  "author": "Nguyễn Tuấn",
+  "copyright": "© 2026 Nguyễn Tuấn. All rights reserved.",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",

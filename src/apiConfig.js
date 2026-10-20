@@ -60,6 +60,34 @@ export function apiUrl(path) {
   return `${API_BASE}${safePath}`;
 }
 
+// ── Write token cho route ghi/xóa server ─────────────────────────────
+// Server chỉ yêu cầu khi đặt env WRITE_TOKEN (mở LAN). Mặc định localhost
+// không đặt → không gửi gì, mọi thứ chạy như cũ.
+// Khi server bật token: điền 1 lần bằng console
+//   localStorage.setItem("sgk_write_token", "<token>")
+// rồi tải lại trang — mọi upload/sửa/xóa sẽ tự kèm header.
+export function getWriteToken() {
+  try {
+    const env = (typeof import.meta !== "undefined" && import.meta.env) ? import.meta.env : {};
+    if (env.VITE_WRITE_TOKEN) return String(env.VITE_WRITE_TOKEN);
+  } catch {}
+  try {
+    if (typeof localStorage !== "undefined") {
+      return String(localStorage.getItem("sgk_write_token") || "");
+    }
+  } catch {}
+  return "";
+}
+
+export function writeHeaders(extra = {}) {
+  const headers = { ...extra };
+  try {
+    const t = getWriteToken();
+    if (t) headers["x-write-token"] = t;
+  } catch {}
+  return headers;
+}
+
 // Export environment info for debugging
 export function getApiConfig() {
   const env = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env : {};

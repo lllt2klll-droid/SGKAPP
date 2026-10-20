@@ -220,11 +220,14 @@ describe('A2 • Lifecycle xóa → khôi phục (tích hợp domain)', () => {
     assert.equal(listTrash().length, 0, 'đã lấy ra khỏi thùng rác');
   });
 
-  it('clearQuestions (dọn kho) KHÔNG đi qua thùng rác — cố ý, không hoàn tác được', () => {
+  it('clearQuestions (dọn kho) ĐI qua thùng rác — khôi phục được cả lô', () => {
     localStorage.setItem('sgk_questions', JSON.stringify([{ id: 'q1', type: 'mc', question: '?', options: ['a', 'b', 'c', 'd'], correctIndex: 0 }]));
     clearQuestions();
     assert.equal(getQuestions().length, 0);
-    assert.equal(listTrashByType(TRASH_TYPE.QUESTION).length, 0);
+    assert.equal(listTrashByType(TRASH_TYPE.QUESTION).length, 1);
+    const taken = takeFromTrash(listTrashByType(TRASH_TYPE.QUESTION)[0].id);
+    assert.equal(restoreQuestion(taken.payload), true);
+    assert.equal(getQuestions().length, 1);
   });
 });
 

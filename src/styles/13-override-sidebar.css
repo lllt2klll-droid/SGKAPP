@@ -229,25 +229,8 @@
   box-shadow: none;
 }
 
-/* Tooltip for collapsed (native title is fallback; add via ::after on hover via data-title) */
-.sidebar.collapsed .nav-item:hover::after {
-  content: attr(title);
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 50%;
-  transform: translateY(-50%);
-  background: var(--text-dark);
-  color: var(--surface);
-  font-size: 0.76rem;
-  font-weight: 700;
-  padding: 0.35rem 0.55rem;
-  border-radius: 6px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 999;
-  box-shadow: var(--shadow-md);
-  opacity: 1;
-}
+/* Tooltip khi thu gọn: ĐÃ XÓA theo yêu cầu — native title attr vẫn còn
+   (hover chậm ~1s mới hiện nhãn gốc của trình duyệt, không còn hộp đen CSS). */
 
 /* Footer */
 .sidebar-footer {

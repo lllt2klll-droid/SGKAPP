@@ -1,0 +1,466 @@
+/* ── Đánh dấu & Ghi chú đã lưu: đồng bộ UX Từ vựng / Bộ sưu tập ── */
+
+.bm-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12, 0.75rem);
+}
+
+.bm-toolbar {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.bm-toolbar .data-table-toolbar-left,
+.bm-toolbar .data-table-toolbar-right {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bm-search {
+  min-width: min(280px, 100%);
+}
+
+.bm-count {
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.bm-book {
+  font-weight: var(--font-semibold, 600);
+  color: var(--text-dark);
+}
+
+.bm-sub {
+  font-size: var(--font-caption, 0.76rem);
+  color: var(--text-muted);
+}
+
+.bm-book-sm {
+  font-size: var(--font-caption, 0.78rem);
+  color: var(--text-mid);
+}
+
+.bm-label {
+  cursor: text;
+  color: var(--text-dark);
+}
+
+.bm-add-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px dashed var(--border-strong, #475569);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-caption, 0.74rem);
+  padding: 0.15rem 0.6rem;
+  cursor: pointer;
+}
+
+.bm-add-label:hover {
+  border-color: var(--primary);
+  color: var(--text-dark);
+}
+
+.bm-note-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  font-size: var(--font-caption, 0.74rem);
+  font-weight: var(--font-semibold, 600);
+  padding: 0.18rem 0.6rem;
+  cursor: pointer;
+}
+
+.bm-note-badge.has {
+  border: 1px solid var(--secondary);
+  background: var(--secondary-light, rgba(167, 139, 250, 0.14));
+  color: var(--text-dark);
+}
+
+.bm-note-badge.has:hover {
+  filter: brightness(1.08);
+}
+
+.bm-note-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.bm-img-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-mid);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.08rem 0.5rem;
+  background: var(--surface-soft);
+}
+
+.bm-more {
+  font-size: 0.74rem;
+  color: var(--primary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.bm-more:hover {
+  text-decoration: underline;
+}
+
+.bm-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.bm-empty-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.bm-clear-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0.75rem;
+}
+
+.bm-label-modal {
+  width: min(440px, calc(100vw - 2rem));
+}
+
+.bm-label-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+/* ── Khung gom nhóm theo sách (Ghi chú đã lưu & Trang đánh dấu) ── */
+/* Phong cách thẻ "Tiếp tục đọc": bo tròn, viền accent, đổ bóng nhẹ, hover nâng */
+
+/* Toolbar dạng thẻ cho gọn gàng */
+.bm-toolbar {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 11px 13px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.bm-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bm-group {
+  position: relative;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.bm-group:hover {
+  border-color: color-mix(in srgb, var(--color-action, var(--primary)) 42%, var(--border-color));
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+  transform: translateY(-2px);
+}
+
+.bm-group::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  z-index: 1;
+  background: linear-gradient(180deg, var(--color-action, var(--primary)), var(--color-action-active, var(--color-action, var(--primary))));
+  opacity: 0.9;
+}
+
+.bm-group.collapsed::before {
+  opacity: 0.5;
+}
+
+.bm-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px 11px 16px;
+  background: linear-gradient(120deg, var(--color-action-soft, rgba(37, 99, 235, 0.12)), transparent 72%);
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.bm-group.collapsed .bm-group-head {
+  border-bottom: none;
+}
+
+.bm-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  flex: 1 1 240px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  color: inherit;
+}
+
+.bm-caret {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+
+.bm-group.collapsed .bm-caret {
+  transform: rotate(-90deg);
+}
+
+.bm-group-badge {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fff;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--color-action, var(--primary)), var(--color-action-active, var(--color-action, var(--primary))));
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--color-action, var(--primary)) 35%, transparent);
+}
+
+.bm-group-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bm-group-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(52vw, 440px);
+}
+
+.bm-group-meta {
+  font-size: var(--font-caption, 0.72rem);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.bm-group-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bm-group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.bm-group-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.bm-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px 10px 16px;
+  border-top: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.bm-group-body > .bm-row:first-child {
+  border-top: none;
+}
+
+.bm-row:hover {
+  background: var(--surface-soft);
+}
+
+.bm-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bm-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bm-row .vocab-select-btn {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Hành động mỗi dòng: hiện rõ khi hover / focus (vẫn hiện trên thiết bị cảm ứng) */
+.bm-row .data-table-actions {
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.bm-row:hover .data-table-actions,
+.bm-row:focus-within .data-table-actions {
+  opacity: 1;
+  transform: none;
+}
+
+@media (hover: none) {
+  .bm-row .data-table-actions {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Ghi chú dạng thẻ hình chữ nhật, xếp lưới trong khung sách ── */
+.bm-note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  align-items: stretch;
+}
+
+.bm-note-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.bm-note-card:hover {
+  border-color: color-mix(in srgb, var(--color-action, var(--primary)) 45%, var(--border-color));
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+}
+
+.bm-note-card.selected {
+  border-color: var(--color-action, var(--primary));
+  background: color-mix(in srgb, var(--color-action, var(--primary)) 8%, var(--surface));
+}
+
+.bm-note-card-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bm-note-card-check {
+  margin-left: auto;
+}
+
+.bm-note-card-text {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--text-dark);
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bm-note-card-text.full {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.bm-note-card .bm-more {
+  align-self: flex-start;
+}
+
+.bm-note-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.bm-note-card-actions .btn:last-child {
+  margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .bm-toolbar .data-table-toolbar-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .bm-search {
+    width: 100%;
+  }
+
+  .bm-group-head {
+    padding: 10px 12px;
+  }
+
+  .bm-group-title {
+    max-width: 40vw;
+  }
+
+  .bm-group-actions {
+    margin-left: 0;
+  }
+
+  .bm-group-actions .btn-xs {
+    padding: 0.22rem 0.5rem;
+  }
+
+  .bm-note-grid {
+    grid-template-columns: 1fr;
+    padding: 10px;
+    gap: 9px;
+  }
+}

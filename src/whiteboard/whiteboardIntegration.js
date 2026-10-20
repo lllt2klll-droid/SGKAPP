@@ -19,11 +19,14 @@ function stripPlaceholder(s) {
 // ── Gửi nội dung bất kỳ vào Whiteboard (đang mở hoặc sẽ mở) ──
 // Hỗ trợ liên kết 2 chiều: sourceRef { filename, title, page, bookPage, chapter, citation } + imageDataUrl
 // FIX BookReader heavy duplicate: trước emit 3 lần (direct + integration + queue) → lặp ảnh, nặng. Giờ chỉ emit 1 lần duy nhất qua queuePendingPayload.
-export function sendToWhiteboard({ title, text, kind = "node", source = "app", sourceRef = null, imageDataUrl = null, mindmapBranches = null }) {
-  const cleanTitle = stripPlaceholder(title) || title;
+export function sendToWhiteboard({ title, text, kind = "node", source = "app", sourceRef = null, imageDataUrl = null, mindmapBranches = null, navigate = true }) {
+  const rawTitle = String(title || "");
+  const cleanTitle = stripPlaceholder(rawTitle);
   const cleanText = stripPlaceholder(text);
+  // P0/M8: title toàn placeholder → fallback sang text sạch, không giữ placeholder làm title node
+  const fallbackTitle = cleanTitle || String(cleanText || "").slice(0, 80) || "Nội dung";
   const payload = {
-    title: String(cleanTitle || cleanText || "Nội dung").slice(0, 80),
+    title: String(fallbackTitle).slice(0, 80),
     text: String(cleanText || cleanTitle || "").slice(0, 2000),
     kind,
     source,
@@ -41,8 +44,10 @@ export function sendToWhiteboard({ title, text, kind = "node", source = "app", s
   queuePendingPayload(payload);
   // 1b. Tracing qua integration hub nhưng KHÔNG emit lại SEND_TO_WHITEBOARD (chỉ log navigate=false để tránh loop)
   // Bỏ để tránh duplicate; nếu cần trace sau này có thể emit event khác
-  // 2. Chuyển view sang whiteboard (nếu App đang lắng nghe)
-  try { appEvents.emit(AppEvents.NAVIGATE, { view: "whiteboard", payload }); } catch (e) { console.warn("[whiteboardIntegration] emit navigate failed", e); }
+  // 2. Chuyển view sang whiteboard (nếu App đang lắng nghe) — cho phép navigate:false để import nền hàng loạt
+  if (navigate !== false) {
+    try { appEvents.emit(AppEvents.NAVIGATE, { view: "whiteboard", payload }); } catch (e) { console.warn("[whiteboardIntegration] emit navigate failed", e); }
+  }
   return payload;
 }
 
@@ -165,18 +170,44 @@ export function bookPageToBoard({ bookTitle, page, text, clip }) {
 }
 
 // ── Cho GlobalSearch index ──
+// P0: sau migration key legacy sgk_wb_index đã bị xóa → đọc IDB canonical trước, fallback LS
+export async function getWhiteboardIndexAsync() {
+  try {
+    const { default: indexedDBService, STORES } = await import("../indexedDB.js");
+    try {
+      if (indexedDBService?.constructor?.isAvailable()) {
+        const all = await indexedDBService.getAll(STORES.WB_BOARDS);
+        if (Array.isArray(all) && all.length) {
+          return all.map((e) => ({
+            id: `wb:${e.id}`,
+            type: "whiteboard",
+            title: e.name || "Bảng trắng",
+            subtitle: (() => { try { return new Date(e.updatedAt).toLocaleDateString("vi-VN"); } catch { return ""; } })(),
+            view: "whiteboard",
+            boardId: e.id,
+          }));
+        }
+      }
+    } catch {}
+  } catch {}
+  return getWhiteboardIndex();
+}
 export function getWhiteboardIndex() {
   try {
     const idx = safeGetJSON("sgk_wb_index", [], Array.isArray);
-    if (!Array.isArray(idx)) return [];
-    return idx.map((e) => ({
-      id: `wb:${e.id}`,
-      type: "whiteboard",
-      title: e.name || "Bảng trắng",
-      subtitle: new Date(e.updatedAt).toLocaleDateString("vi-VN"),
-      view: "whiteboard",
-      boardId: e.id,
-    }));
+    if (Array.isArray(idx) && idx.length) {
+      return idx.map((e) => ({
+        id: `wb:${e.id}`,
+        type: "whiteboard",
+        title: e.name || "Bảng trắng",
+        subtitle: (() => { try { return new Date(e.updatedAt).toLocaleDateString("vi-VN"); } catch { return ""; } })(),
+        view: "whiteboard",
+        boardId: e.id,
+      }));
+    }
+    // IDB canonical đã migrate nhưng caller sync không await được → trả [] (caller nên dùng getWhiteboardIndexAsync)
+    // Thử đọc cache qua localStorage key phụ nếu có (không block)
+    return [];
   } catch (e) { console.warn("[whiteboardIntegration] getWhiteboardIndex failed", e); return []; }
 }
 
@@ -194,4 +225,14 @@ export function onNavigateToWhiteboard(handler) {
   return appEvents.on(AppEvents.NAVIGATE, (detail) => {
     if (detail?.view === "whiteboard") handler(detail);
   });
+}
+
+// ── Đồng bộ đa tab: event WHITEBOARD_UPDATED của tab KHÁC thì tab này phải
+// biết để làm mới danh sách / hỏi tải lại — không bao giờ ghi đè lén.
+// Quy ước: tab phát luôn gắn origin = TAB_ID của nó (+ boardId/action/at).
+// Event không origin (đường storage legacy) cũng coi là remote (an toàn: refresh/báo).
+export function isRemoteWhiteboardEvent(detail, tabId) {
+  if (!detail || typeof detail !== "object") return false;
+  if (detail.origin && detail.origin === tabId) return false;
+  return true;
 }

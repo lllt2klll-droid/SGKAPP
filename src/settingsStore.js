@@ -3,8 +3,9 @@
 // + Central behavior hub: mọi cài đặt đều điều khiển app thật qua applySettings + helpers.
 import { ACCENT_PALETTES, generateAccentScale, accentSemanticsFromScale } from "./designTokens.js";
 import { safeGetJSON, safeGetString, safeSetJSON, safeSetString, safeRemove, listKeys } from "./safeStorage.js";
-import { STORAGE_KEYS, isCacheKey as isCacheKeyCore } from "./core/storageKeys.js";
+import { STORAGE_KEYS, isCacheKey as isCacheKeyCore, isBackupKey as isBackupKeyCore } from "./core/storageKeys.js";
 import { normalizeModel } from "./apiConfig.js";
+import { setReadingRuler } from "./accessibility/readingRuler.js";
 
 export const SETTINGS_KEY = STORAGE_KEYS.SETTINGS;
 
@@ -70,15 +71,25 @@ export const DEFAULT_SETTINGS = {
   notifications: {
     dailyReminder: false,
     dailyTime: "08:00",
+    readReminder: false,
+    readTime: "20:00",
   },
   accessibility: {
     highContrast: false,
     largerText: false,
     reduceMotion: false,
     focusIndicators: true,
+    // 6 khóa "tinh tế" — xem applySettings() để biết tác động DOM/CSS tương ứng:
+    followSystem: true,      // tự theo prefers-contrast / prefers-reduced-motion của máy
+    underlineLinks: false,   // gạch chân liên kết (khác màu + gạch chân, WCAG 1.4.1)
+    wideSpacing: false,      // giãn chữ/giãn dòng cho dễ đọc
+    readingRuler: false,     // vệt sáng theo chuột giúp theo dõi dòng
+    preventFlashing: false,  // tắt hiệu ứng nhấp nháy lặp vô hạn
+    visualAlerts: false,     // viền chớp khi có toast — thấy thông báo dù không nghe
   },
   export: {
     includeTimestamp: true,
+    filenameStamp: "date", // date|datetime|none — cách gắn mốc thời gian vào tên file tải về
   },
   backup: {
     autoBackup: true,
@@ -124,6 +135,24 @@ export const DEFAULT_SETTINGS = {
     defaultPenWidth: 3,
     soundEffects: true,
   },
+  // Bảng điều khiển — bật/tắt từng khối trên Dashboard (điều khiển thật, DashboardView đọc trực tiếp)
+  dashboard: {
+    showGreeting: true,
+    showQuickActions: true,
+    showKpis: true,
+    showWorkflow: true,
+    showReading: true,
+    showRecentPlans: true,
+    showTasks: true,
+    showMissions: true,
+    showScans: true,
+    showStats: true,
+    showWhiteboards: true,
+  },
+  // Tính năng — danh sách view tắt toàn app: ẩn khỏi điều hướng + chặn mở trực tiếp
+  features: {
+    disabled: [],
+  },
   data: { cachedBooks: 0, indexedBooks: 0, indexedSize: 0 },
   advanced: {
     // Chỉ giữ debugMode — đã nối thật với log chi tiết của aiService + data-debug.
@@ -139,9 +168,18 @@ export const DEFAULT_SETTINGS = {
   },
 };
 
+// Các view NGƯỜI DÙNG được phép tắt toàn app (Cài đặt → Tính năng).
+// View cốt lõi (dashboard/library/search/lessonplans/tasks/datatools/help…) không nằm trong danh sách này.
+export const OPTIONAL_VIEW_IDS = [
+  "vocab", "whiteboard", "internship",
+  "activities", "worksheets", "questionbank",
+  "compare", "matrix", "inventory", "langstats",
+  "references", "collections",
+  "ideas", "stats", "webtools",
+];
+
 // Legacy single-hex map kept for migration only
-const LEGACY_ACCENT_MAP = {
-  blue: "#2563EB",
+const LEGACY_ACCENT_MAP = {  blue: "#2563EB",
   purple: "#7C3AED",
   green: "#16A34A",
   orange: "#D97706",
@@ -198,6 +236,24 @@ function migrateNotifications(notifications) {
   // (refreshNotificationTimer) không đọc → toggle không có tác dụng, gỡ khỏi UI.
   delete notifications.streakReminder;
   delete notifications.achievementUnlocked;
+  // Nhắc đọc sách — timer thứ hai trong refreshNotificationTimer
+  if (typeof notifications.readReminder !== "boolean") notifications.readReminder = false;
+  if (!/^\d{1,2}:\d{2}$/.test(notifications.readTime || "")) notifications.readTime = "20:00";
+}
+
+// Bảng điều khiển: mọi khóa phải là boolean — storage cũ/hỏng thì khôi phục true
+function migrateDashboard(dashboard) {
+  if (!dashboard || typeof dashboard !== "object") return;
+  for (const k of Object.keys(DEFAULT_SETTINGS.dashboard)) {
+    if (typeof dashboard[k] !== "boolean") dashboard[k] = DEFAULT_SETTINGS.dashboard[k];
+  }
+}
+
+// Tính năng: chỉ giữ các view id hợp lệ trong danh sách cho phép, khử trùng
+function migrateFeatures(features) {
+  if (!features || typeof features !== "object") return;
+  const arr = Array.isArray(features.disabled) ? features.disabled : [];
+  features.disabled = [...new Set(arr.filter((id) => typeof id === "string" && OPTIONAL_VIEW_IDS.includes(id)))];
 }
 
 function migrateReading(reading) {
@@ -272,10 +328,13 @@ function migrateAdvanced(advanced) {
   }
 }
 
-// Xuất: chỉ includeTimestamp còn được đọc (exportDoc) → dọn khóa cũ
+// Xuất: includeTimestamp (BẬT/TẮT mốc thời gian) + filenameStamp (kiểu mốc) —
+// dl() trong exportDoc đọc filenameStamp trước, includeTimestamp giữ cho tương thích
 function migrateExport(exp) {
   if (!exp || typeof exp !== "object") return;
   if (typeof exp.includeTimestamp !== "boolean") exp.includeTimestamp = true;
+  const valid = ["date", "datetime", "none"];
+  if (!valid.includes(exp.filenameStamp)) exp.filenameStamp = exp.includeTimestamp ? "date" : "none";
   for (const k of ["format", "includeMeta", "autoZip"]) delete exp[k];
 }
 
@@ -299,6 +358,8 @@ export function loadSettings() {
       migrateAI(merged.ai);
       migrateAdvanced(merged.advanced);
       migrateExport(merged.export);
+      migrateDashboard(merged.dashboard);
+      migrateFeatures(merged.features);
       return merged;
     }
     if (!parsed || typeof parsed !== "object") return base;
@@ -314,6 +375,8 @@ export function loadSettings() {
     migrateAI(merged.ai);
     migrateAdvanced(merged.advanced);
     migrateExport(merged.export);
+    migrateDashboard(merged.dashboard);
+    migrateFeatures(merged.features);
     merged.version = DEFAULT_SETTINGS.version;
     return merged;
   } catch {
@@ -499,40 +562,78 @@ export function getLibraryConfig(settings) {
 }
 // Đã xóa getExportConfig/getAdvancedConfig/isAnalyticsAllowed: 0 nơi gọi,
 // phục vụ các toggle không có tác dụng thật (giờ đã gỡ khỏi UI).
+
+// ── Dashboard: đọc cấu hình khối hiển thị (DashboardView render theo) ──
+export function getDashboardConfig(settings) {
+  try {
+    const s = settings || loadSettings();
+    const d = s.dashboard || {};
+    const out = {};
+    for (const k of Object.keys(DEFAULT_SETTINGS.dashboard)) out[k] = d[k] !== false;
+    return out;
+  } catch {
+    const out = {};
+    for (const k of Object.keys(DEFAULT_SETTINGS.dashboard)) out[k] = true;
+    return out;
+  }
+}
+
+// ── Features: danh sách view đang TẮT toàn app (ẩn nav + chặn mở) ──
+export function getDisabledViews(settings) {
+  try {
+    const s = settings || loadSettings();
+    const arr = s.features?.disabled;
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((id) => typeof id === "string" && OPTIONAL_VIEW_IDS.includes(id));
+  } catch { return []; }
+}
+/** true = view còn dùng được (không nằm trong features.disabled). */
+export function isViewEnabled(viewId, settings) {
+  try { return !getDisabledViews(settings).includes(viewId); } catch { return true; }
+}
 export function getNotificationConfig(settings) {
   try {
     const s = settings || loadSettings();
+    const timeOf = (v, fallback) => (/^\d{2}:\d{2}$/.test(v || "") ? v : fallback);
     return {
       dailyReminder: s.notifications?.dailyReminder === true,
-      dailyTime: /^\d{2}:\d{2}$/.test(s.notifications?.dailyTime || "") ? s.notifications.dailyTime : "08:00",
+      dailyTime: timeOf(s.notifications?.dailyTime, "08:00"),
+      readReminder: s.notifications?.readReminder === true,
+      readTime: timeOf(s.notifications?.readTime, "20:00"),
     };
-  } catch { return { dailyReminder: false, dailyTime: "08:00" }; }
+  } catch { return { dailyReminder: false, dailyTime: "08:00", readReminder: false, readTime: "20:00" }; }
 }
 
-// ── Notifications: lập lịch nhắc hằng ngày local-only ──
-let _notifTimer = null;
+// ── Notifications: lập lịch nhắc hằng ngày local-only (nhiệm vụ + đọc sách) ──
+let _notifTimers = [];
 export function refreshNotificationTimer(settings) {
   try {
-    if (_notifTimer) { clearTimeout(_notifTimer); _notifTimer = null; }
-    const cfg = getNotificationConfig(settings);
-    if (!cfg.dailyReminder) return;
+    for (const t of _notifTimers) { try { clearTimeout(t); } catch {} }
+    _notifTimers = [];
     if (!("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
-    const [hh, mm] = cfg.dailyTime.split(":").map(Number);
-    const now = new Date();
-    const next = new Date(now);
-    next.setHours(hh || 8, mm || 0, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
-    const delay = Math.min(next.getTime() - now.getTime(), 24 * 3600 * 1000);
-    _notifTimer = setTimeout(() => {
-      try {
-        const s = loadSettings();
-        if (s.notifications?.dailyReminder && shouldShowNotifications(s)) {
-          new Notification("Hành trang Tiểu học", { body: "Đến giờ nhiệm vụ ngày mới — mở app để giữ streak nhé!" });
-        }
-      } catch {}
-      refreshNotificationTimer(loadSettings());
-    }, delay);
+    const cfg = getNotificationConfig(settings);
+    // Lên lịch 1 nhắc/ngày; isStillOn tự đọc lại settings lúc bắn để không nhắc cái đã tắt
+    const schedule = (time, body, isStillOn) => {
+      const [hh, mm] = String(time).split(":").map(Number);
+      const now = new Date();
+      const next = new Date(now);
+      next.setHours(hh || 8, mm || 0, 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+      const delay = Math.min(next.getTime() - now.getTime(), 24 * 3600 * 1000);
+      const timer = setTimeout(() => {
+        try {
+          const s = loadSettings();
+          if (isStillOn(getNotificationConfig(s)) && shouldShowNotifications(s)) {
+            new Notification("Hành trang Tiểu học", { body });
+          }
+        } catch {}
+        refreshNotificationTimer(loadSettings());
+      }, delay);
+      _notifTimers.push(timer);
+    };
+    if (cfg.dailyReminder) schedule(cfg.dailyTime, "Đến giờ nhiệm vụ ngày mới — mở app để giữ streak nhé!", (c) => c.dailyReminder);
+    if (cfg.readReminder) schedule(cfg.readTime, "Đọc sách 15 phút để giữ nhịp học tập nhé!", (c) => c.readReminder);
   } catch {}
 }
 export async function testNotification() {
@@ -582,6 +683,8 @@ export function parseSettingsBackup(text) {
   migrateAI(merged.ai);
   migrateAdvanced(merged.advanced);
   migrateExport(merged.export);
+  migrateDashboard(merged.dashboard);
+  migrateFeatures(merged.features);
   merged.version = DEFAULT_SETTINGS.version;
   return merged;
 }
@@ -594,6 +697,64 @@ export function getStorageUsage() {
     }
     return { chars: total, kb: Math.round(total / 102.4) / 10 };
   } catch { return { chars: 0, kb: 0 }; }
+}
+
+/** Phân loại localStorage theo nhóm: dữ liệu cá nhân / cache / khác (đơn vị KB, số key). */
+export function getStorageBreakdown() {
+  try {
+    const buckets = { data: { chars: 0, keys: 0 }, cache: { chars: 0, keys: 0 }, other: { chars: 0, keys: 0 } };
+    for (const k of listKeys()) {
+      if (!k) continue;
+      const size = (k.length || 0) + (safeGetString(k, "").length || 0);
+      let b = buckets.other;
+      try { if (isCacheKeyCore(k)) b = buckets.cache; else if (isBackupKeyCore(k)) b = buckets.data; } catch {}
+      b.chars += size; b.keys += 1;
+    }
+    const toKb = (c) => Math.round(c / 102.4) / 10;
+    return {
+      data: { kb: toKb(buckets.data.chars), keys: buckets.data.keys },
+      cache: { kb: toKb(buckets.cache.chars), keys: buckets.cache.keys },
+      other: { kb: toKb(buckets.other.chars), keys: buckets.other.keys },
+      total: { kb: toKb(buckets.data.chars + buckets.cache.chars + buckets.other.chars) },
+    };
+  } catch { return { data: { kb: 0, keys: 0 }, cache: { kb: 0, keys: 0 }, other: { kb: 0, keys: 0 }, total: { kb: 0 } }; }
+}
+
+// ── Xóa dữ liệu có chọn lọc (Cài đặt → Riêng tư) — mỗi hàm trả số mục đã xóa ──
+/** Xoá lịch sử trò chuyện với Trợ lý AI: assistant_history + chat_<sách> + log phân tích ảnh. */
+export function clearAiChatHistory() {
+  let n = 0;
+  try { if (safeRemove("assistant_history").ok) n++; } catch {}
+  try { if (safeRemove(STORAGE_KEYS.AI_HISTORY).ok) n++; } catch {}
+  try {
+    for (const k of listKeys()) {
+      if (k && k.startsWith("chat_") && safeRemove(k).ok) n++;
+    }
+  } catch {}
+  try { _busSettings.emit(_EventsSettings.DATA_UPDATED, { source: "settings-clear-ai-history" }); } catch {}
+  return n;
+}
+/** Xoá lịch sử tìm kiếm gần đây (SearchView & Ctrl+K). */
+export function clearRecentSearchHistory() {
+  let n = 0;
+  try { if (safeRemove(STORAGE_KEYS.RECENT_SEARCHES).ok) n = 1; } catch {}
+  try { _busSettings.emit(_EventsSettings.DATA_UPDATED, { source: "settings-clear-recent-search" }); } catch {}
+  return n;
+}
+/** Xoá toàn bộ scan: metadata (localStorage) + ảnh crop (IndexedDB scan_assets). */
+export async function clearScanHistory() {
+  let n = 0;
+  try {
+    const list = safeGetJSON(STORAGE_KEYS.SCANS, [], Array.isArray);
+    n = Array.isArray(list) ? list.length : 0;
+    safeRemove(STORAGE_KEYS.SCANS);
+  } catch {}
+  try {
+    const { default: idb } = await import("./indexedDB.js");
+    await idb.clear("scan_assets");
+  } catch {}
+  try { _busSettings.emit(_EventsSettings.DATA_UPDATED, { source: "settings-clear-scans" }); } catch {}
+  return n;
 }
 
 // Resolve current 9-scale: preset palettes OR custom generated
@@ -615,6 +776,45 @@ function isDarkTheme(theme) {
   if (theme === "dark") return true;
   if (theme === "light") return false;
   try { return window.matchMedia("(prefers-color-scheme: dark)").matches; } catch { return false; }
+}
+
+// ── Trợ năng: tự theo cài đặt hệ thống (prefers-*) ──
+// followSystem=true → app tự bật tương phản cao / giảm chuyển động khi HĐH yêu cầu.
+// Chỉ "cộng thêm" — cài đặt tay của Thầy/cô vẫn giữ nguyên hiệu lực.
+let lastAppliedSettings = null;
+let systemPrefsBound = false;
+
+function reapplyForSystemPref() {
+  const acc = lastAppliedSettings?.accessibility;
+  if (!acc || acc.followSystem === false) return;
+  try { applySettings(lastAppliedSettings); } catch {}
+}
+
+function bindSystemPrefListeners() {
+  if (systemPrefsBound || typeof window === "undefined" || !window.matchMedia) return;
+  systemPrefsBound = true;
+  const watch = (q) => {
+    try {
+      const mq = window.matchMedia(q);
+      if (mq.addEventListener) mq.addEventListener("change", reapplyForSystemPref);
+      else if (mq.addListener) mq.addListener(reapplyForSystemPref); // Safari cũ
+    } catch {}
+  };
+  watch("(prefers-contrast: more)");
+  watch("(prefers-reduced-motion: reduce)");
+}
+
+function mqOn(q) {
+  try { return !!(window.matchMedia && window.matchMedia(q).matches); } catch { return false; }
+}
+
+// Giảm chuyển động "hiệu lực" cho JS (âm thanh, logic…) — cộng cả nguồn hệ thống
+// khi followSystem bật. CSS thì đã có data-reduce-motion + media query sẵn.
+export function isReduceMotionEffective(s) {
+  const acc = s?.accessibility || {};
+  if (acc.reduceMotion === true) return true;
+  if (acc.followSystem === false) return false;
+  return mqOn("(prefers-reduced-motion: reduce)");
 }
 
 // Apply side effects — single source for color system + toàn app
@@ -704,19 +904,29 @@ export function applySettings(s) {
     root.style.setProperty("--transition-base", "200ms cubic-bezier(0.4,0,0.2,1)");
     root.style.setProperty("--transition-slow", "300ms cubic-bezier(0.4,0,0.2,1)");
   }
-  // Accessibility flags
+  // Accessibility flags — cài đặt tay ∪ yêu cầu hệ thống (khi followSystem bật)
   const acc = s.accessibility || {};
-  if (acc.reduceMotion) root.setAttribute("data-reduce-motion", "true"); else root.removeAttribute("data-reduce-motion");
-  if (acc.highContrast) root.setAttribute("data-high-contrast", "true"); else root.removeAttribute("data-high-contrast");
+  const sysContrast = acc.followSystem !== false && mqOn("(prefers-contrast: more)");
+  const sysMotion = acc.followSystem !== false && mqOn("(prefers-reduced-motion: reduce)");
+  if (acc.reduceMotion || sysMotion) root.setAttribute("data-reduce-motion", "true"); else root.removeAttribute("data-reduce-motion");
+  if (acc.highContrast || sysContrast) root.setAttribute("data-high-contrast", "true"); else root.removeAttribute("data-high-contrast");
   if (acc.largerText) root.setAttribute("data-larger-text", "true"); else root.removeAttribute("data-larger-text");
   if (acc.focusIndicators) root.setAttribute("data-focus-indicators", "true"); else root.removeAttribute("data-focus-indicators");
+  if (acc.underlineLinks) root.setAttribute("data-underline-links", "true"); else root.removeAttribute("data-underline-links");
+  if (acc.wideSpacing) root.setAttribute("data-wide-spacing", "true"); else root.removeAttribute("data-wide-spacing");
+  if (acc.preventFlashing) root.setAttribute("data-no-flash", "true"); else root.removeAttribute("data-no-flash");
+  if (acc.visualAlerts) root.setAttribute("data-visual-alerts", "true"); else root.removeAttribute("data-visual-alerts");
+  if (acc.followSystem !== false) root.setAttribute("data-follow-system", "true"); else root.removeAttribute("data-follow-system");
+  try { setReadingRuler(acc.readingRuler === true); } catch {}
+  lastAppliedSettings = s;
+  bindSystemPrefListeners();
 
   // Behavior / system flags — để CSS + JS đọc
   const adv = s.advanced || {};
   if (adv.debugMode) root.setAttribute("data-debug", "true"); else root.removeAttribute("data-debug");
   const lib = s.library || {};
   root.setAttribute("data-lib-previews", lib.showPreviews !== false ? "true" : "false");
-  // Display name → title亲切
+  // Display name → title
   try {
     const name = (s.general?.displayName || "").trim();
     if (name) document.title = `${name} — Hành trang Tiểu học`;
@@ -729,6 +939,9 @@ export function getSettings() { return loadSettings(); }
 
 export const SETTINGS_SEARCH_INDEX = [
   { q: ["tổng quan", "general", "tên", "tuần", "trang mở", "múi giờ"], section: "general", anchor: "sec-general" },
+  { q: ["dashboard", "bảng điều khiển", "lời chào", "hero", "chào"], section: "dashboard", anchor: "sec-dashboard" },
+  { q: ["kpi", "số liệu", "quick action", "thao tác nhanh", "quy trình"], section: "dashboard", anchor: "sec-dashboard" },
+  { q: ["feature", "tính năng", "module", "ẩn module", "tắt view", "bật tắt"], section: "features", anchor: "sec-features" },
   { q: ["editor", "soạn thảo", "word", "font", "thước", "ruler", "zoom", "nháp"], section: "editor", anchor: "sec-editor" },
   { q: ["whiteboard", "bảng trắng", "bảng", "grid", "lưới", "snap", "mindmap"], section: "whiteboard", anchor: "sec-whiteboard" },
   { q: ["sound", "âm thanh", "volume", "âm lượng", "profile", "loa"], section: "behavior", anchor: "sec-sound" },
@@ -743,17 +956,26 @@ export const SETTINGS_SEARCH_INDEX = [
   { q: ["reading", "đọc", "pdf", "zoom", "trang", "layout"], section: "reading", anchor: "sec-reading" },
   { q: ["mission", "nhiệm vụ", "gamification", "xp", "streak", "achievement"], section: "missions", anchor: "sec-missions" },
   { q: ["ai", "gemini", "api", "model", "temperature"], section: "ai", anchor: "sec-ai" },
-  { q: ["notification", "thông báo", "reminder"], section: "notifications", anchor: "sec-notif" },
+  { q: ["notification", "thông báo", "reminder", "nhắc đọc", "nhắc nhiệm vụ"], section: "notifications", anchor: "sec-notif" },
   { q: ["keyboard", "phím tắt", "shortcut"], section: "keyboard", anchor: "sec-keys" },
-  { q: ["accessibility", "tiếp cận", "tương phản", "high contrast"], section: "accessibility", anchor: "sec-a11y" },
+  { q: ["accessibility", "tiếp cận", "trợ năng", "tương phản", "high contrast", "giảm chuyển động", "viền focus"], section: "accessibility", anchor: "sec-a11y" },
+  { q: ["thanh đọc", "reading ruler", "dòng đang đọc", "theo con trỏ", "vệt sáng"], section: "accessibility", anchor: "sec-a11y" },
+  { q: ["gạch chân", "underline", "giãn chữ", "giãn dòng", "khoảng chữ", "wide spacing"], section: "accessibility", anchor: "sec-a11y" },
+  { q: ["chớp", "nhấp nháy", "chống chớp", "báo động hình"], section: "accessibility", anchor: "sec-a11y" },
+  { q: ["theo hệ thống", "prefers", "hệ điều hành", "theo máy"], section: "accessibility", anchor: "sec-a11y" },
+  { q: ["quét a11y", "quét accessibility", "quét trợ năng", "a11y", "audit"], section: "accessibility", anchor: "sec-a11y-tools" },
   { q: ["data", "dữ liệu", "storage", "backup", "restore", "import", "export", "sao lưu"], section: "backup", anchor: "sec-backup" },
-  { q: ["privacy", "riêng tư", "lịch sử", "dữ liệu cá nhân"], section: "privacy", anchor: "sec-privacy" },
+  { q: ["lưu trữ", "dung lượng", "phân bổ", "đĩa", "dọn cache"], section: "backup", anchor: "sec-storage" },
+  { q: ["privacy", "riêng tư", "lịch sử", "dữ liệu cá nhân", "chat ai", "xoá scan", "tìm kiếm gần đây"], section: "privacy", anchor: "sec-privacy" },
   { q: ["gỡ lỗi", "debug", "log", "console", "developer"], section: "advanced", anchor: "sec-perf" },
-  { q: ["diagnostics", "chẩn đoán", "version", "kiểm tra"], section: "advanced", anchor: "sec-diag" },
+  { q: ["diagnostics", "chẩn đoán", "version", "kiểm tra", "báo cáo"], section: "advanced", anchor: "sec-diag" },
   { q: ["thư viện", "library", "lưới", "sắp xếp", "xem trước"], section: "library", anchor: "sec-library" },
   { q: ["tìm kiếm", "search", "fuzzy", "hoa thường"], section: "search", anchor: "sec-search" },
-  { q: ["xuất", "export", "thời gian", "timestamp"], section: "export", anchor: "sec-export" },
+  { q: ["xuất", "export", "thời gian", "timestamp", "tên file", "filename", "ngày xuất"], section: "export", anchor: "sec-export" },
   { q: ["hành vi", "behavior", "xác nhận", "xóa", "rung"], section: "behavior", anchor: "sec-behavior" },
+
+  { q: ["giới thiệu", "about", "phiên bản", "bản quyền", "phát triển"], section: "about", anchor: "sec-about" },
+  { q: ["góp ý", "gop y", "phản hồi", "feedback", "đánh giá app", "báo lỗi cho dev", "liên hệ nhà phát triển"], section: "about", anchor: "sec-feedback" },
 ];
 
 export function searchSettings(query) {

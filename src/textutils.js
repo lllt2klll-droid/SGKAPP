@@ -36,15 +36,19 @@ sẽ đang lại rất hơn nhất cùng theo vào ra lên xuống đi làm nói
 cần phải nên muốn học sinh giáo viên thầy cô em bé bạn chúng tôi ta mình người con bố mẹ
 bài tập trang số hình ảnh tranh câu trả lời câu hỏi hỏi trả lời đáp án nhé đó đây đâu sao
 từ ngữ chữ tiếng âm vần dụng luyện tập thực hành vận dụng trải nghiệm khám phá hoạt động
-`.trim().split(/\s+/));
+`.trim().split(/\s+/).map((w) => w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')));
 
-export function isStopWord(w) { return STOPWORDS.has(w); }
+export function isStopWord(w) {
+  const k = String(w || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  return STOPWORDS.has(k);
+}
 
 // Split a sentence-ish string into lowercase word tokens (Vietnamese:
 // space-delimited syllables, punctuation stripped).
 export function tokenizeWords(text) {
   return String(text || '')
     .toLowerCase()
+    .replace(/đ/g, 'd')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')

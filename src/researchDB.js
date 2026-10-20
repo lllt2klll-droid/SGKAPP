@@ -42,10 +42,13 @@ async function getMergedIndexedList({
   }
 }
 
-import { appEvents, AppEvents } from "./core/appEvents.js";
+import { appEvents, AppEvents, DataDomains } from "./core/appEvents.js";
 function notifyDataUpdated(detail) {
-  const d = detail || { source: "researchDB" };
-  try { appEvents.emit(AppEvents.DATA_UPDATED, d); } catch (e) { console.warn("[researchDB] appEvents emit failed", e); }
+  const d = detail || { source: "researchDB", domain: DataDomains.RESEARCH };
+  // P0 • bắn event domain riêng; alias trong appEvents tự sinh DATA_UPDATED
+  // (Dashboard/DataTools refresh) + BroadcastChannel sang tab khác.
+  // Giữ nguyên các trường {source,key,operation,op,id} để listener cũ vẫn đọc được.
+  try { appEvents.emit(AppEvents.RESEARCH_UPDATED, d); } catch (e) { console.warn("[researchDB] appEvents emit failed", e); }
 }
 // ── safeStorage helpers (audit) ──
 function _dbg(...args) {
@@ -60,6 +63,18 @@ function _safeGetObj(key){ return safeGetJSON(key, {}, v=>v&&typeof v==="object"
 function _updateItemSafe(key, id, patch){ const list=_safeGetList(key); return list.map(it=> it.id===id?{...it,...patch,id:it.id}:it); }
 function _addItemSafe(key, item){ const list=_safeGetList(key); return [item,...list]; }
 // Helper to handle saveJSON errors consistently — safeStorage audit
+// P0 • suy domain từ key để Dashboard refresh chọn lọc + cross-tab gắn nhãn đúng
+function domainForKey(key = "") {
+  const k = String(key);
+  if (k.includes("concept")) return DataDomains.CONCEPTS;
+  if (k.includes("clip")) return DataDomains.CLIPS;
+  if (k.includes("sgk_refs") || (k.includes("ref") && !k.includes("refs"))) return DataDomains.REFS;
+  if (k.includes("evidence")) return DataDomains.EVIDENCE;
+  if (k.includes("collection")) return DataDomains.COLLECTIONS;
+  if (k.includes("marks")) return DataDomains.MARKS;
+  if (k.includes("eacherNote")) return DataDomains.TEACHER_NOTES;
+  return DataDomains.RESEARCH;
+}
 function safeSave(key, value, operation = 'save') {
   const res = safeSetJSON(key, value);
   if (!res.ok) {
@@ -68,7 +83,7 @@ function safeSave(key, value, operation = 'save') {
     console.error(`Failed to ${operation} ${key}:`, res.error || res.message);
     return false;
   }
-  notifyDataUpdated({ source: "researchDB", key, operation });
+  notifyDataUpdated({ source: "researchDB", domain: domainForKey(key), key, operation });
   return true;
 }
 
@@ -226,6 +241,8 @@ export async function addClip({ collId, file, bookTitle, grade, subject, page, t
         const updated = localClips.filter(c => c.id !== item.id);
         { const _r=safeSetJSON(CLIP_KEY, updated); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", CLIP_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", CLIP_KEY, ":", _r.error); } }
       } catch (e) { console.warn("[researchDB] operation failed", e); }
+      // P0 • đường IDB thành công cũng phải notify (trước đây chỉ fallback mới báo)
+      notifyDataUpdated({ source: "researchDB", domain: DataDomains.CLIPS, op: "addClip", id: item.id });
     } catch (err) {
       console.error('IndexedDB clip write failed, using localStorage fallback:', err);
       safeSave(CLIP_KEY, _addItemSafe(CLIP_KEY, item), 'add clip');
@@ -264,6 +281,8 @@ export async function updateClip(id, patch) {
           throw new Error('IndexedDB update returned false');
         }
 
+        // P0 • đường IDB thành công cũng phải notify
+        notifyDataUpdated({ source: "researchDB", domain: DataDomains.CLIPS, op: "updateClip", id });
         return true;
       }
     } catch (err) {
@@ -285,7 +304,8 @@ export async function deleteClip(id) {
           const updated = localClips.filter(c => c.id !== id);
           { const _r=safeSetJSON(CLIP_KEY, updated); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", CLIP_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", CLIP_KEY, ":", _r.error); } }
         } catch (e) { console.warn("[researchDB] operation failed", e); }
-        
+        // P0 • đường IDB thành công cũng phải notify
+        notifyDataUpdated({ source: "researchDB", domain: DataDomains.CLIPS, op: "deleteClip", id });
         return true;
       }
     } catch (err) {
@@ -434,6 +454,8 @@ export async function addManualRef(ref) {
         { const _r=safeSetJSON(REF_KEY, updated); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", REF_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", REF_KEY, ":", _r.error); } }
       } catch (e) { console.warn("[researchDB] operation failed", e); }
       try{ emitReferenceCreated(item.id); }catch(e){ console.warn("[researchDB] emitReferenceCreated failed", e); }
+      // P0 • đường IDB thành công cũng phải notify
+      notifyDataUpdated({ source: "researchDB", domain: DataDomains.REFS, op: "addManualRef", id: item.id });
       return item;
     } catch (err) {
       console.error('IndexedDB ref write failed, falling back to localStorage:', err);
@@ -456,6 +478,8 @@ export async function updateRef(id, patch) {
           throw new Error('IndexedDB reference update returned false');
         }
 
+        // P0 • đường IDB thành công cũng phải notify
+        notifyDataUpdated({ source: "researchDB", domain: DataDomains.REFS, op: "updateRef", id });
         return true;
       }
     } catch (err) {
@@ -479,6 +503,8 @@ export async function deleteRef(id) {
         const updated = localRefs.filter(r => r.id !== id);
         { const _r=safeSetJSON(REF_KEY, updated); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", REF_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", REF_KEY, ":", _r.error); } }
       } catch (e) { console.warn("[researchDB] operation failed", e); }
+      // P0 • đường IDB thành công cũng phải notify
+      notifyDataUpdated({ source: "researchDB", domain: DataDomains.REFS, op: "deleteRef", id });
       return;
     } catch (err) {
       console.error('IndexedDB ref delete failed, falling back to localStorage:', err);
@@ -567,6 +593,8 @@ export async function addEvidence(evidence) {
       } catch (e) { console.warn("[researchDB] operation failed", e); }
       // Đồng bộ nhiệm vụ: emit cả khi lưu IDB thành công (trước đây chỉ emit ở fallback)
       try{ emitEvidenceCreated(item.id); }catch(e){ console.warn("[researchDB] emitEvidenceCreated failed", e); }
+      // P0 • đường IDB thành công cũng phải notify bus
+      notifyDataUpdated({ source: "researchDB", domain: DataDomains.EVIDENCE, op: "addEvidence", id: item.id });
       return item;
     } catch (err) {
       console.error('IndexedDB evidence write failed, falling back to localStorage:', err);
@@ -589,6 +617,8 @@ export async function verifyEvidence(id) {
           throw new Error('IndexedDB evidence update returned false');
         }
 
+        // P0 • đường IDB thành công cũng phải notify
+        notifyDataUpdated({ source: "researchDB", domain: DataDomains.EVIDENCE, op: "verifyEvidence", id });
         return true;
       }
     } catch (err) {
@@ -674,6 +704,8 @@ export async function addConcept(c) {
         const updated = localConcepts.filter(c => c.id !== item.id);
         { const _r=safeSetJSON(CONC_KEY, updated); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", CONC_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", CONC_KEY, ":", _r.error); } }
       } catch (e) { console.warn("[researchDB] operation failed", e); }
+      // P0 • đường IDB thành công cũng phải notify (trước đây chỉ fallback mới báo)
+      notifyDataUpdated({ source: "researchDB", domain: DataDomains.CONCEPTS, op: "addConcept", id: item.id });
     } catch (err) {
       console.error('IndexedDB concept write failed, falling back to localStorage:', err);
       safeSave(CONC_KEY, _addItemSafe(CONC_KEY, item), 'add concept');
@@ -708,6 +740,8 @@ export async function updateConcept(id, patch) {
           throw new Error('IndexedDB concept update returned false');
         }
 
+        // P0 • đường IDB thành công cũng phải notify
+        notifyDataUpdated({ source: "researchDB", domain: DataDomains.CONCEPTS, op: "updateConcept", id });
         return true;
       }
     } catch (err) {
@@ -727,6 +761,8 @@ export async function deleteConcept(id) {
         const updated = localConcepts.filter(c => c.id !== id);
         { const _r=safeSetJSON(CONC_KEY, updated); if(!_r.ok){ if(_r.quota) console.warn("[safeStorage] QuotaExceededError on", CONC_KEY, "-", _r.message); else console.warn("[safeStorage] save failed for", CONC_KEY, ":", _r.error); } }
       } catch (e) { console.warn("[researchDB] operation failed", e); }
+      // P0 • đường IDB thành công cũng phải notify
+      notifyDataUpdated({ source: "researchDB", domain: DataDomains.CONCEPTS, op: "deleteConcept", id });
       return;
     } catch (err) {
       console.error('IndexedDB concept delete failed, falling back to localStorage:', err);

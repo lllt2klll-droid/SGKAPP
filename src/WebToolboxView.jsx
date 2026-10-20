@@ -15,16 +15,29 @@ import {
   ArrowUpDown,
   Sparkles,
   AppWindow,
+  Pin,
+  Keyboard,
 } from "lucide-react";
 
 import { safeGetJSON, safeSetJSON } from "./safeStorage";
+import { checkLinkStatus, countFailedLink } from "./webtoolsCheck";
+import { CATEGORIES, CATEGORY_LABEL, inferCategory, normalizeCategory } from "./webtoolsCategory";
+import { pickExternalTools } from "./webtoolsSync";
 
 const LS_KEY = "sgk_web_tools";
 const LS_ORDER = "sgk_web_tools_order_v1";
 
+// Chuẩn hoá 1 tool: bổ sung category/pinned/favicon nếu thiếu (migrate dữ liệu cũ).
+function normalizeTool(t) {
+  if (!t || typeof t !== "object") return null;
+  const category = normalizeCategory(t.category, t.url);
+  return { ...t, category, pinned: !!t.pinned, favicon: t.favicon || getFavicon(t.url) };
+}
+
 function loadTools() {
   const arr = safeGetJSON(LS_KEY, [], Array.isArray);
-  return Array.isArray(arr) ? arr : [];
+  if (!Array.isArray(arr)) return [];
+  return arr.map(normalizeTool).filter(Boolean);
 }
 function saveTools(arr) {
   const res = safeSetJSON(LS_KEY, arr);
@@ -107,38 +120,44 @@ function normalizeForCompare(url) {
 
 // default seed tools — only injected once if storage empty
 const DEFAULT_TOOLS = [
-  { id: "gh", url: "https://github.com", title: "GitHub", color: "#24292f" },
-  { id: "mdn", url: "https://developer.mozilla.org", title: "MDN Web Docs", color: "#0168b8" },
-  { id: "figma", url: "https://www.figma.com", title: "Figma", color: "#a259ff" },
-  { id: "canva", url: "https://www.canva.com", title: "Canva", color: "#00c4cc" },
-  { id: "chatgpt", url: "https://chat.openai.com", title: "ChatGPT", color: "#10a37f" },
-  { id: "gemini", url: "https://gemini.google.com", title: "Gemini", color: "#8e75ff" },
+  { id: "gh", url: "https://github.com", title: "GitHub", category: "dev" },
+  { id: "mdn", url: "https://developer.mozilla.org", title: "MDN Web Docs", category: "dev" },
+  { id: "figma", url: "https://www.figma.com", title: "Figma", category: "design" },
+  { id: "canva", url: "https://www.canva.com", title: "Canva", category: "design" },
+  { id: "chatgpt", url: "https://chat.openai.com", title: "ChatGPT", category: "ai" },
+  { id: "gemini", url: "https://gemini.google.com", title: "Gemini", category: "ai" },
 ];
 
 export default function WebToolboxView() {
   const [tools, setTools] = useState(() => {
     const loaded = loadTools();
     if (loaded.length === 0) {
-      const seeded = DEFAULT_TOOLS.map((t) => ({
+      const seeded = DEFAULT_TOOLS.map((t) => normalizeTool({
         ...t,
         favicon: getFavicon(t.url),
         createdAt: Date.now(),
-      }));
+      })).filter(Boolean);
       // defer save to effect
       return seeded;
     }
-    // ensure favicon field exists
-    return loaded.map((t) => ({ ...t, favicon: t.favicon || getFavicon(t.url) }));
+    // ensure favicon/category fields exist (normalizeTool đã lo)
+    return loaded;
   });
   const [query, setQuery] = useState("");
+  const [activeCat, setActiveCat] = useState("all"); // "all" | "pinned" | categoryId
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null); // tool or null
   const [formUrl, setFormUrl] = useState("");
   const [formTitle, setFormTitle] = useState("");
+  const [formCategory, setFormCategory] = useState("other");
   const [formErr, setFormErr] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  const catTouchedRef = useRef(false);
+  const searchRef = useRef(null);
+  const gridRef = useRef(null);
 
   // persist on change, but avoid double seed write loop
   const firstPersist = useRef(true);
@@ -152,21 +171,79 @@ export default function WebToolboxView() {
     saveTools(tools);
   }, [tools]);
 
-  // listen external updates (if other tab)
+  // P2 • nghe bus thay cho window listener trực tiếp (đúng kiến trúc appEvents;
+  // WEBTOOLS_UPDATED đã trong whitelist cross-tab nên tab khác đổi là tab này biết).
+  // CHỐNG VÒNG LẶP: saveTools() phát event ĐỒNG BỘ ngay trong effect [tools] →
+  // nếu loadTools() trả nội dung trùng (chính mình vừa ghi) thì giữ nguyên prev
+  // (reference) để React bailout — không render → không save → không emit tiếp.
+  // Trước đây: echo luôn là mảng MỚI → effect chạy lại → 900+ ghi/2s, treo tab.
   useEffect(() => {
-    const h = () => setTools(loadTools());
-    window.addEventListener("sgk:webtools-updated", h);
-    window.addEventListener("storage", h);
-    return () => { window.removeEventListener("sgk:webtools-updated", h); window.removeEventListener("storage", h); };
+    const h = () => setTools((prev) => {
+      let next;
+      try { next = loadTools(); } catch { return prev; }
+      return pickExternalTools(prev, next);
+    });
+    let off1 = null, off2 = null;
+    try { off1 = appEvents.on(AppEvents.WEBTOOLS_UPDATED, h); } catch {}
+    // DATA_UPDATED domain webtools (P0) + backup-import không kèm domain (storage.js)
+    try { off2 = appEvents.on(AppEvents.DATA_UPDATED, (d) => { if (!d || d.domain === "webtools" || d.source === "backup-import") h(); }); } catch {}
+    return () => { try { if (off1) off1(); } catch {} try { if (off2) off2(); } catch {} };
   }, []);
+
+  // P2 • kiểm tra link chết (session-only, không ghi storage — mạng đổi là check lại)
+  const [linkStatus, setLinkStatus] = useState({}); // { [id]: "checking" | "ok" | "fail" }
+  const [checkingAll, setCheckingAll] = useState(false);
+  const checkCancelRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; checkCancelRef.current = true; }, []);
+  const failCount = useMemo(() => countFailedLink(linkStatus), [linkStatus]);
+
+  const checkOne = useCallback(async (tool) => {
+    if (mountedRef.current) setLinkStatus((prev) => ({ ...prev, [tool.id]: "checking" }));
+    let r;
+    try { r = await checkLinkStatus(tool.url); } catch { r = { ok: false }; }
+    if (!mountedRef.current || checkCancelRef.current) return !!(r && r.ok);
+    setLinkStatus((prev) => ({ ...prev, [tool.id]: r && r.ok ? "ok" : "fail" }));
+    return !!(r && r.ok);
+  }, []);
+
+  const checkAllLinks = useCallback(async () => {
+    if (checkingAll) return;
+    checkCancelRef.current = false;
+    setCheckingAll(true);
+    for (const t of tools) {
+      if (checkCancelRef.current || !mountedRef.current) break;
+      await checkOne(t);
+    }
+    if (mountedRef.current) setCheckingAll(false);
+  }, [checkingAll, checkOne, tools]);
+
+  const stopChecking = useCallback(() => { checkCancelRef.current = true; }, []);
+
+  // ── Đếm theo nhóm (chip lọc) ──────────────────────────────────────
+  const catCounts = useMemo(() => {
+    const m = {};
+    for (const t of tools) {
+      const c = CATEGORY_LABEL[t.category] ? t.category : "other";
+      m[c] = (m[c] || 0) + 1;
+    }
+    return m;
+  }, [tools]);
+  const pinnedCount = useMemo(() => tools.filter((t) => t.pinned).length, [tools]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return tools;
-    return tools.filter((t) =>
-      t.title.toLowerCase().includes(q) || t.url.toLowerCase().includes(q) || hostnameOf(t.url).toLowerCase().includes(q)
-    );
-  }, [tools, query]);
+    let list = tools;
+    if (activeCat === "pinned") list = list.filter((t) => t.pinned);
+    else if (activeCat !== "all") list = list.filter((t) => (CATEGORY_LABEL[t.category] ? t.category : "other") === activeCat);
+    if (q) {
+      list = list.filter((t) =>
+        t.title.toLowerCase().includes(q) || t.url.toLowerCase().includes(q) || hostnameOf(t.url).toLowerCase().includes(q)
+      );
+    }
+    // Ghim lên đầu, phần còn lại giữ nguyên thứ tự kéo thả (sort ổn định)
+    return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+  }, [tools, query, activeCat]);
 
   const openTool = useCallback((tool) => {
     const url = normalizeUrl(tool.url);
@@ -174,10 +251,56 @@ export default function WebToolboxView() {
     window.open(url, "_blank", "noopener,noreferrer");
   }, []);
 
+  const togglePin = useCallback((id) => {
+    setTools((prev) => prev.map((t) => (t.id === id ? { ...t, pinned: !t.pinned } : t)));
+  }, []);
+
+  // ── Bàn phím: '/' focus tìm kiếm (chỉ khi đang ở view này) ─────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Modal Thêm/Sửa đang mở → "/" phải giữ nguyên (không đánh cắp focus ra ô tìm kiếm phía sau)
+      if (document.querySelector(".wt-modal-overlay")) return;
+      const t = document.activeElement;
+      const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+      if (typing) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ── Bàn phím: mũi tên điều hướng ô vuông như desktop ──────────────
+  const handleGridKeyDown = useCallback((e) => {
+    const navKeys = ["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown", "Home", "End"];
+    if (!navKeys.includes(e.key)) return;
+    const nodes = gridRef.current ? Array.from(gridRef.current.querySelectorAll('[data-wt-cell="1"]')) : [];
+    if (!nodes.length) return;
+    const active = document.activeElement;
+    const i = nodes.findIndex((n) => n === active || n.contains(active));
+    if (i === -1) return;
+    e.preventDefault();
+    // số cột = số ô nằm cùng hàng đầu
+    const firstTop = nodes[0].offsetTop;
+    const cols = Math.max(1, nodes.filter((n) => Math.abs(n.offsetTop - firstTop) < 2).length || 1);
+    let ni = i;
+    if (e.key === "ArrowRight") ni = i + 1;
+    else if (e.key === "ArrowLeft") ni = i - 1;
+    else if (e.key === "ArrowDown") ni = i + cols;
+    else if (e.key === "ArrowUp") ni = i - cols;
+    else if (e.key === "Home") ni = 0;
+    else if (e.key === "End") ni = nodes.length - 1;
+    ni = Math.max(0, Math.min(nodes.length - 1, ni));
+    nodes[ni].focus();
+  }, []);
+
   const onAddClick = () => {
     setEditing(null);
     setFormUrl("");
     setFormTitle("");
+    setFormCategory("other");
+    catTouchedRef.current = false;
     setFormErr("");
     setShowModal(true);
   };
@@ -185,6 +308,8 @@ export default function WebToolboxView() {
     setEditing(tool);
     setFormUrl(tool.url);
     setFormTitle(tool.title);
+    setFormCategory(CATEGORY_LABEL[tool.category] ? tool.category : "other");
+    catTouchedRef.current = true;
     setFormErr("");
     setShowModal(true);
   };
@@ -201,11 +326,12 @@ export default function WebToolboxView() {
     if (dup) { setFormErr("Link này đã có trong kho rồi."); return; }
     const titleRaw = formTitle.trim();
     const title = (titleRaw || hostnameOf(url) || "Công cụ").slice(0, 30);
+    const category = CATEGORY_LABEL[formCategory] ? formCategory : "other";
     if (editing) {
-      setTools((prev) => prev.map((t) => t.id === editing.id ? { ...t, url, title, favicon: getFavicon(url) } : t));
+      setTools((prev) => prev.map((t) => t.id === editing.id ? { ...t, url, title, category, favicon: getFavicon(url) } : t));
     } else {
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      setTools((prev) => [...prev, { id, url, title, favicon: getFavicon(url), createdAt: Date.now(), color: "#2563eb" }]);
+      setTools((prev) => [...prev, { id, url, title, category, pinned: false, favicon: getFavicon(url), createdAt: Date.now() }]);
     }
     setShowModal(false);
     setEditing(null);
@@ -218,6 +344,24 @@ export default function WebToolboxView() {
     setTools((prev) => prev.filter((t) => t.id !== deleteConfirm.id));
     setDeleteConfirm(null);
   };
+
+  // ── Escape đóng modal Thêm/Sửa hoặc dialog Xóa dù focus ở đâu ──────
+  // (input có handler riêng nhưng chỉ khi focus nằm trong modal; Tab có thể
+  //  thoát ra sau sau vì view này không có focus trap → nghe ở window cho chắc).
+  // Bỏ qua khi overlay của Cài đặt / Ctrl+K đang mở phía trên.
+  useEffect(() => {
+    if (!showModal && !deleteConfirm) return;
+    const h = (e) => {
+      if (e.key !== "Escape") return;
+      if (document.querySelector(".st-modal, .global-search-overlay")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (deleteConfirm) setDeleteConfirm(null);
+      else setShowModal(false);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [showModal, deleteConfirm]);
 
   // Drag & drop reorder (desktop-like grid)
   const onDragStart = (e, id) => {
@@ -275,6 +419,11 @@ export default function WebToolboxView() {
     setTools((prev) => [...prev].sort((a,b) => (a.createdAt||0) - (b.createdAt||0)));
   };
 
+  const visibleCats = useMemo(
+    () => CATEGORIES.filter((c) => catCounts[c.id] > 0),
+    [catCounts]
+  );
+
   return (
     <div className="webtoolbox-view">
       {/* Header */}
@@ -283,30 +432,69 @@ export default function WebToolboxView() {
           <div className="wt-iconBox" aria-hidden="true"><AppWindow size={22} /></div>
           <div>
             <h1 className="wt-title">Kho Công cụ Web</h1>
-            <p className="wt-subtitle">Kho link của bạn — mở nhanh như desktop • kéo thả để sắp xếp • ô vuông ~2cm</p>
+            <p className="wt-subtitle">Kho link của bạn — mở nhanh như desktop • phân nhóm &amp; ghim ô hay dùng • kéo thả để sắp xếp</p>
           </div>
         </div>
         <div className="wt-header-actions">
           <div className="wt-search">
             <Search size={14} />
             <input
+              ref={searchRef}
               value={query}
               onChange={(e)=>setQuery(e.target.value)}
+              onKeyDown={(e)=>{ if(e.key==="Escape" && query){ e.stopPropagation(); setQuery(""); } }}
               placeholder="Tìm tên, link..."
               aria-label="Tìm công cụ"
             />
-            {query && <button className="wt-search-clear" onClick={()=>setQuery("")} aria-label="Xóa tìm kiếm"><X size={12}/></button>}
+            {query
+              ? <button className="wt-search-clear" onClick={()=>setQuery("")} aria-label="Xóa tìm kiếm"><X size={12}/></button>
+              : <kbd className="wt-search-kbd" title="Nhấn / để tìm nhanh">/</kbd>}
           </div>
           <span className="wt-count">{filtered.length} công cụ</span>
+          {failCount > 0 && <span className="wt-count" title="Số link kiểm tra lỗi — nên sửa hoặc xóa">⚠️ {failCount} lỗi</span>}
+          {checkingAll
+            ? <button className="btn btn-secondary btn-sm" onClick={stopChecking} title="Dừng kiểm tra"><X size={14}/> Dừng</button>
+            : <button className="btn btn-secondary btn-sm" onClick={checkAllLinks} title="Mở thử từng link, gắn cờ link chết — chỉ kiểm tra, không sửa gì"><Link2 size={14}/> Kiểm tra link</button>}
           <button className="btn btn-secondary btn-sm" onClick={handleResetOrder} title="Sắp lại theo thời gian thêm"><ArrowUpDown size={14}/> Sắp xếp</button>
           <button className="btn btn-primary" onClick={onAddClick}><Plus size={16}/> Thêm Link</button>
         </div>
       </div>
 
+      {/* Category filter bar */}
+      <div className="wt-catbar" role="toolbar" aria-label="Lọc theo nhóm">
+        <button
+          className={"filter-btn" + (activeCat === "all" ? " active" : "")}
+          onClick={() => setActiveCat("all")}
+          aria-pressed={activeCat === "all"}
+        >
+          Tất cả <span className="wt-cat-n">{tools.length}</span>
+        </button>
+        {pinnedCount > 0 && (
+          <button
+            className={"filter-btn" + (activeCat === "pinned" ? " active" : "")}
+            onClick={() => setActiveCat("pinned")}
+            aria-pressed={activeCat === "pinned"}
+            title="Chỉ hiện công cụ đã ghim"
+          >
+            <Pin size={12} /> Ghim <span className="wt-cat-n">{pinnedCount}</span>
+          </button>
+        )}
+        {visibleCats.map((c) => (
+          <button
+            key={c.id}
+            className={"filter-btn" + (activeCat === c.id ? " active" : "")}
+            onClick={() => setActiveCat(c.id)}
+            aria-pressed={activeCat === c.id}
+          >
+            {c.label} <span className="wt-cat-n">{catCounts[c.id]}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Info bar */}
       <div className="wt-info">
-        <span><Sparkles size={12}/> Mẹo: Kéo thả ô vuông để đổi chỗ • Click để mở link trong tab mới • Di chuột để sửa/xóa</span>
-        <span className="wt-info-size">◫ 76–88px / ô (~2cm)</span>
+        <span><Sparkles size={12}/> Kéo thả ô để đổi chỗ • Click ô để mở tab mới • <Pin size={11}/> ghim ô hay dùng lên đầu</span>
+        <span className="wt-info-size"><Keyboard size={11}/> Mũi tên di chuyển • / để tìm</span>
       </div>
 
       {/* Grid — desktop-like */}
@@ -314,6 +502,8 @@ export default function WebToolboxView() {
         className="wt-grid"
         role="grid"
         aria-label="Kho công cụ"
+        ref={gridRef}
+        onKeyDown={handleGridKeyDown}
         onDragOver={(e)=>e.preventDefault()}
         onDrop={onGridDrop}
       >
@@ -323,7 +513,7 @@ export default function WebToolboxView() {
           return (
             <div
               key={tool.id}
-              className={`wt-tile ${isDragged ? "dragging" : ""} ${isOver ? "drag-over" : ""}`}
+              className={`wt-tile ${tool.pinned ? "is-pinned" : ""} ${isDragged ? "dragging" : ""} ${isOver ? "drag-over" : ""}`}
               draggable
               onDragStart={(e)=>onDragStart(e, tool.id)}
               onDragEnd={onDragEnd}
@@ -331,13 +521,36 @@ export default function WebToolboxView() {
               onDragLeave={onDragLeave}
               onDrop={(e)=>onDrop(e, tool.id)}
               role="gridcell"
-              title={`${tool.title}\n${tool.url}`}
+              title={`${tool.title}\n${tool.url}\nNhóm: ${CATEGORY_LABEL[tool.category] || "Khác"}${tool.pinned ? " • Đã ghim" : ""}`}
             >
               {/* drag handle */}
               <div className="wt-tile-handle" aria-hidden="true"><GripVertical size={12}/></div>
+              {/* ghim: huy hiệu cố định khi ô được ghim */}
+              {tool.pinned && (
+                <span className="wt-tile-pinmark" aria-hidden="true"><Pin size={10}/></span>
+              )}
+              {/* P2 • cờ kiểm tra link: xanh = tới được, đỏ = chết, xám xoay = đang check */}
+              {linkStatus[tool.id] && linkStatus[tool.id] !== "checking" && (
+                <span
+                  className="wt-tile-linkflag"
+                  title={linkStatus[tool.id] === "ok" ? "Link mở được (kiểm tra lúc này)" : "Link lỗi/không mở được — nên sửa hoặc xóa"}
+                  style={{
+                    position: "absolute", left: 6, bottom: 6, width: 10, height: 10,
+                    borderRadius: 999, background: linkStatus[tool.id] === "ok" ? "#16a34a" : "#dc2626",
+                    border: "2px solid #fff", boxShadow: "0 1px 3px rgba(0,0,0,.3)", zIndex: 2,
+                  }}
+                />
+              )}
 
               {/* actions on hover */}
               <div className="wt-tile-actions">
+                <button
+                  className={"wt-tile-btn" + (tool.pinned ? " active" : "")}
+                  onClick={(e)=>{e.stopPropagation(); togglePin(tool.id);}}
+                  title={tool.pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+                  aria-label={tool.pinned ? `Bỏ ghim ${tool.title}` : `Ghim ${tool.title}`}
+                  aria-pressed={!!tool.pinned}
+                ><Pin size={12}/></button>
                 <button className="wt-tile-btn" onClick={(e)=>{e.stopPropagation(); onEditClick(tool);}} title="Sửa" aria-label={`Sửa ${tool.title}`}><Pencil size={12}/></button>
                 <button className="wt-tile-btn danger" onClick={(e)=>{e.stopPropagation(); handleDelete(tool);}} title="Xóa" aria-label={`Xóa ${tool.title}`}><Trash2 size={12}/></button>
               </div>
@@ -345,6 +558,7 @@ export default function WebToolboxView() {
               {/* main clickable area */}
               <button
                 className="wt-tile-main"
+                data-wt-cell="1"
                 onClick={()=>openTool(tool)}
                 aria-label={`Mở ${tool.title}`}
               >
@@ -365,7 +579,7 @@ export default function WebToolboxView() {
         })}
 
         {/* Add tile — always last, not draggable */}
-        <button className="wt-tile wt-tile-add" onClick={onAddClick} aria-label="Thêm Link mới">
+        <button className="wt-tile wt-tile-add" data-wt-cell="1" onClick={onAddClick} aria-label="Thêm Link mới">
           <div className="wt-tile-add-inner">
             <div className="wt-tile-add-icon"><Plus size={24}/></div>
             <div className="wt-tile-label">Thêm Link</div>
@@ -378,6 +592,14 @@ export default function WebToolboxView() {
             <Search size={18}/>
             <p>Không tìm thấy “{query}”</p>
             <button className="btn btn-ghost btn-sm" onClick={()=>setQuery("")}>Xóa lọc</button>
+          </div>
+        )}
+
+        {filtered.length === 0 && !query && activeCat !== "all" && (
+          <div className="wt-empty-search" role="status">
+            <Pin size={18}/>
+            <p>Không có công cụ trong nhóm “{activeCat === "pinned" ? "Đã ghim" : (CATEGORY_LABEL[activeCat] || "Khác")}”</p>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setActiveCat("all")}>Xem tất cả</button>
           </div>
         )}
       </div>
@@ -394,7 +616,8 @@ export default function WebToolboxView() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="modal-overlay wt-modal-overlay" onClick={()=>setShowModal(false)} role="dialog" aria-modal="true" aria-labelledby="wt-modal-title">
-          <div className="modal-content wt-modal" onClick={(e)=>e.stopPropagation()}>
+          <div className="modal-content wt-modal" onClick={(e)=>e.stopPropagation()}
+             onKeyDown={(e)=>{ if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); setShowModal(false); } }}>
             <div className="modal-header">
               <h2 id="wt-modal-title">{editing ? "Sửa Link" : "Thêm Link mới"}</h2>
               <button className="btn btn-ghost btn-xs" onClick={()=>setShowModal(false)} aria-label="Đóng"><X size={16}/></button>
@@ -408,7 +631,12 @@ export default function WebToolboxView() {
                 id="wt-url"
                 className="form-control"
                 value={formUrl}
-                onChange={(e)=>{ setFormUrl(e.target.value); if (formErr) setFormErr(""); }}
+                onChange={(e)=>{
+                  const v = e.target.value;
+                  setFormUrl(v);
+                  if (formErr) setFormErr("");
+                  if (!editing && !catTouchedRef.current) setFormCategory(inferCategory(normalizeUrl(v) || v));
+                }}
                 placeholder="https://github.com/username/repo hoặc https://..."
                 autoFocus
                 onKeyDown={(e)=>{ if(e.key==="Enter") handleSave(); if(e.key==="Escape") setShowModal(false); }}
@@ -424,6 +652,22 @@ export default function WebToolboxView() {
                 onKeyDown={(e)=>{ if(e.key==="Enter") handleSave(); if(e.key==="Escape") setShowModal(false); }}
               />
               {formTitle.length > 0 && <div style={{fontSize:'0.7rem', color:'var(--text-muted)', marginTop:2}}>{formTitle.length}/30</div>}
+
+              <label className="form-label" style={{marginTop: '0.7rem'}}>Nhóm công cụ</label>
+              <div className="wt-cat-picker" role="radiogroup" aria-label="Chọn nhóm công cụ">
+                {CATEGORIES.map((c) => (
+                  <button
+                    type="button"
+                    key={c.id}
+                    className={"filter-btn" + (formCategory === c.id ? " active" : "")}
+                    onClick={()=>{ catTouchedRef.current = true; setFormCategory(c.id); }}
+                    role="radio"
+                    aria-checked={formCategory === c.id}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
 
               {formUrl && (
                 <div className="wt-url-preview">
@@ -441,7 +685,7 @@ export default function WebToolboxView() {
               </div>
 
               <div className="wt-modal-tips">
-                <strong>Gợi ý nhanh:</strong> Dán link GitHub, Figma, Canva, Vercel... rồi đặt tên ngắn gọn để ô vuông gọn đẹp (2 dòng).
+                <strong>Gợi ý nhanh:</strong> Dán link GitHub, Figma, Canva, Vercel... rồi đặt tên ngắn gọn và chọn nhóm để ô vuông gọn đẹp, lọc nhanh về sau.
               </div>
             </div>
           </div>
@@ -466,4 +710,3 @@ export default function WebToolboxView() {
     </div>
   );
 }
-

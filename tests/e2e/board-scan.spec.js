@@ -94,7 +94,7 @@ async function gotoViewByLabel(label) {
 function readBoards() {
   return page.evaluate(async () => {
     const fromRows = (rows) =>
-      rows.map((b) => ({ name: b.name, texts: (b.objects || []).map((o) => o.text).filter(Boolean) }));
+      rows.map((b) => ({ name: b.name, texts: (b.objects || []).map((o) => o.text).filter(Boolean), shapes: (b.objects || []).filter((o) => o.kind === "shape").length }));
     try {
       const rows = await new Promise((resolve, reject) => {
         const rq = indexedDB.open("SGKAppDB");
@@ -116,7 +116,7 @@ function readBoards() {
       const idx = JSON.parse(localStorage.getItem("sgk_wb_index") || "[]");
       return idx.map((x) => {
         const b = JSON.parse(localStorage.getItem(`sgk_wb_board_${x.id}`) || "null");
-        return { name: x.name, texts: ((b || {}).objects || []).map((o) => o.text).filter(Boolean) };
+        return { name: x.name, texts: ((b || {}).objects || []).map((o) => o.text).filter(Boolean), shapes: ((b || {}).objects || []).filter((o) => o.kind === "shape").length };
       });
     } catch {
       return [];
@@ -128,13 +128,26 @@ function readBoardNames() {
   return readBoards().then((rows) => rows.map((r) => r.name));
 }
 
-function canvasText() {
-  return page.evaluate(() => document.querySelector("svg.wb-svg")?.textContent || "");
-}
-
 async function openWhiteboard() {
   await gotoViewByLabel("Bảng trắng");
   await page.waitForSelector("svg.wb-svg", { timeout: 20000 });
+  // Tour "30 giây" tự mở ở profile mới khi bảng trống → che nút.
+  // Đóng nếu hiện (click overlay = closeTour, đồng thời ghi cờ đã xem).
+  await dismissTourIfOpen();
+}
+
+async function dismissTourIfOpen() {
+  for (let i = 0; i < 3; i++) {
+    const closed = await page.evaluate(() => {
+      const ov = [...document.querySelectorAll(".modal-overlay")].find((el) =>
+        (el.textContent || "").includes("30 giây"),
+      );
+      if (ov) { ov.click(); return true; }
+      return false;
+    });
+    if (!closed) return;
+    await new Promise((r) => setTimeout(r, 400));
+  }
 }
 
 async function openLibrary() {
@@ -223,22 +236,23 @@ test("G2 • Tạo bảng mới → toast + số bảng tăng", async () => {
   assert.ok(after.length > before.length, `số bảng phải tăng: ${before.length} → ${after.length}`);
 });
 
-test("G3 • chọn công cụ Hình khối → click canvas → thêm khối 'Khối' + lưu", async () => {
+test("G3 • chọn công cụ Hình khối → click canvas → thêm khối hình (trống) + lưu", async () => {
   await openWhiteboard();
   await page.locator('button.wb-tool[title="Hình khối (S/4)"]').click();
   await page.locator("svg.wb-svg").click({ position: { x: 420, y: 300 } });
 
-  await waitFor(async () => (await canvasText()).includes("Khối"), { message: "khối 'Khối' xuất hiện trên canvas" });
-  assert.match(await canvasText(), /Khối/, "canvas phải có text 'Khối'");
+  // khối mới để trống (không chữ sẵn) nhưng được chọn ngay → thanh ngữ cảnh hiện ra
+  await page.waitForSelector(".whiteboard-ctxbar", { timeout: 10000 });
+  assert.ok((await page.locator(".whiteboard-ctxbar").count()) >= 1, "thanh ngữ cảnh phải hiện khi khối mới được chọn");
 
   // Bấm lưu chủ đích — autosave debounce 900ms, test sau có thể navigate away
   await page.locator('button[title="Lưu ngay (Ctrl+S)"]').click();
   await waitFor(
     async () => {
       const rows = await readBoards();
-      return rows.some((r) => r.texts.includes("Khối")) ? rows : null;
+      return rows.some((r) => r.shapes > 0) ? rows : null;
     },
-    { timeout: 15000, message: "khối 'Khối' đã được ghi xuống storage" },
+    { timeout: 15000, message: "khối hình đã được ghi xuống storage" },
   );
 });
 
@@ -255,11 +269,11 @@ test("G4 • reload → bảng và khối đã vẽ vẫn còn trong storage", a
   const rows = await waitFor(
     async () => {
       const r = await readBoards();
-      return r.some((x) => x.texts.includes("Khối")) ? r : null;
+      return r.some((x) => x.shapes > 0) ? r : null;
     },
-    { timeout: 20000, message: "khối 'Khối' còn sau reload" },
+    { timeout: 20000, message: "khối hình còn sau reload" },
   );
-  assert.ok(rows.some((r) => r.texts.includes("Khối")), "reload không được mất khối đã vẽ");
+  assert.ok(rows.some((r) => r.shapes > 0), "reload không được mất khối đã vẽ");
   assert.equal((await readBoardNames()).length, namesBefore.length, "số bảng sau reload phải giữ nguyên");
 });
 

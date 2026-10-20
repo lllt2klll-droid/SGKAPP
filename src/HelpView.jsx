@@ -129,9 +129,9 @@ const MODULES = [
     title: "Tổng quan — Bảng điều khiển",
     icon: <BarChart3 size={18} />,
     color: "#0f172a",
-    summary: "12 thẻ KPI, quick actions, giáo án gần đây và ô “Tất cả công cụ” dẫn tới mọi tính năng.",
+    summary: "11 thẻ KPI, quick actions, giáo án gần đây và ô “Tất cả công cụ” dẫn tới mọi tính năng.",
     steps: [
-      { id: "db1", t: "Xem số liệu", d: "12 thẻ KPI: Sách, Đang đọc, Đánh dấu, Từ vựng, Trích đoạn, Nhiệm vụ, Giáo án, Ý tưởng, Bảng trắng, Ghi chú, Khái niệm, Tham khảo — bấm “Từ vựng →” là mở thẳng Sổ tay." },
+      { id: "db1", t: "Xem số liệu", d: "11 thẻ KPI: Sách, Đang đọc, Đánh dấu, Từ vựng, Trích đoạn, Nhiệm vụ, Giáo án, Ý tưởng, Bảng trắng, Ghi chú, Tham khảo — bấm “Từ vựng →” là mở thẳng Sổ tay." },
       { id: "db2", t: "Tiếp tục & Quick actions", d: "Khối “Đang đọc” quay lại đúng trang; các nút Soạn Word, Soạn giáo án, Tạo câu hỏi, Nghiên cứu, Bảng trắng mở ngay việc cần làm." },
       { id: "db3", t: "Tất cả công cụ", d: "Cuộn xuống ô “Tất cả công cụ” (~20 công cụ, có ô tìm kiếm) và khối “Scan gần đây” mở lại lịch sử quét ảnh." },
     ],
@@ -167,9 +167,28 @@ const MODULES = [
       { id: "r2", t: "Mục lục & phóng to", d: "Bấm “Mục lục” (phím t) → chọn bài/tuần. Có ảnh trang mục lục? Kéo tối đa 6 ảnh vào panel Mục lục → AI dựng mục lục tự động. Zoom bằng + / − / f (vừa khung trang)." },
       { id: "r3", t: "Đánh dấu & Sổ tay từ vựng", d: "Ctrl+D đánh dấu trang → xem ở “Đánh dấu”. Bôi đen từ → “Thêm vào sổ tay từ vựng” (chưa có nghĩa thì AI tự tra trước khi lưu)." },
       { id: "r4", t: "Công cụ khi đọc", d: "Alt+K mở bảng lệnh 20+ lệnh · Ctrl+Shift+C panel AI (Hỏi/Phân tích/Sư phạm/Giáo án) · 🔊 đọc to 0.7–1.5x · ✂ Quét vùng · OCR · sửa sách như Word / xuất .docx." },
+      { id: "r5", t: "Tiếp tục đọc", d: "Sidebar “Tiếp tục đọc” (Alt+3): thẻ lớn cuốn gần đây nhất + “Đọc tiếp · Tr.N” mở đúng trang đang đọc. Đổi xem Thẻ/Bảng, lọc lớp/môn/trạng thái và sắp xếp theo gần đây, tiến độ, tiêu đề." },
     ],
     tip: "Ctrl+K là tìm kiếm TOÀN CỤC (dùng mọi nơi); Alt+K chỉ là bảng lệnh khi đang đọc sách. Tạo mục lục từ ảnh cần API Key.",
     cta: { label: "Thử Tiếp tục đọc", view: "continue" },
+  },
+  {
+    id: "marks",
+    groupId: "workspace-library",
+    group: "Không gian làm việc · Thư viện SGK",
+    title: "Đánh dấu & Ghi chú đã lưu — gom theo sách",
+    icon: <Tags size={18} />,
+    color: "#db2777",
+    badge: "Mới",
+    summary: "3 tab Tổng quan · Trang đánh dấu · Ghi chú đã lưu; mỗi sách một khung gọn, thu gọn/mở và xóa theo sách.",
+    steps: [
+      { id: "mk1", t: "Tổng quan & lọc", d: "Tab Tổng quan: thẻ số liệu + biểu đồ theo sách (bấm 1 dòng để lọc). Dùng ô tìm kiếm, chip Lớp/Môn, “Chỉ trang có ghi chú”; menu “Sách:” xếp các khung (A→Z, Z→A, nhiều/ít mục nhất, theo lớp) và menu cạnh nó xếp mục bên trong (theo sách/trang/nhãn)." },
+      { id: "mk2", t: "Khung gom theo sách", d: "Mỗi sách là 1 khung bo tròn (sách xếp A→Z). Bấm tiêu đề khung để Thu gọn / Mở — app nhớ trạng thái từng khung. Trong khung có nút “Mở” sách và “Xóa cả sách”." },
+      { id: "mk3", t: "Trang đánh dấu", d: "Mỗi dòng là 1 trang: bấm nhãn để đổi tên; badge báo có ghi chú cùng trang (bấm để xem); chip ảnh nếu trang có ảnh. Bấm dòng để mở đúng trang." },
+      { id: "mk4", t: "Ghi chú đã lưu & xuất", d: "Ghi chú gom theo sách, xếp theo trang tăng dần; nội dung dài có “Xem thêm”. Xuất Word/TXT đúng phần đang xem; xóa chọn lọc hoặc “Xóa cả sách”." },
+    ],
+    tip: "Chọn nhiều dòng bằng nút chọn rồi “Xóa đã chọn”, hoặc xóa nhanh cả 1 cuốn bằng “Xóa cả sách” ngay trên khung — không cần lọc thủ công.",
+    cta: { label: "Mở Đánh dấu", view: "marks" },
   },
   {
     id: "vocab",
@@ -214,7 +233,9 @@ const MODULES = [
     steps: [
       { id: "it1", t: "Thêm nhật ký", d: "Sidebar “Thực tập” → “Thêm nhật ký” → điền trường, lớp, môn, chủ đề, hoạt động, số giờ. Tự lưu, sửa/xóa có xác nhận." },
       { id: "it2", t: "Phản ánh sau giờ dạy", d: "Mở nhật ký → khối “Phản ánh sau giờ dạy”: mức thành công, điểm cần cải thiện, mức tham gia, nhận xét của GV." },
-      { id: "it3", t: "Lịch & tìm kiếm", d: "Lịch tháng có chấm ngày có nhật ký; ô tìm kiếm lọc theo trường / lớp / môn. Thống kê hiện “số nhật ký, số phản ánh”." },
+      { id: "it3", t: "Lịch & tìm kiếm", d: "Lịch tháng có chấm ngày có nhật ký; ô tìm kiếm lọc theo trường / lớp / môn / hoạt động / phản ánh. Thống kê hiện “số nhật ký, số phản ánh”." },
+      { id: "it4", t: "Khoảng thời gian", d: "Trên lịch chọn “Từ ngày … Tới ngày …” (hoặc preset 7 ngày / 30 ngày / Tháng này / Học kỳ) để lọc lịch & danh sách, kèm số nhật ký, số ngày, tổng giờ trong khoảng." },
+      { id: "it5", t: "Lọc & xuất báo cáo", d: "Lọc theo môn và “Đã / Chưa phản ánh”; nhân bản nhật ký để ghi nhanh buổi lặp lại. Xuất Word / TXT đúng phần đang xem để nộp báo cáo thực tập." },
     ],
     cta: { label: "Mở Thực tập", view: "internship" },
   },
@@ -319,11 +340,11 @@ const MODULES = [
     title: "Ma trận, Kiểm kê, Thống kê & Bộ sưu tập",
     icon: <Tags size={18} />,
     color: "#7c3aed",
-    summary: "Ma trận YCCĐ, Kiểm kê bài tập, Thống kê ngôn ngữ, Khái niệm, Tài liệu tham khảo, Bộ công cụ dữ liệu.",
+    summary: "Ma trận, Kiểm kê, Thống kê ngôn ngữ (nhóm Công cụ nâng cao) + Tài liệu tham khảo, Bộ sưu tập (nhóm Sổ tay nghiên cứu).",
     steps: [
       { id: "ad1", t: "Ma trận & Gắn thẻ", d: "Trong sách bấm “Gắn thẻ CTGDPT” → chọn YCCĐ → Ma trận (Alt+8) tự tổng hợp mạch kiến thức, xuất Word." },
-      { id: "ad2", t: "Kiểm kê & Thống kê", d: "Kiểm kê rà soát bài tập theo YCCĐ (trang có câu hỏi/bài tập); Thống kê ngôn ngữ đếm từ, tần suất, trích đoạn." },
-      { id: "ad3", t: "Khái niệm & Bộ sưu tập", d: "Khái niệm (sổ thuật ngữ gắn trang), Tài liệu tham khảo, Bộ công cụ dữ liệu (trích đoạn hay) — đều xuất Word/PDF." },
+      { id: "ad2", t: "Kiểm kê & Thống kê", d: "Sidebar → Công cụ nâng cao: Kiểm kê rà soát bài tập theo YCCĐ (trang có câu hỏi/bài tập); Thống kê ngôn ngữ đếm từ, tần suất, trích đoạn." },
+      { id: "ad3", t: "Thư mục nghiên cứu", d: "Sidebar → Sổ tay nghiên cứu: Tài liệu tham khảo, Bộ công cụ dữ liệu (trích đoạn hay) — đều xuất Word/PDF. Thuật ngữ/khái niệm nay nằm trong Sổ tay Từ vựng (thẻ phân loại)." },
     ],
     cta: { label: "Mở Ma trận", view: "matrix" },
   },
@@ -340,7 +361,7 @@ const MODULES = [
       { id: "ta2", t: "Chế độ tập trung", d: "Bật timer tập trung khi soạn giáo án/thiết dạy — đồng hồ đếm giúp làm việc đủ nhịp, tránh xao nhãng." },
       { id: "ta3", t: "Ý tưởng & Thống kê", d: "Ý tưởng: lưu trò chơi/hoạt động dạy học để dùng lại. Thống kê: biểu đồ sách đã mở, % hoàn thành, từ vựng (bấm “Từ vựng →”), có “Đặt lại thống kê cuốn này”." },
     ],
-    cta: { label: "Mở Nhiệm vụ", view: "tasks" },
+    cta: { label: "Mở Nhiệm vụ", view: "tasks", tab: "today" },
   },
   {
     id: "webtools",
@@ -350,13 +371,14 @@ const MODULES = [
     icon: <AppWindow size={18} />,
     color: "#2563eb",
     badge: "Mới",
-    summary: "Lưu mọi link hay (GitHub, Figma, Canva…) thành ô vuông, kéo thả sắp xếp như desktop.",
+    summary: "Lưu mọi link hay (GitHub, Figma, Canva…) thành ô vuông, phân nhóm & ghim ô hay dùng, kéo thả sắp xếp như desktop.",
     steps: [
-      { id: "wt1", t: "Thêm link", d: "Bấm “Thêm Link mới” → dán URL (vd https://github.com/...) → đặt tên ngắn gọn → Lưu. Chỉ nhận http(s) + chống trùng." },
-      { id: "wt2", t: "Mở & sắp xếp", d: "Click ô để mở tab mới. Kéo thả ô để đổi chỗ, vị trí tự lưu localStorage." },
-      { id: "wt3", t: "Sửa / Xóa", d: "Hover ô → ✏️ sửa, 🗑️ xóa. Tìm nhanh bằng ô tìm kiếm trên đầu (tìm cả tên lẫn link)." },
+      { id: "wt1", t: "Thêm link", d: "Bấm “Thêm Link mới” → dán URL (vd https://github.com/...) → đặt tên ngắn gọn → chọn nhóm (AI, Lập trình, Thiết kế…) → Lưu. Chỉ nhận http(s) + chống trùng." },
+      { id: "wt2", t: "Nhóm & Ghim", d: "Chip trên thanh lọc để xem từng nhóm; bấm 📌 trên ô để ghim công cụ hay dùng lên đầu (kho tự lưu)." },
+      { id: "wt3", t: "Mở & sắp xếp", d: "Click ô để mở tab mới. Kéo thả ô để đổi chỗ, vị trí tự lưu localStorage." },
+      { id: "wt4", t: "Bàn phím & Sửa/Xóa", d: "Nhấn / để vào ô tìm kiếm; mũi tên di chuyển giữa các ô, Enter mở. Hover ô → ✏️ sửa, 🗑️ xóa." },
     ],
-    tip: "Đặt tên 2 dòng (vd “GitHub Của Tôi”) để ô vuông gọn đẹp.",
+    tip: "Đặt tên 2 dòng (vd “GitHub Của Tôi”) để ô vuông gọn đẹp; ghim vài ô dùng hằng ngày để luôn ở đầu.",
     cta: { label: "Mở Kho Công cụ", view: "webtools" },
   },
   {
@@ -386,9 +408,9 @@ const MODULES = [
     steps: [
       { id: "gl1", t: "Mở từ điển khi đọc", d: "Trong sách → ngăn “Công cụ nâng cao” → “Từ điển” (phím g) — tra ngay tại trang đang đọc, không mất chỗ." },
       { id: "gl2", t: "Lưu vào sổ tay", d: "Mỗi mục có nút “Lưu vào sổ tay” → tự gắn thẻ “thuật ngữ”, xuất hiện trong Sổ tay từ vựng để ôn lại." },
-      { id: "gl3", t: "Tra lại nhanh", d: "Ctrl+K → gõ thuật ngữ → nhóm kết quả Từ vựng/Thuật ngữ hiển thị, bấm là mở đúng mục." },
+      { id: "gl3", t: "Tra cứu trong Từ vựng", d: "Mở Từ vựng → tab “Tra cứu” — cùng khung tra thuật ngữ, tra xong bấm “Lưu vào sổ tay” là vào bảng ngay. Ctrl+K → gõ thuật ngữ → nhóm kết quả Từ vựng/Thuật ngữ hiển thị, bấm là mở đúng mục." },
     ],
-    cta: { label: "Mở Từ điển", view: "glossary" },
+    cta: { label: "Mở Từ vựng → Tra cứu", view: "vocab", tab: "lookup" },
   },
   {
     id: "shortcuts",
@@ -409,14 +431,15 @@ const MODULES = [
     id: "settings",
     groupId: "tien-ich",
     group: "Tiện ích",
-    title: "Cài đặt — 18 mục cho mọi tính năng",
+    title: "Cài đặt — 20 mục cho mọi tính năng",
     icon: <Settings size={18} />,
     color: "#475569",
     summary: "1 nơi cho giao diện, đọc sách, AI, phím tắt, thông báo, trợ năng — mọi thay đổi lưu & áp dụng ngay.",
     steps: [
       { id: "st1", t: "Giao diện nhanh", d: "Header → ☀️/🌙/🖥️ chuyển Sáng/Tối/Tự động. Vào Cài đặt → Giao diện để đổi màu chủ đạo, cỡ chữ & mật độ." },
-      { id: "st2", t: "18 mục, 4 nhóm", d: "Chung · Học tập & Đọc (Trình đọc, Soạn Word, Thư viện, Bảng trắng, Nhiệm vụ) · AI & Dữ liệu (AI Gemini, Tìm kiếm, Xuất, Sao lưu) · Hệ thống (Hành vi & Âm thanh, Thông báo, Phím tắt, Trợ năng, Riêng tư, Nâng cao, Giới thiệu). Có thanh tìm cài đặt + “Khôi phục mặc định cho mục này”." },
+      { id: "st2", t: "20 mục, 4 nhóm", d: "Chung (Tổng quan, Bảng điều khiển, Giao diện) · Học tập & Đọc (Trình đọc, Soạn Word, Thư viện, Bảng trắng, Nhiệm vụ) · AI & Dữ liệu (AI Gemini, Tìm kiếm, Xuất, Sao lưu) · Hệ thống (Hành vi & Âm thanh, Thông báo, Phím tắt, Tính năng, Trợ năng, Riêng tư, Nâng cao, Giới thiệu). Có thanh tìm cài đặt + “Khôi phục mặc định cho mục này”." },
       { id: "st3", t: "API Key cho AI", d: "Cài đặt → AI Gemini → dán key (aistudio.google.com) → “Kiểm tra”. Header có chấm trạng thái AI — bấm vào là mở đúng mục này; sidebar hiện nút “Cấu hình” khi chưa có key." },
+      { id: "st4", t: "Bật/tắt Dashboard & module toàn app", d: "Cài đặt → Bảng điều khiển: bật/tắt từng khối trang Tổng quan (lời chào, KPI, việc cần làm…). Cài đặt → Tính năng: ẩn module (Từ vựng, Bảng trắng, Phiếu, Ngân hàng…) khỏi sidebar, Dashboard và cả Ctrl+K — bật lại là dữ liệu còn nguyên." },
     ],
     tip: "Chưa có API Key vẫn đọc sách, ghi chú, làm phiếu bình thường — AI chỉ phụ thêm.",
     cta: { label: "Mở Cài đặt", view: null, action: "settings", section: "general" },
@@ -461,7 +484,8 @@ export default function HelpView({ geminiKey, onOpenSettings, onNavigate }) {
 
   const navigate = (mod) => {
     if (mod.cta?.action === "settings" && onOpenSettings) return onOpenSettings(mod.cta.section || "ai");
-    if (mod.cta?.view && onNavigate) return onNavigate(mod.cta.view);
+    // P1 • cta có thể kèm tab (vd Từ vựng → Tra cứu); onNavigate(v, opts) tương thích cũ (opts optional)
+    if (mod.cta?.view && onNavigate) return onNavigate(mod.cta.view, mod.cta.tab ? { tab: mod.cta.tab } : undefined);
     if (onNavigate && mod.id) {
       // fallback: map id to view
       const map = { library: "library", reader: "library", lesson: "lessonplans", qbank: "questionbank", research: "search", tasks: "tasks", webtools: "webtools", ai: "vocab", glossary: "glossary" };

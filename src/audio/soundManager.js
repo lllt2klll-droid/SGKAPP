@@ -4,7 +4,7 @@
 
 import { getAssetUrl, effectiveVolume } from "./soundAssets.js";
 import { normalizeEvent, isEventEnabledForProfile, VALID_PROFILES } from "./soundEvents.js";
-import { loadSettings } from "../settingsStore.js";
+import { loadSettings, isReduceMotionEffective } from "../settingsStore.js";
 
 const CACHE = new Map(); // event -> HTMLAudioElement (template)
 let enabledOverride = null; // for preview bypass if needed
@@ -100,7 +100,9 @@ function getSettingsSnapshot() {
       soundEnabled: b.soundEnabled === true,
       soundVolume: Number.isFinite(b.soundVolume) ? b.soundVolume : 0.35,
       soundProfile: VALID_PROFILES.has(b.soundProfile) ? b.soundProfile : "minimal",
-      reduceMotion: s?.accessibility?.reduceMotion === true,
+      // Giảm chuyển động hiệu lực = tay ∪ hệ thống (followSystem) — âm "trang trí"
+      // (pageTurn/click) phải nín đúng lúc animation bị tắt.
+      reduceMotion: isReduceMotionEffective(s),
     };
   } catch {
     return { soundEnabled: false, soundVolume: 0.35, soundProfile: "minimal", reduceMotion: false };

@@ -67,7 +67,7 @@ export const YCCD = [
   // ─── TOÁN LỚP 4 ───
   { id: 't4m1a', subject: 'Toán', grade: 4, machId: 'm1', text: 'Đọc, viết, so sánh số tự nhiên đến hàng triệu; nhận biết dãy số tự nhiên' },
   { id: 't4m1b', subject: 'Toán', grade: 4, machId: 'm1', text: 'Thực hiện cộng, trừ, nhân, chia số tự nhiên (nhân, chia với số có đến hai chữ số)' },
-  { id: 't4m1c', subject: 'Toán', grade: 4, machId: 'm1', text: 'Vận dụng tính chất giao hoán, kết hợp, phân phối để tính hợp lí' },
+  { id: 't4m1c', subject: 'Toán', grade: 4, machId: 'm1', text: 'Vận dụng tính chất giao hoán, kết hợp, phân phối để tính hợp lý' },
   { id: 't4m1d', subject: 'Toán', grade: 4, machId: 'm1', text: 'Nhận biết phân số, so sánh hai phân số cùng mẫu hoặc khác mẫu; thực hiện cộng, trừ phân số cùng mẫu' },
   { id: 't4m2a', subject: 'Toán', grade: 4, machId: 'm2', text: 'Nhận biết góc nhọn, góc vuông, góc tù, góc bẹt; hai đường thẳng song song, vuông góc' },
   { id: 't4m2b', subject: 'Toán', grade: 4, machId: 'm2', text: 'Tính chu vi, diện tích hình bình hành, hình thoi; biết đơn vị đo diện tích mét vuông, đề-xi-mét vuông' },
@@ -82,7 +82,7 @@ export const YCCD = [
   { id: 't5m3a', subject: 'Toán', grade: 5, machId: 'm3', text: 'Đọc, mô tả số liệu từ biểu đồ; tính tỉ số phần trăm; nhận biết một số mô hình xác suất đơn giản' },
 
   // ─── TIẾNG VIỆT LỚP 1 ───
-  { id: 'v1d1', subject: 'Tiếng Việt', grade: 1, machId: 'v1', text: 'Nhận biết và đọc đúng âm, vần; đọc trơn từ ngữ, câu, đoạn ngắn (tốc độ hợp lí)' },
+  { id: 'v1d1', subject: 'Tiếng Việt', grade: 1, machId: 'v1', text: 'Nhận biết và đọc đúng âm, vần; đọc trơn từ ngữ, câu, đoạn ngắn (tốc độ hợp lý)' },
   { id: 'v1d2', subject: 'Tiếng Việt', grade: 1, machId: 'v1', text: 'Hiểu nghĩa từ ngữ trong bài đọc; trả lời được câu hỏi về nội dung đoạn văn ngắn' },
   { id: 'v1v1', subject: 'Tiếng Việt', grade: 1, machId: 'v2', text: 'Viết đúng chữ thường, chữ hoa; chép và viết chính tả từ ngữ, câu ngắn (tốc độ 30–35 chữ/15 phút)' },
   { id: 'v1v2', subject: 'Tiếng Việt', grade: 1, machId: 'v2', text: 'Viết được câu đơn giản, hoàn thiện câu theo gợi ý (tưởng tượng sáng tạo theo tranh)' },
@@ -90,7 +90,7 @@ export const YCCD = [
   { id: 'v1n2', subject: 'Tiếng Việt', grade: 1, machId: 'v3', text: 'Nói rõ ràng, tự tin trong giao tiếp, chào hỏi, cảm ơn, xin lỗi trong tình huống quen thuộc' },
   { id: 'v1g1', subject: 'Tiếng Việt', grade: 1, machId: 'v4', text: 'Nhận biết âm, vần, tiếng, từ, câu; dấu thanh, chữ hoa/chữ thường' },
   // ─── TIẾNG VIỆT LỚP 2 ───
-  { id: 'v2d1', subject: 'Tiếng Việt', grade: 2, machId: 'v1', text: 'Đọc rõ ràng, ngắt nghỉ hợp lí văn bản ngắn; tốc độ 40–60 chữ/phút' },
+  { id: 'v2d1', subject: 'Tiếng Việt', grade: 2, machId: 'v1', text: 'Đọc rõ ràng, ngắt nghỉ hợp lý văn bản ngắn; tốc độ 40–60 chữ/phút' },
   { id: 'v2d2', subject: 'Tiếng Việt', grade: 2, machId: 'v1', text: 'Hiểu ý chính của đoạn, bài; trả lời câu hỏi; nhận biết nhân vật, sự việc, chi tiết quan trọng' },
   { id: 'v2v1', subject: 'Tiếng Việt', grade: 2, machId: 'v2', text: 'Viết chính tả đoạn văn ngắn theo tốc độ quy định; viết hoa đúng quy tắc, đúng dấu câu cơ bản' },
   { id: 'v2v2', subject: 'Tiếng Việt', grade: 2, machId: 'v2', text: 'Viết được đoạn văn kể/ tả ngắn về người, vật, sự việc quen thuộc; viết tin nhắn, thiệp mời' },
@@ -115,7 +115,7 @@ export const YCCD = [
   { id: 'v5d2', subject: 'Tiếng Việt', grade: 5, machId: 'v1', text: 'Nhận xét, đánh giá chi tiết, hình ảnh, nhân vật; hiểu nghĩa tường minh và hàm ẩn trong văn bản đơn giản' },
   { id: 'v5v1', subject: 'Tiếng Việt', grade: 5, machId: 'v2', text: 'Viết bài văn kể, tả, bày tỏ cảm xúc có cấu trúc chặt chẽ; viết đoạn văn lập luận ngắn' },
   { id: 'v5v2', subject: 'Tiếng Việt', grade: 5, machId: 'v2', text: 'Viết biên bản, đơn từ, báo cáo, thư theo yêu cầu; viết chương trình hoạt động đơn giản' },
-  { id: 'v5n1', subject: 'Tiếng Việt', grade: 5, machId: 'v3', text: 'Trình bày, thuyết trình ngắn có dàn ý; tranh luận, bảo vệ ý kiến với lí lẽ và bằng chứng' },
+  { id: 'v5n1', subject: 'Tiếng Việt', grade: 5, machId: 'v3', text: 'Trình bày, thuyết trình ngắn có dàn ý; tranh luận, bảo vệ ý kiến với lý lẽ và bằng chứng' },
   { id: 'v5g1', subject: 'Tiếng Việt', grade: 5, machId: 'v4', text: 'Nhận biết câu ghép, trạng ngữ, từ đồng nghĩa, trái nghĩa, từ đa nghĩa; liên kết câu trong đoạn văn' },
 ];
 

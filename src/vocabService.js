@@ -62,7 +62,7 @@ export function collectTags(list) {
       else counts.set(key, { tag: t, count: 1 });
     }
   }
-  return [...counts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, "vi"));
 }
 
 export function dayKey(t) {
@@ -118,7 +118,7 @@ export function computeVocabStats(list) {
     withMeaning: arr.length - missingMeaning,
     tagged,
     lastAt,
-    byFile: [...byFile.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title)),
+    byFile: [...byFile.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title, "vi")),
     byGrade: [...byGrade.entries()]
       .map(([grade, count]) => ({ grade, count }))
       .sort((a, b) => a.grade - b.grade),
@@ -241,11 +241,25 @@ export function buildMcQuestions(entries, limit = 20) {
   return { questions, skipped };
 }
 
+// Prompt giải nghĩa chuẩn học thuật cho SINH VIÊN ĐẠI HỌC VÀ CAO HỌC:
+// từ loại/lĩnh vực → định nghĩa → ví dụ → thuật ngữ liên quan.
+// Vẫn nêu lớp của sách nguồn (SGK lớp X) để AI nắm ngữ cảnh xuất xứ của từ.
 export function buildExplainPrompt(entries, grade) {
-  const lines = (Array.isArray(entries) ? entries : [])
+  const list = Array.isArray(entries) ? entries : [];
+  const lines = list
     .map((e, i) => `${i + 1}. "${String(e.word || "").trim()}"`)
     .join("\n");
-  return `Giải nghĩa ${entries.length} từ/cụm từ sau cho học sinh tiểu học lớp ${grade || "tương ứng"}. Trả về MỘT mảng JSON hợp lệ, không thêm văn bản ngoài JSON, mỗi phần tử dạng {"word":"<từ y hệt>","meaning":"<nghĩa 2-3 câu, văn phong giáo viên tiểu học, có ví dụ gần gũi, thêm emoji>"}:\n${lines}`;
+  const context = grade ? ` (trích từ SGK lớp ${grade})` : "";
+  return `Giải nghĩa ${list.length} từ/cụm từ sau${context} cho SINH VIÊN ĐẠI HỌC VÀ CAO HỌC: ngôn ngữ chuẩn mực, chính xác, súc tích, KHÔNG dùng emoji.
+Trả về MỘT mảng JSON hợp lệ, không thêm văn bản ngoài JSON, mỗi phần tử dạng {"word":"<từ y hệt>","meaning":"<nội dung>"}.
+Trong "meaning", trình bày gọn theo từng dòng, mỗi dòng bắt đầu bằng dấu •:
+• Từ loại / lĩnh vực: ...
+• Định nghĩa: 1–2 câu học thuật, chuẩn xác và đủ sâu cho sinh viên đại học và cao học; nếu từ có nhiều nghĩa, ưu tiên nghĩa dùng trong ngữ cảnh giáo dục
+• Ví dụ: 1 câu thực tế (học tập hoặc đời sống)
+• Liên quan: từ đồng nghĩa / trái nghĩa / thuật ngữ gần nghĩa (bỏ dòng nếu không có)
+Nếu từ là tiếng nước ngoài, ghi thêm phiên âm IPA ngay sau từ. Giữ nguyên chính tả từ gốc ở trường "word".
+Danh sách từ:
+${lines}`;
 }
 
 export function buildQuestionPrompt(entries, bookTitle, grade) {

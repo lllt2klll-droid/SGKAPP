@@ -119,13 +119,13 @@ export default function QuestionBankView({ books, onNavigate }) {
           comparison = (b.createdAt || 0) - (a.createdAt || 0);
           break;
         case 'subject':
-          comparison = (a.subject || '').localeCompare(b.subject || '');
+          comparison = (a.subject || '').localeCompare(b.subject || '', 'vi');
           break;
         case 'grade':
           comparison = (a.grade || 0) - (b.grade || 0);
           break;
         case 'mucdo':
-          comparison = (a.mucdo || '').localeCompare(b.mucdo || '');
+          comparison = (a.mucdo || '').localeCompare(b.mucdo || '', 'vi');
           break;
         default:
           comparison = 0;
@@ -308,16 +308,21 @@ export default function QuestionBankView({ books, onNavigate }) {
     if (!drawn.length) return;
     const nowD = new Date();
     const title = `Đề luyện tập ngẫu nhiên — ${nowD.toLocaleDateString("vi-VN")}`;
-    saveWorksheet({
-      id: makeId("ws"),
-      title,
-      subject: drawn[0].subject || "",
-      grade: drawn[0].grade ?? null,
-      intro: "",
-      questions: drawn.map((q) => q.id),
-      showAnswers: false,
-      at: Date.now(),
-    });
+    try {
+      saveWorksheet({
+        id: makeId("ws"),
+        title,
+        subject: drawn[0].subject || "",
+        grade: drawn[0].grade ?? null,
+        intro: "",
+        questions: drawn.map((q) => q.id),
+        showAnswers: false,
+        at: Date.now(),
+      });
+    } catch (e) {
+      alert(e.message || "Không lưu được phiếu (bộ nhớ đầy).");
+      return;
+    }
     alert('Đã lưu thành phiếu học tập trong tab "Phiếu học tập".');
   };
 
@@ -439,6 +444,7 @@ export default function QuestionBankView({ books, onNavigate }) {
     if (selectedIds.length === 0) return;
 
     let updatedCount = 0;
+    let failed = 0;
     selectedIds.forEach(id => {
       const question = questions.find(q => q.id === id);
       if (question) {
@@ -446,16 +452,18 @@ export default function QuestionBankView({ books, onNavigate }) {
         if (bulkEditForm.subject) updates.subject = bulkEditForm.subject;
         if (bulkEditForm.grade) updates.grade = parseInt(bulkEditForm.grade, 10);
         if (bulkEditForm.mucdo) updates.mucdo = bulkEditForm.mucdo;
-        
+
         if (Object.keys(updates).length > 0) {
-          updateQuestion(id, { ...question, ...updates });
-          updatedCount++;
+          try {
+            updateQuestion(id, { ...question, ...updates });
+            updatedCount++;
+          } catch { failed++; }
         }
       }
     });
 
     refresh();
-    alert(`Đã cập nhật ${updatedCount} câu hỏi`);
+    alert(failed ? `Đã cập nhật ${updatedCount} câu hỏi (${failed} lỗi — có thể đầy bộ nhớ).` : `Đã cập nhật ${updatedCount} câu hỏi`);
     setBulkEditMode(null);
     setBulkEditForm({ subject: '', grade: '', mucdo: '' });
   };
@@ -477,19 +485,22 @@ export default function QuestionBankView({ books, onNavigate }) {
 
     const tags = bulkTagInput.split(',').map(t => t.trim()).filter(Boolean);
     let updatedCount = 0;
-    
+    let failed = 0;
+
     selectedIds.forEach(id => {
       const question = questions.find(q => q.id === id);
       if (question) {
         const existingTags = question.tags || [];
         const mergedTags = [...new Set([...existingTags, ...tags])];
-        updateQuestion(id, { ...question, tags: mergedTags });
-        updatedCount++;
+        try {
+          updateQuestion(id, { ...question, tags: mergedTags });
+          updatedCount++;
+        } catch { failed++; }
       }
     });
 
     refresh();
-    alert(`Đã thêm thẻ vào ${updatedCount} câu hỏi`);
+    alert(failed ? `Đã thêm thẻ vào ${updatedCount} câu hỏi (${failed} lỗi — có thể đầy bộ nhớ).` : `Đã thêm thẻ vào ${updatedCount} câu hỏi`);
     setBulkEditMode(null);
     setBulkTagInput('');
   };

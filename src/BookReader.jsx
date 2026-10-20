@@ -130,7 +130,16 @@ import {
   ZOOM_PRESETS,
 } from "./reader/zoomController";
 import { normalizeGeneratedQuestion } from "./questionSchema";
+import { paginateHtmlContent, parseWordHeadingsToToc } from "./reader/wordToc.js";
+import { bookPageNumber, totalBookPagesFor, resolvePageRange } from "./reader/pageRange.js";
 import { clampPage, nextPage } from "./reader/pageNavigation";
+import {
+  cleanExtractedText,
+  sanitizeNoteHtml,
+  plainTextFromHtml,
+  tryParseJSONBookReader,
+  parseJSONSafe,
+} from "./reader/textClean.js";
 import { soundManager } from "./audio/soundManager.js";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove, safeSetJSONWithQuotaRetry } from "./safeStorage";
 import {
@@ -140,116 +149,6 @@ import {
   deleteNoteImages,
   primeImageCache,
 } from "./noteImageStore.js";
-
-// ─── Watermark / noise text cleaner ──────────────────────────────────────────
-function cleanExtractedText(text) {
-  if (!text) return "";
-  let c = text;
-  c = c.replace(/https?:\/\/\S+/gi, "");
-  c = c.replace(/blogtailieu[\s.]*com[\s./]*[a-zA-Z0-9_-]*/gi, "");
-  c = c.replace(/blogtailieu[\s.]*\w+[\s./]*\w*[-\w]*/gi, "");
-  c = c.replace(/blogtailieu/gi, "");
-  c = c.replace(/sách chia sẻ tại/gi, "");
-  c = c.replace(/sach chia se tai/gi, "");
-  c = c.replace(/chia sẻ tại/gi, "");
-  c = c.replace(/giao\s*-\s*an\s*-\s*lo\s*p?\s*-\s*\d/gi, "");
-  c = c.replace(/day\s*-\s*va\s*-\s*hoc/gi, "");
-  c = c.replace(/\s*-\s*va\s*-\s*/gi, " ");
-  // Protect fractions like 1/2 from being mangled, then strip leftover slashes
-  const fracs = [];
-  const marker = String.fromCharCode(1);
-  c = c.replace(/(\d)\s*\/\s*(\d)/g, (m, a, b) => {
-    fracs.push(`${a}/${b}`);
-    return `${marker}${fracs.length - 1}${marker}`;
-  });
-  c = c.replace(/\/+/g, " ");
-  c = c
-    .split(marker)
-    .map((part, i) => (i % 2 === 1 ? fracs[parseInt(part, 10)] : part))
-    .join("");
-  c = c.replace(/\s+/g, " ").trim();
-  return c;
-}
-
-function sanitizeNoteHtml(html) {
-  if (!html) return "";
-  try {
-    // DOMPurify parse trên document inert nên script/onerror KHÔNG thể chạy
-    // trong lúc sanitize (cách cũ gán innerHTML lên div rồi mới dọn là đã trễ).
-    // Allowlist y hệt bản cũ: chỉ b/strong/i/em/u/s/strike/br, không attribute.
-    let out = DOMPurify.sanitize(String(html), {
-      ALLOWED_TAGS: ["b", "strong", "i", "em", "u", "s", "strike", "br"],
-      ALLOWED_ATTR: [],
-    }).trim();
-    if (/^(<br\s*\/?>)+$/i.test(out)) out = "";
-    return out;
-  } catch {
-    return String(html).replace(/<[^>]*>/g, "").slice(0, 4000);
-  }
-}
-function plainTextFromHtml(html) {
-  try {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html || "";
-    return (tmp.textContent || tmp.innerText || "")
-      .replace(/\u00A0/g, " ")
-      .trim();
-  } catch {
-    return (html || "").replace(/<[^>]*>/g, " ").trim();
-  }
-}
-
-function tryParseJSONBookReader(s) {
-  try { return { ok: true, value: JSON.parse(s) }; } catch {}
-  try { return { ok: true, value: JSON.parse(String(s).replace(/,\s*([}\]])/g, "$1")) }; } catch {}
-  return { ok: false, value: null };
-}
-
-function parseJSONSafe(text) {
-  if (!text) return null;
-  let t = text.trim();
-  t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  // 1) Parse toàn chuỗi trước (đúng cho mảng thuần [...] mà prompt TOC yêu cầu)
-  let r = tryParseJSONBookReader(t);
-  if (r.ok) {
-    let result = r.value;
-    for (let i = 0; i < 3 && typeof result === "string"; i++) {
-      const inner = result.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      if (!inner) break;
-      const r2 = tryParseJSONBookReader(inner);
-      if (!r2.ok) break;
-      result = r2.value;
-    }
-    return typeof result === "string" ? null : result;
-  }
-  // 2) Fallback: cắt khối JSON khi AI chèn chữ xung quanh.
-  // Ưu tiên khối bắt đầu TRƯỚC (ngoài cùng): mảng [...] bắt đầu trước {...} con bên trong.
-  const objStart = t.indexOf("{");
-  const objEnd = t.lastIndexOf("}");
-  const arrStart = t.indexOf("[");
-  const arrEnd = t.lastIndexOf("]");
-  const objOk = objStart >= 0 && objEnd > objStart;
-  const arrOk = arrStart >= 0 && arrEnd > arrStart;
-  let cand = t;
-  if (objOk && arrOk) {
-    cand = arrStart < objStart ? t.slice(arrStart, arrEnd + 1) : t.slice(objStart, objEnd + 1);
-  } else if (arrOk) {
-    cand = t.slice(arrStart, arrEnd + 1);
-  } else if (objOk) {
-    cand = t.slice(objStart, objEnd + 1);
-  }
-  r = tryParseJSONBookReader(cand);
-  if (!r.ok) return null;
-  let result = r.value;
-  for (let i = 0; i < 3 && typeof result === "string"; i++) {
-    const inner = result.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-    if (!inner) break;
-    const r2 = tryParseJSONBookReader(inner);
-    if (!r2.ok) break;
-    result = r2.value;
-  }
-  return typeof result === "string" ? null : result;
-}
 
 const API_BASE = getApiBase();
 
@@ -467,50 +366,7 @@ export default function BookReader({
     window.addEventListener("sgk:settings-updated", onSettings);
     return ()=> window.removeEventListener("sgk:settings-updated", onSettings);
   },[htmlZoom]);
-  const htmlBookPages = useMemo(()=>{
-    const raw = htmlBookContent || "";
-    if(!raw || raw.includes("Chưa có nội dung")||raw.includes("Chua co noi dung")) return [raw];
-    try{
-      const tmp=document.createElement("div");
-      tmp.innerHTML=raw;
-      const nodes=Array.from(tmp.childNodes);
-      if(!nodes.length) return [raw];
-      const pages=[]; let cur=""; let curLen=0; const limit=3000;
-      const plainLen=(h)=>{ const d=document.createElement("div"); d.innerHTML=h; return (d.textContent||"").length; };
-      const chunkLongBlock=(out, len)=>{
-        if(len <= limit) return [out];
-        try{
-          const t=document.createElement("div"); t.innerHTML=out;
-          const el=t.firstElementChild;
-          if(!el) return [out];
-          const tag=(el.tagName||"").toLowerCase();
-          if(["table","pre","ul","ol"].includes(tag)) return [out];
-          const text=(el.textContent||"").trim();
-          if(!text || text.length <= limit) return [out];
-          const chunks=[]; let pos=0;
-          while(pos < text.length){
-            let end=Math.min(pos+limit, text.length);
-            if(end < text.length){ const sp=text.lastIndexOf(" ", end); if(sp > pos+800) end=sp; }
-            const piece=text.slice(pos, end).trim();
-            if(piece) chunks.push(`<${tag}>${piece.replace(/</g,"&lt;")}</${tag}>`);
-            pos=end;
-          }
-          return chunks.length? chunks : [out];
-        }catch{ return [out]; }
-      };
-      for(const n of nodes){
-        const out=n.outerHTML ?? `<p>${(n.textContent||"").replace(/</g,"&lt;")}</p>`;
-        const len=plainLen(out) || Math.ceil(out.length/3);
-        const pieces=chunkLongBlock(out, len);
-        for(const piece of pieces){
-          const pLen=plainLen(piece) || Math.ceil(piece.length/3);
-          if(curLen + pLen > limit && cur){ pages.push(cur); cur=piece; curLen=pLen; } else { cur+=piece; curLen+=pLen; }
-        }
-      }
-      if(cur) pages.push(cur);
-      return pages.length? pages : [raw];
-    }catch{ return [raw]; }
-  },[htmlBookContent]);
+  const htmlBookPages = useMemo(()=>paginateHtmlContent(htmlBookContent),[htmlBookContent]);
 
   // ── Advanced Tools Drawer State ─────────────────────────────────
   const [advancedToolsSearch, setAdvancedToolsSearch] = useState("");
@@ -1926,30 +1782,8 @@ export default function BookReader({
   };
 
   // Resolve a page range the user picked (null = current page only)
-  const resolveRange = (fromVal, toVal) => {
-    const total = totalBookPages || 1;
-    const f =
-      fromVal && !isNaN(parseInt(fromVal, 10))
-        ? Math.max(1, Math.min(total, parseInt(fromVal, 10)))
-        : null;
-    const t =
-      toVal && !isNaN(parseInt(toVal, 10))
-        ? Math.max(1, Math.min(total, parseInt(toVal, 10)))
-        : null;
-    if (f == null && t == null) return null;
-    const from = f ?? Math.min(t ?? total, bookPage(pageNum));
-    const to = t ?? from;
-    if (to < from)
-      return {
-        error: "Trang kết thúc phải lớn hơn hoặc bằng trang bắt đầu nhé!",
-      };
-    if (to - from + 1 > 7)
-      return {
-        error:
-          "Tối đa 7 trang cho mỗi lần hỏi. Hãy thu hẹp khoảng trang rồi thử lại nhé!",
-      };
-    return { from, to };
-  };
+  const resolveRange = (fromVal, toVal) =>
+    resolvePageRange(fromVal, toVal, totalBookPages || 1, bookPage(pageNum));
 
   // ── TOC cột: load per-file — ưu tiên cache per-file, rồi TOC riêng file, rồi static chung
   useEffect(() => {
@@ -2031,22 +1865,7 @@ export default function BookReader({
       return;
     }
     try {
-      const tmp=document.createElement("div");
-      tmp.innerHTML=htmlBookContent;
-      const heads=tmp.querySelectorAll("h1,h2,h3");
-      if(!heads.length){
-        // fallback 1 mục cho sách word
-        setTocItems([{ id:"word-toc-0", title: book.title || "Nội dung chính", page:1, pdfPage:1, depth:0 }]);
-        return;
-      }
-      const items=Array.from(heads).map((el, idx)=>{
-        const tag=el.tagName.toLowerCase();
-        const depth=tag==="h1"?0: tag==="h2"?1:2;
-        // phân trang ước lượng theo htmlBookPages
-        const page=Math.min(htmlBookPages.length||1, Math.max(1, Math.floor(idx * (htmlBookPages.length||1) / heads.length)+1));
-        return { id:`word-toc-${idx}`, title: (el.textContent||"").trim().slice(0,90) || `Mục ${idx+1}`, page, pdfPage: page, depth };
-      });
-      setTocItems(items);
+      setTocItems(parseWordHeadingsToToc(htmlBookContent, htmlBookPages.length, book.title));
     } catch { setTocItems([]); }
   }, [isWordFile, htmlBookContent, htmlBookLoading, htmlBookPages.length, book]);
 
@@ -2087,9 +1906,13 @@ export default function BookReader({
       a.href = url;
       const safeName =
         String(book.title || book.filename || "muc-luc")
+          // eslint-disable-next-line no-control-regex
+          .replace(/[\x00-\x1f\\/:*?"<>|]+/g, "-")
           .replace(/[^\w\u00C0-\u024F\s-]/g, "")
           .trim()
-          .replace(/\s+/g, "-") || "muc-luc";
+          .replace(/\s+/g, "-")
+          .replace(/[. ]+$/g, "")
+          .slice(0, 120) || "muc-luc";
       a.download = `muc-luc-${safeName}-2cot.xlsx`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -2180,7 +2003,7 @@ export default function BookReader({
       if (!items.length) {
         throw new Error("AI không nhận diện được mục nào từ ảnh — hãy chụp lại trang mục lục rõ nét hơn.");
       }
-      // Dựng file Excel 2 cột Tên/Trang ngay trong bộ nhớ, nạp qua pipeline cũ
+      // Dựng file Excel mục lục ngay trong bộ nhớ, nạp qua pipeline cũ
       const buf = await exportTocSimple([{ items }]);
       const { count } = await applyTocBuffer(buf);
       notify(`AI tạo ${count} mục lục từ ${imageParts.length / 2} ảnh mục lục.`, "success");
@@ -3928,8 +3751,8 @@ export default function BookReader({
   }, {});
 
   // PDF page 1 is the cover → book page numbers are PDF page − 1
-  const bookPage = (p) => Math.max(1, p - 1);
-  const totalBookPages = isWordFile ? (htmlBookPages.length||1) : (numPages ? Math.max(1, numPages - 1) : 0);
+  const bookPage = bookPageNumber;
+  const totalBookPages = totalBookPagesFor({ isWordFile, htmlPagesLength: htmlBookPages.length, numPages });
   const pageDisplay =
     twoPageMode && pageNum + 1 <= numPages
       ? `${bookPage(pageNum)}–${bookPage(pageNum + 1)}`
@@ -6415,18 +6238,7 @@ export default function BookReader({
               )}
             </div>
           </div>
-        ) : (
-          <div className="ai-panel-collapsed">
-            <button
-              className="ai-collapsed-btn"
-              onClick={() => setAiCollapsed(false)}
-              title="Mở bảng AI"
-              aria-label="Mở bảng AI"
-            >
-              <Sparkles size={18} />
-            </button>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* ── Study tools: notes, glossary (TOC nay la cot) ───────────── */}

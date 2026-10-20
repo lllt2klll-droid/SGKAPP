@@ -5,18 +5,25 @@ import {
   Accessibility, Shield, Zap, Info, RotateCcw, Eye, EyeOff, RefreshCw,
   X, Sun, Moon, Monitor, FileText, Volume2, Database, Download, Upload,
   Check, Sparkles, SlidersHorizontal, Library as LibraryIcon, Timer,
+  LayoutDashboard, Blocks, Trash2, MessageSquareHeart, ChevronDown, Send,
+  Copy, Star, Lightbulb, Bug, Gauge, PenLine, ThumbsUp, ExternalLink,
 } from "lucide-react";
 import {
   loadSettings, saveSettings, updateSettings, resetSection, resetAllSettings,
   DEFAULT_SETTINGS, searchSettings, applySettings, dispatchSettingsUpdated,
-  downloadSettingsBackup, parseSettingsBackup, getStorageUsage,
+  downloadSettingsBackup, parseSettingsBackup, getStorageUsage, getStorageBreakdown,
   testNotification, refreshNotificationTimer,
+  clearAiChatHistory, clearRecentSearchHistory, clearScanHistory,
+  OPTIONAL_VIEW_IDS,
 } from "./settingsStore";
 import { soundManager } from "./audio/soundManager.js";
 import {
   DEFAULT_SHORTCUTS, SHORTCUT_META, SHORTCUT_CATEGORIES, getShortcuts,
   comboToString, findConflict,
 } from "./keyboardShortcuts.js";
+import { VIEWS as NAV_VIEWS } from "./core/navigationRegistry.js";
+import { useFocusTrap } from "./ui/useFocusTrap.js";
+import { dl } from "./exportDoc";
 import { getGeminiApiKey, setGeminiApiKey } from "./storage";
 import { safeRemove, listKeys } from "./safeStorage.js";
 import FileDropzone from "./components/FileDropzone.jsx";
@@ -29,13 +36,14 @@ import { ACCENT_PALETTES, generateAccentScale } from "./designTokens.js";
 
 /* ── Điều hướng nhóm ─────────────────────────────── */
 const NAV_GROUPS = [
-  { title: "Chung", items: ["general", "appearance"] },
+  { title: "Chung", items: ["general", "dashboard", "appearance"] },
   { title: "Học tập & Đọc", items: ["reading", "editor", "library", "whiteboard", "missions"] },
   { title: "AI & Dữ liệu", items: ["ai", "search", "export", "backup"] },
-  { title: "Hệ thống", items: ["behavior", "notifications", "keyboard", "accessibility", "privacy", "advanced", "about"] },
+  { title: "Hệ thống", items: ["behavior", "notifications", "keyboard", "features", "accessibility", "privacy", "advanced", "about"] },
 ];
 const SECTIONS = [
   { id: "general", label: "Tổng quan", icon: <Settings size={16} />, hint: "Tên hiển thị, trang mở, tuần" },
+  { id: "dashboard", label: "Bảng điều khiển", icon: <LayoutDashboard size={16} />, hint: "Khối hiển thị trang Tổng quan" },
   { id: "appearance", label: "Giao diện", icon: <Palette size={16} />, hint: "Sáng/tối, màu, chữ", subs: [{ id: "st-theme", label: "Sáng / Tối" }, { id: "st-accent", label: "Màu sắc" }, { id: "st-type", label: "Chữ & Mật độ" }] },
   { id: "reading", label: "Trình đọc sách", icon: <BookOpen size={16} />, hint: "Zoom, layout, TOC" },
   { id: "editor", label: "Soạn thảo Word", icon: <FileText size={16} />, hint: "Font, thước, nháp" },
@@ -44,18 +52,46 @@ const SECTIONS = [
   { id: "missions", label: "Nhiệm vụ", icon: <Target size={16} />, hint: "Gamification, XP, streak" },
   { id: "ai", label: "AI Gemini", icon: <Cpu size={16} />, hint: "Key, model, phong cách" },
   { id: "search", label: "Tìm kiếm", icon: <Search size={16} />, hint: "Mặc định, fuzzy, giới hạn" },
-  { id: "export", label: "Xuất dữ liệu", icon: <Download size={16} />, hint: "Kèm thời gian xuất" },
+  { id: "export", label: "Xuất dữ liệu", icon: <Download size={16} />, hint: "Mốc thời gian trong tên file" },
   { id: "backup", label: "Sao lưu", icon: <Database size={16} />, hint: "Xuất/nhập, reset" },
   { id: "behavior", label: "Hành vi & Âm thanh", icon: <Zap size={16} />, hint: "Xác nhận, tự lưu, loa" },
   { id: "notifications", label: "Thông báo", icon: <Bell size={16} />, hint: "Nhắc hằng ngày, thử" },
   { id: "keyboard", label: "Phím tắt", icon: <Keyboard size={16} />, hint: "Tự thiết lập" },
-  { id: "accessibility", label: "Trợ năng", icon: <Accessibility size={16} />, hint: "Tương phản, chữ lớn" },
+  { id: "features", label: "Tính năng", icon: <Blocks size={16} />, hint: "Bật/tắt module toàn app" },
+  { id: "accessibility", label: "Trợ năng", icon: <Accessibility size={16} />, hint: "Tương phản, chữ, đọc dễ" },
   { id: "privacy", label: "Riêng tư", icon: <Shield size={16} />, hint: "Lịch sử, dữ liệu" },
   { id: "advanced", label: "Nâng cao", icon: <Timer size={16} />, hint: "Gỡ lỗi, chẩn đoán" },
-  { id: "about", label: "Giới thiệu", icon: <Info size={16} />, hint: "Phiên bản" },
+  { id: "about", label: "Giới thiệu", icon: <Info size={16} />, hint: "Phiên bản, góp ý" },
 ];
 
 function nowTime() { try { return new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }); } catch { return ""; } }
+
+/* ── Danh mục module được phép tắt (Cài đặt → Tính năng) ─────────── */
+const FEATURE_GROUPS = [
+  { title: "Thư viện SGK", ids: ["vocab", "whiteboard", "internship"] },
+  { title: "Soạn dạy", ids: ["activities", "worksheets", "questionbank"] },
+  { title: "Nghiên cứu & Công cụ nâng cao", ids: ["compare", "matrix", "inventory", "langstats"] },
+  { title: "Sổ tay nghiên cứu", ids: ["references", "collections"] },
+  { title: "Công việc", ids: ["ideas", "stats"] },
+  { title: "Kho công cụ", ids: ["webtools"] },
+];
+const FEATURE_DESCS = {
+  vocab: "Từ vựng cá nhân + tra từ",
+  whiteboard: "Sơ đồ tư duy, mindmap",
+  internship: "Nhật ký thực tập",
+  activities: "Thư viện hoạt động học",
+  worksheets: "Phiếu học tập",
+  questionbank: "Ngân hàng câu hỏi",
+  compare: "So sánh sách / đoạn văn",
+  matrix: "Ma trận chương trình",
+  inventory: "Kiểm kê SGK",
+  langstats: "Thống kê ngôn ngữ corpus",
+  references: "Tài liệu tham khảo",
+  collections: "Trích đoạn & bộ dữ liệu",
+  ideas: "Sổ ý tưởng",
+  stats: "Thống kê cá nhân",
+  webtools: "Kho công cụ web",
+};
 
 export default function SettingsCenter({ onClose, initialSection = "general" }) {
   const [settings, setSettings] = useState(() => loadSettings());
@@ -70,6 +106,9 @@ export default function SettingsCenter({ onClose, initialSection = "general" }) 
   const [importErr, setImportErr] = useState("");
   const fileRef = useRef(null);
   const mainRef = useRef(null);
+  // Bẫy focus: Tab xoay vòng trong modal, Escape đóng (stopPropagation chặn
+  // handler window của App), trả focus về nút mở Cài đặt khi đóng.
+  const boxRef = useFocusTrap(true, onClose);
 
   useEffect(() => { applySettings(settings); }, []);
   useEffect(() => { try { refreshNotificationTimer(settings); } catch {} }, []);
@@ -103,6 +142,14 @@ export default function SettingsCenter({ onClose, initialSection = "general" }) 
     setSettings((prev) => {
       const next = JSON.parse(JSON.stringify(prev));
       next.appearance = { ...next.appearance, ...patch };
+      return persist(next);
+    });
+  };
+  // Patch nhiều khóa trong 1 section (một lần ghi + một lần phát sự kiện)
+  const handleSectionPatch = (sectionKey, patch) => {
+    setSettings((prev) => {
+      const next = JSON.parse(JSON.stringify(prev));
+      next[sectionKey] = { ...(next[sectionKey] || {}), ...patch };
       return persist(next);
     });
   };
@@ -143,7 +190,7 @@ export default function SettingsCenter({ onClose, initialSection = "general" }) 
 
   return (
     <div className="st-overlay" onClick={onClose}>
-      <div className="st-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Cài đặt" {...stBind} style={{ position: "relative" }}>
+      <div ref={boxRef} className="st-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Cài đặt" {...stBind} style={{ position: "relative" }}>
         {stDrag && (
           <div className="global-drag-overlay" aria-hidden="true"><span>Thả file JSON để nhập cài đặt</span></div>
         )}
@@ -194,6 +241,7 @@ export default function SettingsCenter({ onClose, initialSection = "general" }) 
           <div className="st-main" ref={mainRef}>
             <div className="st-crumb">{activeMeta?.label} <span>· {activeMeta?.hint}</span></div>
             {active === "general" && <GeneralSection settings={settings} onChange={handleChange} />}
+            {active === "dashboard" && <DashboardSection settings={settings} onPatch={handleSectionPatch} />}
             {active === "appearance" && <AppearanceSection settings={settings} onChange={handleChange} onPatch={handleAppearancePatch} />}
             {active === "reading" && <ReadingSection settings={settings} onChange={handleChange} />}
             {active === "editor" && <EditorSection settings={settings} onChange={handleChange} />}
@@ -202,15 +250,16 @@ export default function SettingsCenter({ onClose, initialSection = "general" }) 
             {active === "missions" && <MissionsSection settings={settings} onChange={handleChange} />}
             {active === "ai" && <AISection settings={settings} onChange={handleChange} geminiKey={geminiKey} setGeminiKey={setGeminiKey} saveKey={saveKey} showKey={showKey} setShowKey={setShowKey} testingKey={testingKey} setTestingKey={setTestingKey} keyResult={keyResult} setKeyResult={setKeyResult} />}
             {active === "search" && <SearchSection settings={settings} onChange={handleChange} />}
-            {active === "export" && <ExportSection settings={settings} onChange={handleChange} />}
+            {active === "export" && <ExportSection settings={settings} onPatch={handleSectionPatch} />}
             {active === "backup" && <BackupSection settings={settings} onChange={handleChange} onImportFile={doImportFile} importErr={importErr} onExport={doExport} />}
             {active === "behavior" && <BehaviorSection settings={settings} onChange={handleChange} />}
             {active === "notifications" && <NotificationsSection settings={settings} onChange={handleChange} />}
             {active === "keyboard" && <KeyboardSection />}
-            {active === "accessibility" && <AccessibilitySection settings={settings} onChange={handleChange} />}
+            {active === "features" && <FeaturesSection settings={settings} onPatch={handleSectionPatch} />}
+            {active === "accessibility" && <AccessibilitySection settings={settings} onChange={handleChange} onClose={onClose} />}
             {active === "privacy" && <PrivacySection settings={settings} onChange={handleChange} />}
             {active === "advanced" && <AdvancedSection settings={settings} onChange={handleChange} />}
-            {active === "about" && <AboutSection />}
+            {active === "about" && <AboutSection settings={settings} />}
           </div>
         </div>
         <footer className="st-foot">
@@ -284,6 +333,47 @@ function GeneralSection({ settings, onChange }) {
         <Field label="Múi giờ" hint="Chuẩn ngày Nhiệm vụ & Streak"><select className={sel} value={g.timezone || "auto"} onChange={(e) => onChange(["general", "timezone"], e.target.value)}>
           <option value="auto">Tự động (máy)</option><option value="Asia/Ho_Chi_Minh">Việt Nam (UTC+7)</option><option value="UTC">UTC</option>
         </select></Field>
+      </Card>
+    </div>
+  );
+}
+
+/* ── Bảng điều khiển (Dashboard) ─────────────────────────────── */
+function DashboardSection({ settings, onPatch }) {
+  const d = settings.dashboard || {};
+  const rows = [
+    ["showGreeting", "Lời chào & thông tin nhanh", "Khối đầu trang: “Chào thầy/cô”, ngày, số sách/việc"],
+    ["showQuickActions", "Thao tác nhanh", "Dòng nút: Tiếp tục đọc, Soạn Word, Tất cả công cụ"],
+    ["showKpis", "Dải số liệu tổng quan", "Thẻ Sách / Đang đọc / Đánh dấu / Từ vựng…"],
+    ["showWorkflow", "Quy trình dạy học", "Chuỗi chặng: Học liệu → Đánh giá"],
+    ["showReading", "Khối Đang đọc", "Sách đọc dở kèm % tiến độ"],
+    ["showRecentPlans", "Giáo án gần đây", "3 giáo án sửa gần nhất"],
+    ["showTasks", "Việc cần làm", "Task chưa xong"],
+    ["showMissions", "Nhiệm vụ & huy hiệu", "Widget Daily Missions / streak / XP"],
+    ["showScans", "Scan gần đây", "Ảnh crop SGK đã phân tích"],
+    ["showStats", "Biểu đồ & chỉ số", "Phân bổ hoạt động, phân bố môn, chỉ số thật"],
+    ["showWhiteboards", "Bảng trắng gần đây", "3 bảng trắng mở gần nhất"],
+  ];
+  const presetAll = (val) => {
+    const patch = {};
+    for (const k of Object.keys(DEFAULT_SETTINGS.dashboard)) patch[k] = val;
+    onPatch("dashboard", patch);
+  };
+  return (
+    <div>
+      <Card id="sec-dashboard" title="Bảng điều khiển" desc="Bật/tắt từng khối của trang Tổng quan — đổi là Dashboard đổi ngay, không cần tải lại." icon={<LayoutDashboard size={15} />}>
+        <div className="st-btn-row">
+          <button className="st-btn st-btn-ghost st-btn-sm" onClick={() => presetAll(true)}>Bật tất cả</button>
+          <button className="st-btn st-btn-ghost st-btn-sm" onClick={() => presetAll(false)}>Tối giản (ẩn hết)</button>
+        </div>
+        {rows.map(([key, label, hint]) => (
+          <Field key={key} label={label} hint={hint}>
+            <Toggle label={label} checked={d[key] !== false} onChange={(v) => onPatch("dashboard", { [key]: v })} />
+          </Field>
+        ))}
+      </Card>
+      <Card id="sec-dashboard-modules" title="Ẩn hẳn một module?" desc="Mục trên chỉ ẩn khối ở trang Tổng quan — module vẫn mở từ thanh điều hướng." icon={<Blocks size={15} />}>
+        <p className="st-muted">Muốn tắt một khu vực khỏi <b>toàn bộ app</b> (ẩn thanh bên + chặn mở trực tiếp): vào <b>Cài đặt → Hệ thống → Tính năng</b>.</p>
       </Card>
     </div>
   );
@@ -529,11 +619,20 @@ function SearchSection({ settings, onChange }) {
 }
 
 /* ── Xuất ─────────────────────────────── */
-function ExportSection({ settings, onChange }) {
-  const exp = settings.export;
+function ExportSection({ settings, onPatch }) {
+  const exp = settings.export || {};
+  const stamp = exp.filenameStamp || (exp.includeTimestamp === false ? "none" : "date");
+  const exampleName = (name) =>
+    stamp === "none" ? name
+      : stamp === "datetime" ? `${name}_2026-10-17_1430`
+        : `${name}_2026-10-17`;
   return (
-      <Card id="sec-export" title="Xuất dữ liệu" desc="“Kèm thời gian” chèn ngày vào mọi file tải về · Định dạng do từng khung xuất chọn trực tiếp khi xuất." icon={<Download size={15} />}>
-      <Field label="Kèm thời gian xuất" hint="Chèn ngày giờ vào file tải về"><Toggle label="Time" checked={exp.includeTimestamp !== false} onChange={(v) => onChange(["export", "includeTimestamp"], v)} /></Field>
+      <Card id="sec-export" title="Xuất dữ liệu" desc="Chọn cách gắn mốc thời gian vào TÊN MỌI file tải về · Định dạng (PDF/Word/TXT/Excel) do từng khung xuất chọn lúc xuất." icon={<Download size={15} />}>
+      <Field label="Mốc thời gian trong tên file" hint="Áp dụng cho mọi file tải về: giáo án, phiếu học tập, sao lưu…">
+        <Seg value={stamp} onPick={(v) => onPatch("export", { filenameStamp: v, includeTimestamp: v !== "none" })}
+          options={[{ v: "none", t: "Không" }, { v: "date", t: "Ngày" }, { v: "datetime", t: "Ngày + giờ" }]} />
+      </Field>
+      <div className="st-kv"><span>Ví dụ tên file</span><b style={{ fontFamily: "monospace" }}>{exampleName("giao-an-toan-3")}</b></div>
     </Card>
   );
 }
@@ -541,7 +640,22 @@ function ExportSection({ settings, onChange }) {
 /* ── Sao lưu ─────────────────────────────── */
 function BackupSection({ settings, onChange, onImportFile, importErr, onExport }) {
   const usage = useMemo(() => getStorageUsage(), [settings]);
+  const breakdown = useMemo(() => getStorageBreakdown(), [settings]);
+  const [quota, setQuota] = useState(null);
   const [wiping, setWiping] = useState(false);
+  // Ước lượng dung lượng gốc trình duyệt cấp cho app (khác localStorage — bao gồm cả IndexedDB)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (navigator.storage?.estimate) {
+          const e = await navigator.storage.estimate();
+          if (alive) setQuota({ usage: Number(e.usage) || 0, quota: Number(e.quota) || 0 });
+        }
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []);
   const wipeCache = async () => {
     if (!confirm("Xóa cache tìm kiếm/ảnh để giải phóng bộ nhớ? (Không mất sách & cài đặt)")) return;
     setWiping(true);
@@ -601,6 +715,18 @@ function BackupSection({ settings, onChange, onImportFile, importErr, onExport }
         </div>
         {importErr && <p className="st-note err">{importErr}</p>}
       </Card>
+      <Card id="sec-storage" title="Bộ nhớ" desc="Phân loại theo nhóm key — cache tự dựng lại được, dọn xong app tự xây lại khi cần." icon={<Database size={15} />}>
+        <div className="st-kv"><span>Dữ liệu cá nhân (sách, ghi chú, cài đặt…)</span><b>~{breakdown.data.kb} KB · {breakdown.data.keys} mục</b></div>
+        <div className="st-kv"><span>Cache (index, OCR, bản nháp — dọn được)</span><b>~{breakdown.cache.kb} KB · {breakdown.cache.keys} mục</b></div>
+        <div className="st-kv"><span>Khác</span><b>~{breakdown.other.kb} KB · {breakdown.other.keys} mục</b></div>
+        <div className="st-kv"><span>Tổng localStorage</span><b>~{breakdown.total.kb} KB</b></div>
+        {quota && quota.quota > 0 && (
+          <div className="st-kv">
+            <span>Dung lượng gốc app này (kể cả ảnh IndexedDB)</span>
+            <b>~{Math.round(quota.usage / 104857.6) / 10} / ~{Math.round(quota.quota / 104857.6) / 10} MB</b>
+          </div>
+        )}
+      </Card>
       <Card id="sec-reset" title="Đặt lại" desc="Cẩn thận: đặt lại toàn bộ đưa mọi mục về mặc định gốc." icon={<RotateCcw size={15} />}>
         <div className="st-btn-row">
           <button className="st-btn st-btn-danger-ghost st-btn-sm" onClick={() => { if (confirm("Đặt lại TOÀN BỘ cài đặt về mặc định?")) { const n = resetAllSettings(); window.location.reload(); } }}>Đặt lại toàn bộ</button>
@@ -656,6 +782,10 @@ function NotificationsSection({ settings, onChange }) {
         <Toggle label="Nhắc" checked={n.dailyReminder} onChange={(v) => { onChange(["notifications", "dailyReminder"], v); setTimeout(() => { try { refreshNotificationTimer(loadSettings()); } catch {} }, 50); }} />
       </Field>
       {n.dailyReminder && <Field label="Giờ nhắc"><input type="time" className={inp} value={n.dailyTime} onChange={(e) => { const v = e.target.value; if (/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v)) { onChange(["notifications", "dailyTime"], v); setTimeout(() => { try { refreshNotificationTimer(loadSettings()); } catch {} }, 50); } }} /></Field>}
+      <Field label="Nhắc đọc sách hằng ngày" hint="Gợi ý giữ thói quen đọc đều — báo riêng với nhắc nhiệm vụ">
+        <Toggle label="Nhắc đọc" checked={!!n.readReminder} onChange={(v) => { onChange(["notifications", "readReminder"], v); setTimeout(() => { try { refreshNotificationTimer(loadSettings()); } catch {} }, 50); }} />
+      </Field>
+      {n.readReminder && <Field label="Giờ nhắc đọc"><input type="time" className={inp} value={n.readTime || "20:00"} onChange={(e) => { const v = e.target.value; if (/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v)) { onChange(["notifications", "readTime"], v); setTimeout(() => { try { refreshNotificationTimer(loadSettings()); } catch {} }, 50); } }} /></Field>}
       <div className="st-btn-row">
         <button className="st-btn st-btn-ghost st-btn-sm" onClick={ask}>Xin quyền ({perm})</button>
         <button className="st-btn st-btn-primary st-btn-sm" disabled={testing} onClick={sendTest}>{testing ? "Đang gửi…" : "Gửi thử"}</button>
@@ -732,33 +862,250 @@ function KeyboardSection() {
   );
 }
 
-/* ── Trợ năng ─────────────────────────────── */
-function AccessibilitySection({ settings, onChange }) {
-  const a = settings.accessibility;
+/* ── Tính năng: bật/tắt module toàn app ─────────────────────────────── */
+function FeaturesSection({ settings, onPatch }) {
+  const disabled = Array.isArray(settings.features?.disabled) ? settings.features.disabled : [];
+  const total = OPTIONAL_VIEW_IDS.length;
+  const activeCount = total - disabled.filter((id) => OPTIONAL_VIEW_IDS.includes(id)).length;
+  const setEnabled = (id, on) => {
+    const next = on ? disabled.filter((x) => x !== id) : [...new Set([...disabled, id])];
+    onPatch("features", { disabled: next });
+  };
+  const setAll = (on) => onPatch("features", { disabled: on ? [] : [...OPTIONAL_VIEW_IDS] });
+  const labelOf = (id) => NAV_VIEWS[id]?.label || id;
   return (
-    <Card id="sec-a11y" title="Khả năng tiếp cận" desc="Đổi là app đổi ngay: tương phản, chữ, chuyển động, viền focus." icon={<Accessibility size={15} />}>
-      <Field label="Tương phản cao" hint="Chữ đậm, viền rõ"><Toggle label="HC" checked={a.highContrast} onChange={(v) => onChange(["accessibility", "highContrast"], v)} /></Field>
-      <Field label="Chữ lớn hơn" hint="+~12% toàn app"><Toggle label="LT" checked={a.largerText} onChange={(v) => onChange(["accessibility", "largerText"], v)} /></Field>
-      <Field label="Giảm chuyển động" hint="Tắt animation bay nhảy"><Toggle label="RM" checked={a.reduceMotion} onChange={(v) => onChange(["accessibility", "reduceMotion"], v)} /></Field>
-      <Field label="Viền focus rõ" hint="Đi phím Tab thấy ô đang chọn"><Toggle label="FI" checked={a.focusIndicators} onChange={(v) => onChange(["accessibility", "focusIndicators"], v)} /></Field>
+    <Card id="sec-features" title="Tính năng — Bật/tắt module" desc="Tắt module là ẨN KHỎI TOÀN BỘ app: không hiện ở thanh điều hướng, không hiện ở Bảng điều khiển, đang mở thì tự về Tổng quan. Dữ liệu của module không bị xóa." icon={<Blocks size={15} />}>
+      <div className="st-kv"><span>Đang bật</span><b>{activeCount}/{total} module</b></div>
+      <div className="st-btn-row">
+        <button className="st-btn st-btn-primary st-btn-sm" onClick={() => setAll(true)}>Bật tất cả</button>
+        <button className="st-btn st-btn-ghost st-btn-sm" onClick={() => setAll(false)}>Chỉ giữ cốt lõi</button>
+      </div>
+      {FEATURE_GROUPS.map((g) => (
+        <div key={g.title} className="st-kbd-group" style={{ marginTop: 10 }}>
+          <div className="st-kbd-head"><b>{g.title}</b><span>{g.ids.filter((id) => !disabled.includes(id)).length}/{g.ids.length}</span></div>
+          {g.ids.map((id) => (
+            <div key={id} className="st-kbd-row">
+              <div className="st-kbd-info"><b>{labelOf(id)}</b><small>{FEATURE_DESCS[id] || ""}</small></div>
+              <div className="st-kbd-keys"><i className={`st-chip ${disabled.includes(id) ? "danger" : "ok"}`}>{disabled.includes(id) ? "Tắt" : "Bật"}</i></div>
+              <div className="st-kbd-btns">
+                <Toggle label={labelOf(id)} checked={!disabled.includes(id)} onChange={(v) => setEnabled(id, v)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+      <p className="st-muted" style={{ marginTop: 10 }}>Cốt lõi luôn bật: Tổng quan · Thư viện · Tiếp tục đọc · Đánh dấu · Giáo án · Tìm kiếm · Nhiệm vụ (việc cần làm) · Sao lưu · Trợ giúp.</p>
     </Card>
+  );
+}
+
+/* ── Trợ năng ─────────────────────────────── */
+/* Quét DOM thật — 6 nhóm vấn đề thường gặp của web (chạy trong trình duyệt,
+   không có test Node phủ; kiểm chứng bằng nút "Quét lại" trong UI). */
+function a11yAccessibleName(el) {
+  const aria = (el.getAttribute("aria-label") || "").trim();
+  if (aria) return aria;
+  const lb = (el.getAttribute("aria-labelledby") || "").trim();
+  if (lb) {
+    const t = lb.split(/\s+/).map((id) => (document.getElementById(id)?.textContent || "").trim()).join(" ").trim();
+    if (t) return t;
+  }
+  if (el.id) {
+    try {
+      const lbl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+      if (lbl && (lbl.textContent || "").trim()) return lbl.textContent.trim();
+    } catch {}
+  }
+  const wrap = el.closest?.("label");
+  if (wrap && (wrap.textContent || "").trim()) return wrap.textContent.trim();
+  if ((el.textContent || "").trim()) return el.textContent.trim();
+  const icon = el.querySelector?.("img[alt]");
+  if (icon && (icon.alt || "").trim()) return icon.alt.trim();
+  if ((el.getAttribute("title") || "").trim()) return el.getAttribute("title").trim();
+  if ((el.getAttribute("placeholder") || "").trim()) return el.getAttribute("placeholder").trim();
+  return "";
+}
+
+function runA11yAudit() {
+  const shown = (el) => {
+    if (!el || !el.isConnected) return false;
+    if (el.closest("[aria-hidden='true'], [hidden]")) return false;
+    const st = getComputedStyle(el);
+    return st.display !== "none" && st.visibility !== "hidden";
+  };
+  const imgs = [...document.querySelectorAll("img")]
+    .filter((i) => !i.hasAttribute("alt") && !i.closest("[aria-hidden='true']"));
+  const nameless = [...document.querySelectorAll('button, a[href], [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="switch"]')]
+    .filter((el) => shown(el) && !a11yAccessibleName(el));
+  const unlabeled = [...document.querySelectorAll("input, select, textarea")]
+    .filter((el) => el.type !== "hidden" && shown(el) && !a11yAccessibleName(el));
+  const badTab = [...document.querySelectorAll("[tabindex]")]
+    .filter((el) => parseInt(el.getAttribute("tabindex"), 10) > 0);
+  const seen = new Map();
+  [...document.querySelectorAll("[id]")].forEach((el) => { if (el.id) seen.set(el.id, (seen.get(el.id) || 0) + 1); });
+  const dups = [...seen.entries()].filter(([, n]) => n > 1);
+  const lang = (document.documentElement.getAttribute("lang") || "").trim();
+  return [
+    { key: "img", label: "Ảnh thiếu mô tả (alt)", count: imgs.length, sample: imgs[0], fix: "alt mô tả nội dung; ảnh trang trí dùng alt=\"\"" },
+    { key: "name", label: "Nút / liên kết không có tên đọc được", count: nameless.length, sample: nameless[0], fix: "Thêm aria-label hoặc chữ hiển thị" },
+    { key: "field", label: "Ô nhập không có nhãn", count: unlabeled.length, sample: unlabeled[0], fix: "Thêm aria-label=\"…\" hoặc nối với <label>" },
+    { key: "tabindex", label: "tabindex dương (phím Tab khó đoán)", count: badTab.length, sample: badTab[0], fix: "Dùng tabindex=\"0\" hoặc \"-1\"" },
+    {
+      key: "dup",
+      label: dups.length ? `id trùng lặp (${dups.map(([id]) => id).slice(0, 3).join(", ")}${dups.length > 3 ? "…" : ""})` : "id trùng lặp",
+      count: dups.length,
+      sample: dups.length ? document.getElementById(dups[0][0]) : null,
+      fix: "Đổi id cho duy nhất",
+    },
+    { key: "lang", label: "Thiếu lang trên thẻ <html>", count: lang ? 0 : 1, sample: null, fix: 'lang="vi" để trình đọc màn hình phát âm đúng' },
+  ];
+}
+
+function AccessibilitySection({ settings, onChange, onClose }) {
+  const a = settings.accessibility || {};
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [audit, setAudit] = useState(null); // { at, results }
+  const [auditMsg, setAuditMsg] = useState("");
+  const [sysNote, setSysNote] = useState("");
+
+  // Trạng thái hệ thống hiện tại — hiển thị sống để Thầy/cô biết "theo máy" đang nghĩa là gì
+  useEffect(() => {
+    if (a.followSystem === false) { setSysNote(""); return; }
+    try {
+      const c = window.matchMedia("(prefers-contrast: more)").matches;
+      const m = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setSysNote(c || m
+        ? `Máy đang yêu cầu: ${[c && "tương phản cao", m && "giảm chuyển động"].filter(Boolean).join(" · ")} — app đang tự làm theo.`
+        : "Máy chưa yêu cầu gì đặc biệt — app sẽ tự theo ngay khi hệ thống đổi.");
+    } catch { setSysNote(""); }
+  }, [a.followSystem]);
+
+  const doAudit = () => {
+    try {
+      const results = runA11yAudit();
+      const bad = results.filter((r) => r.count > 0).length;
+      setAudit({ at: nowTime(), results });
+      setAuditMsg(bad ? `Phát hiện ${bad} nhóm vấn đề.` : "Tuyệt vời — không phát hiện vấn đề phổ biến.");
+    } catch (e) { setAuditMsg("Không quét được trang: " + (e?.message || "")); }
+  };
+  const toggleAudit = () => {
+    const next = !auditOpen;
+    setAuditOpen(next);
+    if (next && !audit) doAudit();
+  };
+  const gotoIssue = (el) => {
+    if (!el || !el.isConnected) { setAuditMsg("Phần tử lỗi đã biến mất — hãy Quét lại."); return; }
+    onClose?.(); // đóng Cài đặt để lộ đúng vị trí lỗi phía sau
+    setTimeout(() => {
+      try {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("a11y-flash");
+        setTimeout(() => { try { el.classList.remove("a11y-flash"); } catch {} }, 2400);
+      } catch {}
+    }, 380);
+  };
+
+  return (
+    <>
+      <Card id="sec-a11y" title="Khả năng tiếp cận" desc="Đổi là app đổi ngay: tương phản, chữ, đọc dễ, phản hồi — có cả công cụ kiểm tra." icon={<Accessibility size={15} />}>
+        <Field label="Theo cài đặt hệ thống" hint="Máy yêu cầu gì app tự làm theo — vẫn cộng khi Thầy/cô bật tay">
+          <Toggle label="Theo hệ thống" checked={a.followSystem !== false} onChange={(v) => onChange(["accessibility", "followSystem"], v)} />
+        </Field>
+        {sysNote && <p className="st-note ok" role="status">{sysNote}</p>}
+        <Field label="Tương phản cao" hint="Chữ đậm, viền rõ, bỏ đổ bóng"><Toggle label="HC" checked={!!a.highContrast} onChange={(v) => onChange(["accessibility", "highContrast"], v)} /></Field>
+        <Field label="Chữ lớn hơn" hint="+~12% toàn app"><Toggle label="LT" checked={!!a.largerText} onChange={(v) => onChange(["accessibility", "largerText"], v)} /></Field>
+        <Field label="Giãn chữ & giãn dòng" hint="Khoảng cách rộng hơn — dễ theo dõi khi đọc lâu"><Toggle label="Giãn chữ" checked={!!a.wideSpacing} onChange={(v) => onChange(["accessibility", "wideSpacing"], v)} /></Field>
+        <Field label="Giảm chuyển động" hint="Tắt animation bay nhảy"><Toggle label="RM" checked={!!a.reduceMotion} onChange={(v) => onChange(["accessibility", "reduceMotion"], v)} /></Field>
+        <Field label="Tắt chớp nhấp nháy" hint="Dừng vòng lặp gọi sự chú ý (spinner tải vẫn giữ)"><Toggle label="Chống chớp" checked={!!a.preventFlashing} onChange={(v) => onChange(["accessibility", "preventFlashing"], v)} /></Field>
+        <Field label="Viền focus rõ" hint="Đi phím Tab thấy ô đang chọn"><Toggle label="FI" checked={!!a.focusIndicators} onChange={(v) => onChange(["accessibility", "focusIndicators"], v)} /></Field>
+        <Field label="Gạch chân liên kết" hint="Nhận ra link không chỉ bằng màu (WCAG 1.4.1)"><Toggle label="Gạch chân" checked={!!a.underlineLinks} onChange={(v) => onChange(["accessibility", "underlineLinks"], v)} /></Field>
+        <Field label="Thanh đọc theo con trỏ" hint="Vệt sáng chạy theo chuột — dễ theo dõi dòng"><Toggle label="Thanh đọc" checked={!!a.readingRuler} onChange={(v) => onChange(["accessibility", "readingRuler"], v)} /></Field>
+        <Field label="Chớp viền khi có thông báo" hint="Thấy toast dù không nghe được âm thanh"><Toggle label="Báo động" checked={!!a.visualAlerts} onChange={(v) => onChange(["accessibility", "visualAlerts"], v)} /></Field>
+      </Card>
+
+      <Card id="sec-a11y-tools" title="Kiểm tra nhanh trợ năng" desc="Quét trang đang mở: ảnh thiếu mô tả, nút không tên, ô nhập thiếu nhãn…" icon={<Eye size={15} />}>
+        <button type="button" className={`fb-toggle ${auditOpen ? "open" : ""}`} aria-expanded={auditOpen} aria-controls="a11y-audit" onClick={toggleAudit}>
+          <span className="fb-toggle-ic"><Accessibility size={16} /></span>
+          <span className="fb-toggle-tx">
+            <b>Quét 6 nhóm vấn đề phổ biến</b>
+            <small>Ảnh · nút · ô nhập · tabindex · id trùng · lang — bấm để chạy ngay</small>
+          </span>
+          <ChevronDown size={16} className="fb-chevron" />
+        </button>
+        <div id="a11y-audit" className={`fb-panel ${auditOpen ? "open" : ""}`} hidden={!auditOpen}>
+          {audit ? (
+            <>
+              <p className={`st-note ${auditMsg.startsWith("Tuyệt vời") ? "ok" : "err"}`} role="status">{auditMsg} <em>(quét lúc {audit.at})</em></p>
+              <ul className="st-diag">
+                {audit.results.map((r) => (
+                  <li key={r.key}>
+                    <span>
+                      {r.label}
+                      {r.count > 0 && r.fix && <small className="st-muted"> — {r.fix}</small>}
+                      {r.count > 0 && r.sample && (
+                        <button type="button" className="a11y-jump" onClick={() => gotoIssue(r.sample)}>Đến chỗ</button>
+                      )}
+                    </span>
+                    <b>{r.count > 0 ? `⚠ ${r.count}` : "✓"}</b>
+                  </li>
+                ))}
+              </ul>
+              <div className="st-btn-row">
+                <button className="st-btn st-btn-ghost st-btn-sm" onClick={doAudit}>Quét lại</button>
+              </div>
+              <p className="st-muted">Quét trang đang mở (kể cả bảng Cài đặt). Bấm "Đến chỗ" sẽ tạm đóng bảng để chỉ đúng vị trí lỗi. Quét nhanh không thay được công cụ kiểm thử chuyên sâu.</p>
+            </>
+          ) : (
+            <p className="st-muted" role="status">Đang quét…</p>
+          )}
+        </div>
+      </Card>
+    </>
   );
 }
 
 /* ── Riêng tư (mới: điều khiển thật) ─────────────────────────────── */
 function PrivacySection({ settings, onChange }) {
   const p = settings.privacy || {};
+  const [busy, setBusy] = useState("");
   const clearHistory = () => {
     if (!confirm("Xóa lịch sử mở sách & thống kê lượt mở? (Không xóa sách)")) return;
     try { safeRemove("sgk_history"); safeRemove("sgk_counts"); } catch {}
     try { appEvents.emit(AppEvents.DATA_UPDATED, { source: "privacy-clear-history" }); } catch {}
     alert("Đã xóa lịch sử.");
   };
+  const clearAi = () => {
+    if (!confirm("Xóa toàn bộ lịch sử trò chuyện với Trợ lý AI? (Không ảnh hưởng ghi chú/đánh dấu trong sách)")) return;
+    const n = clearAiChatHistory();
+    alert(`Đã xóa ${n} mục lịch sử AI.`);
+  };
+  const clearSearches = () => {
+    clearRecentSearchHistory();
+    alert("Đã xóa lịch sử tìm kiếm gần đây.");
+  };
+  const clearScans = async () => {
+    if (!confirm("Xóa toàn bộ Scan SGK (thông tin + ảnh crop)? Không thể hoàn tác.")) return;
+    setBusy("scan");
+    try {
+      const n = await clearScanHistory();
+      alert(`Đã xóa ${n} scan.`);
+    } finally { setBusy(""); }
+  };
   return (
-    <Card id="sec-privacy" title="Quyền riêng tư" desc="App local-first: sách & cài đặt nằm trên máy · AI chỉ gửi trang đang chọn." icon={<Shield size={15} />}>
-      <Field label="Ghi nhớ lịch sử mở sách" hint="Tắt = không lưu sách đã mở"><Toggle label="Hist" checked={p.rememberHistory !== false} onChange={(v) => { onChange(["privacy", "rememberHistory"], v); if (!v) { try { safeRemove("sgk_history"); safeRemove("sgk_counts"); } catch {} } }} /></Field>
-      <div className="st-btn-row"><button className="st-btn st-btn-danger-ghost st-btn-sm" onClick={clearHistory}>Xóa lịch sử mở sách</button></div>
-    </Card>
+    <div>
+      <Card id="sec-privacy" title="Quyền riêng tư" desc="App local-first: sách & cài đặt nằm trên máy · AI chỉ gửi trang đang chọn." icon={<Shield size={15} />}>
+        <Field label="Ghi nhớ lịch sử mở sách" hint="Tắt = không lưu sách đã mở"><Toggle label="Hist" checked={p.rememberHistory !== false} onChange={(v) => { onChange(["privacy", "rememberHistory"], v); if (!v) { try { safeRemove("sgk_history"); safeRemove("sgk_counts"); } catch {} } }} /></Field>
+        <div className="st-btn-row"><button className="st-btn st-btn-danger-ghost st-btn-sm" onClick={clearHistory}>Xóa lịch sử mở sách</button></div>
+      </Card>
+      <Card id="sec-privacy-data" title="Quản lý dữ liệu" desc="Xóa có chọn lọc từng loại dữ liệu nhạy cảm — mỗi mục xóa có xác nhận riêng, không đụng tới sách & cài đặt." icon={<Trash2 size={15} />}>
+        <div className="st-btn-row">
+          <button className="st-btn st-btn-danger-ghost st-btn-sm" onClick={clearAi}>Xóa lịch sử AI</button>
+          <button className="st-btn st-btn-danger-ghost st-btn-sm" onClick={clearSearches}>Xóa tìm kiếm gần đây</button>
+          <button className="st-btn st-btn-danger-ghost st-btn-sm" disabled={busy === "scan"} onClick={clearScans}>{busy === "scan" ? "Đang xóa…" : "Xóa toàn bộ Scan"}</button>
+        </div>
+        <p className="st-muted" style={{ marginTop: 8 }}>Lịch sử AI = hội thoại Trợ lý nổi + nhật ký phân tích ảnh. Muốn xóa sâu hơn (cache index/OCR) → <b>Sao lưu → Dọn cache</b>.</p>
+      </Card>
+    </div>
   );
 }
 
@@ -784,27 +1131,369 @@ function AdvancedSection({ settings, onChange }) {
       res.Settings = raw && JSON.parse(raw).missions ? "✓" : "⚠ (thiếu)";
     } catch { res.Settings = "✗"; }
     setDiag(res);
+    return res;
+  };
+  const downloadReport = async () => {
+    try {
+      const checks = diag || (await runDiag());
+      const report = {
+        app: "sgk-app",
+        generatedAt: new Date().toISOString(),
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+        viewport: typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : "",
+        checks,
+        storage: getStorageBreakdown(),
+        config: {
+          theme: settings.appearance?.theme || "system",
+          accent: settings.appearance?.accentColor || settings.appearance?.accent || "",
+          density: settings.appearance?.density || "",
+          modulesDisabled: Array.isArray(settings.features?.disabled) ? settings.features.disabled : [],
+          dashboardBlocksOff: Object.entries(settings.dashboard || {}).filter(([, v]) => v === false).map(([k]) => k),
+        },
+      };
+      dl(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }), "sgk-bao-cao-chan-doan");
+    } catch (e) { alert("Không tạo được báo cáo: " + (e?.message || "")); }
   };
   return (
     <div>
       <Card id="sec-perf" title="Gỡ lỗi" desc="Bật log chi tiết luồng gọi AI (retry, timeout) trong Console." icon={<Timer size={15} />}>
         <Field label="Chế độ gỡ lỗi" hint="Khi bật, mở Console (F12) để xem log chi tiết mỗi lần gọi AI"><Toggle label="Debug" checked={!!adv.debugMode} onChange={(v) => onChange(["advanced", "debugMode"], v)} /></Field>
       </Card>
-      <Card id="sec-diag" title="Chẩn đoán" desc="Kiểm tra nhanh backend, key, engine." icon={<Zap size={15} />}>
+      <Card id="sec-diag" title="Chẩn đoán" desc="Kiểm tra nhanh backend, key, engine — có thể tải thành file .json để gửi kèm khi cần hỗ trợ." icon={<Zap size={15} />}>
         <p className="st-muted">Phiên bản 0.0.0 · Schema 2 · Local-first</p>
-        <div className="st-btn-row"><button className="st-btn st-btn-ghost st-btn-sm" onClick={runDiag}>Chạy chẩn đoán</button></div>
+        <div className="st-btn-row">
+          <button className="st-btn st-btn-ghost st-btn-sm" onClick={runDiag}>Chạy chẩn đoán</button>
+          <button className="st-btn st-btn-ghost st-btn-sm" onClick={downloadReport}><Download size={13} /> Tải báo cáo (.json)</button>
+        </div>
         {diag && <ul className="st-diag">{Object.entries(diag).map(([k, v]) => <li key={k}><span>{k}</span><b>{v}</b></li>)}</ul>}
       </Card>
     </div>
   );
 }
 
-function AboutSection() {
+/* ── Góp ý cho nhà phát triển (Cài đặt → Giới thiệu) ─────────────── */
+/* Form (từ forms.gle/odfjvFnSwdQkqG4v5) chỉ có 1 câu "Góp ý của bạn" — entry.1862600968
+   (đã verify: GET/POST formResponse đều trả 200 + "Câu trả lời của bạn đã được ghi lại.") */
+const FEEDBACK_FORM_ENDPOINT = "https://docs.google.com/forms/d/e/1FAIpQLScN0QVURKYvvawAyOTHtDElyTzGV6MQ9DwjTjKe2A_bIT_txw/formResponse";
+const FEEDBACK_FORM_VIEW = "https://docs.google.com/forms/d/e/1FAIpQLScN0QVURKYvvawAyOTHtDElyTzGV6MQ9DwjTjKe2A_bIT_txw/viewform";
+const FEEDBACK_ENTRY = "entry.1862600968";
+const FEEDBACK_DRAFT_KEY = "sgk_feedback_draft";
+
+const FEEDBACK_TOPICS = [
+  { id: "feature", label: "Đề xuất tính năng", icon: Lightbulb },
+  { id: "bug", label: "Báo lỗi", icon: Bug },
+  { id: "ui", label: "Giao diện", icon: Palette },
+  { id: "perf", label: "Hiệu năng", icon: Gauge },
+  { id: "content", label: "Nội dung sách", icon: PenLine },
+  { id: "other", label: "Khác", icon: ThumbsUp },
+];
+
+const FEEDBACK_PHRASES = {
+  feature: [
+    "Em muốn có tính năng … trong app",
+    "Nên thêm chế độ … cho lớp học của em",
+    "Kính đề xuất mở rộng …",
+  ],
+  bug: [
+    "Em gặp lỗi khi … (lặp lại ở bước …)",
+    "App bị đứng/lỗi sau khi …",
+    "Màn hình hiển thị sai khi em …",
+  ],
+  ui: [
+    "Giao diện đẹp, dễ dùng — em muốn chỉnh …",
+    "Nên thêm màu/chữ … cho dễ đọc hơn",
+    "Nút … hơi nhỏ trên điện thoại",
+  ],
+  perf: [
+    "App hơi chậm khi mở …",
+    "Tốn nhiều dung lượng khi …",
+    "Đề xuất tối ưu phần …",
+  ],
+  content: [
+    "Nội dung SGK lớp … thiếu/bổ sung …",
+    "Ôn tập phần … chưa khớp sách in",
+    "Thêm tài liệu/ảnh cho bài …",
+  ],
+  other: [
+    "Em rất thích app, cảm ơn Thầy/cô!",
+    "Góp ý chung về trải nghiệm",
+    "Cần hướng dẫn thêm về phần …",
+  ],
+};
+
+const FEEDBACK_TOPIC_LABELS = Object.fromEntries(FEEDBACK_TOPICS.map((t) => [t.id, t.label]));
+const FEEDBACK_STARS = [
+  { v: 1, label: "Chưa hài lòng" },
+  { v: 2, label: "Tạm ổn" },
+  { v: 3, label: "Ổn" },
+  { v: 4, label: "Tốt" },
+  { v: 5, label: "Rất tốt" },
+];
+
+function loadFeedbackDraft() {
+  try {
+    const raw = localStorage.getItem(FEEDBACK_DRAFT_KEY);
+    if (!raw) return {};
+    const d = JSON.parse(raw);
+    return d && typeof d === "object" ? d : {};
+  } catch { return {}; }
+}
+function saveFeedbackDraft(draft) {
+  try { localStorage.setItem(FEEDBACK_DRAFT_KEY, JSON.stringify(draft)); } catch {}
+}
+
+function AboutSection({ settings }) {
+  const a = settings.appearance || {};
+  const themeLabel = { light: "Sáng", dark: "Tối", system: "Theo máy" }[a.theme] || "Theo máy";
+  const moduleOff = (Array.isArray(settings.features?.disabled) ? settings.features.disabled : []).length;
+  const dashboardOff = Object.entries(settings.dashboard || {}).filter(([, v]) => v === false).length;
   return (
-    <Card id="sec-about" title="Hành trang Tiểu học — SGK App 3.0" desc="Local-first · Không cloud · Dữ liệu nằm trên máy thầy/cô." icon={<Info size={15} />}>
-      <div className="st-kv"><span>Phát triển</span><b>{APP_DEVELOPER}</b></div>
-      <div className="st-kv"><span>Bản quyền</span><b>{APP_COPYRIGHT}</b></div>
-      <div className="st-kv"><span>Kiến trúc</span><b>React + Express · IndexedDB + localStorage</b></div>
+    <>
+      <Card id="sec-about" title="Hành trang Tiểu học — SGK App 3.0" desc="Local-first · Không cloud · Dữ liệu nằm trên máy thầy/cô." icon={<Info size={15} />}>
+        <div className="st-kv"><span>Phát triển</span><b>{APP_DEVELOPER}</b></div>
+        <div className="st-kv"><span>Bản quyền</span><b>{APP_COPYRIGHT}</b></div>
+        <div className="st-kv"><span>Kiến trúc</span><b>React + Express · IndexedDB + localStorage</b></div>
+        <div className="st-kv">
+          <span>Giao diện hiện tại</span>
+          <b style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+            <i style={{ width: 12, height: 12, borderRadius: 99, background: a.accentColor || "#2563EB", border: "1px solid var(--border-color)", display: "inline-block" }} />
+            {themeLabel} · {a.density === "compact" ? "Gọn" : a.density === "spacious" ? "Rộng" : "Thoải mái"}
+          </b>
+        </div>
+        <div className="st-kv"><span>Cấu hình đang chạy</span><b>{moduleOff ? `${moduleOff} module tắt` : "Đủ module"}{dashboardOff ? ` · ${dashboardOff} khối Dashboard ẩn` : ""}</b></div>
+      </Card>
+      <FeedbackPanel settings={settings} />
+    </>
+  );
+}
+
+function FeedbackPanel({ settings }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(() => {
+    const d = loadFeedbackDraft();
+    return {
+      topic: FEEDBACK_TOPICS.some((t) => t.id === d.topic) ? d.topic : "",
+      text: typeof d.text === "string" ? d.text.slice(0, 1200) : "",
+      name: typeof d.name === "string" ? d.name.slice(0, 60) : "",
+      contact: typeof d.contact === "string" ? d.contact.slice(0, 80) : "",
+      rating: [1, 2, 3, 4, 5].includes(d.rating) ? d.rating : 0,
+    };
+  });
+  const [status, setStatus] = useState(null); // { type: "ok" | "err", msg }
+  const textRef = useRef(null);
+  const toggleRef = useRef(null);
+
+  useEffect(() => { saveFeedbackDraft(draft); }, [draft]);
+  useEffect(() => {
+    if (open && !draft.text) textRef.current?.focus();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const patch = (part) => setDraft((d) => ({ ...d, ...part }));
+  const canSend = !!draft.topic && draft.text.trim().length >= 10;
+  const ratingLabel = draft.rating ? FEEDBACK_STARS.find((s) => s.v === draft.rating)?.label : "";
+
+  const appendPhrase = (phrase) => {
+    setDraft((d) => {
+      const cur = d.text.trimEnd();
+      if (cur.split("\n").some((l) => l.trim() === phrase)) return d;
+      return { ...d, text: cur ? `${cur}\n${phrase}` : phrase };
+    });
+    setStatus(null);
+  };
+
+  const composeMessage = () => {
+    const lines = [
+      `Chủ đề: ${FEEDBACK_TOPIC_LABELS[draft.topic] || "Khác"}`,
+      draft.rating ? `Mức độ hài lòng: ${draft.rating}/5 (${ratingLabel})` : "",
+      `Nội dung: ${draft.text.trim()}`,
+      `Tên: ${draft.name.trim() || "(ẩn danh)"}`,
+      draft.contact.trim() ? `Liên hệ: ${draft.contact.trim()}` : "",
+      `Ứng dụng: SGK App 3.0 · ${typeof navigator !== "undefined" ? navigator.platform || "Web" : "Web"}`,
+    ];
+    return lines.filter(Boolean).join("\n");
+  };
+
+  const copyText = async (msg) => {
+    try {
+      if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(msg); return true; }
+    } catch {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = msg; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+      return true;
+    } catch { return false; }
+  };
+
+  /* Gửi thẳng vào Google Form: POST chéo origin qua <form> nhúng iframe ẩn
+     (navigation không bị CORS chặn — đã verify server trả 200 "đã ghi lại"). */
+  const sendToForm = (msg) => {
+    const frameName = `fb_send_${Date.now()}`;
+    const iframe = document.createElement("iframe");
+    iframe.name = frameName;
+    iframe.title = "Gửi góp ý";
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:0;height:0;border:0;visibility:hidden;";
+    document.body.appendChild(iframe);
+    const form = document.createElement("form");
+    form.action = FEEDBACK_FORM_ENDPOINT;
+    form.method = "POST";
+    form.target = frameName;
+    form.acceptCharset = "UTF-8";
+    const addHidden = (name, value) => {
+      const el = document.createElement("input");
+      el.type = "hidden"; el.name = name; el.value = value;
+      form.appendChild(el);
+    };
+    addHidden(FEEDBACK_ENTRY, msg);
+    addHidden("submit", "Submit");
+    document.body.appendChild(form);
+    form.submit();
+    setTimeout(() => { try { form.remove(); iframe.remove(); } catch {} }, 15000);
+  };
+
+  const prefilledViewUrl = () => {
+    const msg = composeMessage();
+    if (!canSend) return FEEDBACK_FORM_VIEW;
+    return `${FEEDBACK_FORM_VIEW}?${FEEDBACK_ENTRY}=${encodeURIComponent(msg)}`;
+  };
+
+  const submit = async () => {
+    if (!canSend) {
+      setStatus({ type: "err", msg: "Thầy/cô hãy chọn chủ đề và viết tối thiểu 10 ký tự trước khi gửi ạ." });
+      return;
+    }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      const copied = await copyText(composeMessage());
+      setStatus(copied
+        ? { type: "err", msg: "Đang ngoại tuyến — đã sao chép nội dung. Thầy/cô mở lại khi có mạng rồi bấm Gửi, hoặc dán vào form trực tiếp ạ." }
+        : { type: "err", msg: "Đang ngoại tuyến và không sao chép được — hãy thử lại khi có mạng ạ." });
+      return;
+    }
+    try {
+      sendToForm(composeMessage());
+      setStatus({ type: "ok", msg: "Đã gửi góp ý tới nhà phát triển — cảm ơn Thầy/cô ạ! (Muốn kiểm tra lại thì bấm \"Mở form trên web\".)" });
+    } catch {
+      const copied = await copyText(composeMessage());
+      try { window.open(prefilledViewUrl(), "_blank", "noopener,noreferrer"); } catch {}
+      setStatus(copied
+        ? { type: "ok", msg: "Gửi trực tiếp bị chặn — đã mở form kèm sẵn nội dung, Thầy/cô bấm Gửi là xong ạ." }
+        : { type: "err", msg: "Không gửi được — hãy bấm \"Mở form trên web\" rồi nhập tay ạ." });
+    }
+  };
+
+  const copyOnly = async () => {
+    if (!canSend) { setStatus({ type: "err", msg: "Hãy chọn chủ đề và viết tối thiểu 10 ký tự trước khi sao chép ạ." }); return; }
+    const ok = await copyText(composeMessage());
+    setStatus(ok
+      ? { type: "ok", msg: "Đã sao chép nội dung góp ý vào bộ nhớ tạm." }
+      : { type: "err", msg: "Không sao chép được — Thầy/cô copy tay trong ô nội dung nhé." });
+  };
+
+  const toggle = () => {
+    setOpen((o) => {
+      const next = !o;
+      if (!next) setTimeout(() => toggleRef.current?.focus(), 0);
+      return next;
+    });
+  };
+
+  return (
+    <Card id="sec-feedback" title="Góp ý cho nhà phát triển" desc="Mỗi ý kiến của Thầy/cô giúp app hoàn thiện hơn từng ngày." icon={<MessageSquareHeart size={15} />}>
+      <button ref={toggleRef} type="button" className={`fb-toggle ${open ? "open" : ""}`} aria-expanded={open}
+              aria-controls="fb-panel" onClick={toggle}>
+        <span className="fb-toggle-ic"><Lightbulb size={16} /></span>
+        <span className="fb-toggle-tx">
+          <b>Gửi góp ý ngay tại đây</b>
+          <small>Đề xuất · Báo lỗi · Giao diện · Nội dung — chỉ vài giây</small>
+        </span>
+        <ChevronDown size={16} className="fb-chevron" />
+      </button>
+
+      <div id="fb-panel" className={`fb-panel ${open ? "open" : ""}`} hidden={!open}>
+        <div className="fb-step">
+          <label className="fb-label"><i>1</i> Chọn chủ đề</label>
+          <div className="fb-chips">
+            {FEEDBACK_TOPICS.map((t) => (
+              <button key={t.id} type="button"
+                      className={`fb-chip ${draft.topic === t.id ? "active" : ""}`}
+                      aria-pressed={draft.topic === t.id}
+                      onClick={() => { patch({ topic: t.id }); setStatus(null); }}>
+                <t.icon size={12} /> {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {draft.topic && (
+          <div className="fb-step">
+            <label className="fb-label"><i>2</i> Chọn câu có sẵn hoặc tự viết</label>
+            <div className="fb-phrases">
+              {(FEEDBACK_PHRASES[draft.topic] || FEEDBACK_PHRASES.other).map((p) => (
+                <button key={p} type="button" className="fb-phrase" onClick={() => appendPhrase(p)}>
+                  <span>{p}</span><em>+</em>
+                </button>
+              ))}
+            </div>
+            <textarea ref={textRef} className="fb-textarea" value={draft.text} maxLength={1200}
+                      placeholder="Viết thêm cảm nhận, mô tả lỗi hoặc ý tưởng của Thầy/cô ở đây…"
+                      onChange={(e) => { patch({ text: e.target.value }); setStatus(null); }} />
+            <div className="fb-meta"><span>{draft.text.trim().length}/10 ký tự tối thiểu · {draft.text.length}/1200</span></div>
+          </div>
+        )}
+
+        {draft.topic && (
+          <div className="fb-step">
+            <label className="fb-label"><i>3</i> Mức độ hài lòng {ratingLabel && <em className="fb-rate-ok">· {ratingLabel}</em>}</label>
+            <div className="fb-stars" role="radiogroup" aria-label="Mức độ hài lòng">
+              {FEEDBACK_STARS.map((s) => (
+                <button key={s.v} type="button" role="radio" aria-checked={draft.rating === s.v}
+                        title={s.label}
+                        className={`fb-star ${draft.rating >= s.v ? "on" : ""}`}
+                        onClick={() => patch({ rating: draft.rating === s.v ? 0 : s.v })}>
+                  <Star size={16} />
+                </button>
+              ))}
+              <span className="fb-stars-hint">{ratingLabel || "Bấm sao để đánh giá (không bắt buộc)"}</span>
+            </div>
+          </div>
+        )}
+
+        {draft.topic && (
+          <div className="fb-step">
+            <label className="fb-label"><i>4</i> Thông tin hồi âm <em>(không bắt buộc)</em></label>
+            <div className="fb-row">
+              <input className="st-input fb-input" maxLength={60} placeholder={settings.general?.displayName ? settings.general.displayName : "Tên Thầy/cô"}
+                     value={draft.name} onChange={(e) => patch({ name: e.target.value })} />
+              <input className="st-input fb-input" maxLength={80} placeholder="Email / Zalo để được hồi âm"
+                     value={draft.contact} onChange={(e) => patch({ contact: e.target.value })} />
+            </div>
+          </div>
+        )}
+
+        {draft.topic && (
+          <>
+            <div className="st-btn-row">
+              <button className="st-btn st-btn-primary" disabled={!canSend} onClick={submit}
+                      title={canSend ? "Gửi thẳng góp ý vào form Google" : "Cần chọn chủ đề và viết ≥ 10 ký tự"}>
+                <Send size={13} /> Gửi góp ý
+              </button>
+              <button className="st-btn st-btn-ghost st-btn-sm" onClick={() => { try { window.open(prefilledViewUrl(), "_blank", "noopener,noreferrer"); } catch {} }}>
+                <ExternalLink size={13} /> Mở form trên web
+              </button>
+              <button className="st-btn st-btn-ghost st-btn-sm" disabled={!canSend} onClick={copyOnly}>
+                <Copy size={13} /> Chỉ sao chép
+              </button>
+            </div>
+            {status && <p className={`st-note ${status.type === "ok" ? "ok" : "err"}`}>{status.msg}</p>}
+            <p className="fb-note">
+              Góp ý được gửi thẳng tới form Google của nhà phát triển — không cần dán tay. Nếu trình duyệt chặn gửi trực tiếp, hãy bấm "Mở form trên web" (nội dung đã được điền sẵn).
+              Không có dữ liệu riêng tư nào trong app được gửi đi.
+              <a href={prefilledViewUrl()} target="_blank" rel="noopener noreferrer"> Mở form trực tiếp <ExternalLink size={10} /></a>
+            </p>
+          </>
+        )}
+      </div>
     </Card>
   );
 }

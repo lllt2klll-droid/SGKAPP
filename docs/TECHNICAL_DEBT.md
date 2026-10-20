@@ -8,9 +8,9 @@
 
 ```bash
 npm run lint        # oxlint  → hiện 0 warnings / 0 errors (179 files, 89 rules)
-npm test            # node:test → hiện 329 pass / 0 fail (57 suites)
-npm run build       # Vite → 1994 modules, PWA precache 78 entries, 0 cảnh báo
-npm run test:e2e    # playwright-core → 24/24 (5 spec, cần dist/)
+npm test            # node:test → hiện 474 pass / 0 fail (72 suites, verify 11/10/2026)
+npm run build       # Vite + PWA precache 78 entries, 0 cảnh báo
+npm run test:e2e    # playwright-core → 37/37 (5 spec, cần dist/)
 ```
 
 Đếm nợ bằng grep (ngoại trừ `*.test.*`, các module được phép `safeStorage/storage/indexedDB/storageHealth`):

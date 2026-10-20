@@ -83,6 +83,28 @@
 .upload-preview-actions {
   display: flex;
   gap: 0.4rem;
+}
+/* Fix 4 • chọn cách lưu .docx bằng radio thay vì 2 nút dễ nhầm */
+.docx-choice { display: flex; flex-direction: column; gap: 0.45rem; min-width: min(330px, 100%); }
+.docx-opt {
+  display: flex; gap: 0.5rem; align-items: flex-start;
+  padding: 0.5rem 0.6rem; border: 1.5px solid var(--border-color); border-radius: 10px;
+  cursor: pointer; background: var(--surface); font-size: 0.78rem; margin: 0;
+}
+.docx-opt.active { border-color: var(--primary); background: var(--primary-light, #eff6ff); }
+.docx-opt input { margin-top: 2px; accent-color: var(--primary); flex-shrink: 0; }
+.docx-opt strong { display: block; color: var(--text-dark); font-size: 0.78rem; }
+.docx-opt small { display: block; color: var(--text-muted); font-size: 0.7rem; margin-top: 2px; font-weight: 500; }
+.docx-rec {
+  font-style: normal; font-size: 0.62rem; font-weight: 800; color: #fff;
+  background: var(--success, #16a34a); border-radius: 999px; padding: 1px 7px; margin-left: 4px;
+  white-space: nowrap;
+}
+.docx-confirm-row { display: flex; gap: 0.4rem; }
+@media (max-width: 640px) {
+  .upload-preview-card { flex-wrap: wrap; }
+  .upload-preview-actions { flex: 1 1 100%; }
+  .docx-choice { min-width: 0; width: 100%; }
 } /* ============================================================
    App shell - sidebar + main content
    ============================================================ */

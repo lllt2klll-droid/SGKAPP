@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { getApiBase } from "./apiConfig";
+import { getApiBase, writeHeaders } from "./apiConfig";
 import { PRIMARY_SUBJECTS } from "./subjectCatalog";
 import { loadSettings, updateSettings } from "./settingsStore";
 import { readJSON, saveJSON, removeKey } from "./storage";
@@ -548,7 +548,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       if (isEdit) {
         res = await fetch(`${API_BASE}/api/books/${encodeURIComponent(editingBook.filename)}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: writeHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(payload),
         });
         data = await res.json().catch(() => ({}));
@@ -559,7 +559,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       } else {
         res = await fetch(`${API_BASE}/api/books/create-text`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: writeHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(payload),
         });
         data = await res.json().catch(() => ({}));

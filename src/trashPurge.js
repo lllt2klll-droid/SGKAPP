@@ -3,7 +3,7 @@
 // hoàn tác — nên chỉ chạy khi mục đã quá hạn hoặc người dùng chủ động bấm).
 
 import { purgeExpiredTrash, TRASH_TYPE } from "./trashStore.js";
-import { apiUrl } from "./apiConfig.js";
+import { apiUrl, writeHeaders } from "./apiConfig.js";
 import { removeBookData } from "./storage.js";
 
 /** Xóa thật 1 file sách + dữ liệu liên quan trên máy. */
@@ -11,7 +11,7 @@ export async function hardDeleteBook(filename) {
   if (!filename) return false;
   let fileGone = false;
   try {
-    const res = await fetch(apiUrl(`/api/books/${encodeURIComponent(filename)}`), { method: "DELETE" });
+    const res = await fetch(apiUrl(`/api/books/${encodeURIComponent(filename)}`), { method: "DELETE", headers: writeHeaders() });
     fileGone = res.ok;
   } catch {
     fileGone = false;
