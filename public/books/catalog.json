@@ -1,0 +1,483 @@
+{
+  "generatedAt": "2026-10-20T01:02:58.445Z",
+  "booksBaseUrl": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main",
+  "books": [
+    {
+      "filename": "01-sgk-dao-duc-1.pdf",
+      "title": "Sgk dao duc 1 - Tập 1",
+      "grade": 1,
+      "subject": "Đạo đức",
+      "term": 1,
+      "size": 10395553,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-dao-duc-1.pdf"
+    },
+    {
+      "filename": "01-sgk-hoat-dong-trai-nghiem-1.pdf",
+      "title": "Sgk hoat dong trai nghiem 1 - Tập 1",
+      "grade": 1,
+      "subject": "Hoạt động trải nghiệm",
+      "term": 1,
+      "size": 12217887,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-hoat-dong-trai-nghiem-1.pdf"
+    },
+    {
+      "filename": "AACHUYA-N-A-a-PHA-T-TRIa-N-NN-2026.pdf",
+      "title": "AACHUYA N A a PHA T TRIa N NN 2026 - Tập 1",
+      "grade": 1,
+      "subject": "Khác",
+      "term": 1,
+      "size": 1827606,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/AACHUYA-N-A-a-PHA-T-TRIa-N-NN-2026.pdf"
+    },
+    {
+      "filename": "Nhia-m-va-nhA-m-10-tua-n-PPDHTV2-N4-26-27.pdf",
+      "title": "Nhia m va nhA m 10 tua n PPDHTV2 N4 26 27 - Tập 1",
+      "grade": 1,
+      "subject": "Khác",
+      "term": 1,
+      "size": 122144,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/Nhia-m-va-nhA-m-10-tua-n-PPDHTV2-N4-26-27.pdf"
+    },
+    {
+      "filename": "TLHT-GiA-o-da-c-mA-i-tr-a-ng-2025.pdf",
+      "title": "TLHT GiA o da c mA i tr a ng 2025 - Tập 1",
+      "grade": 1,
+      "subject": "Khác",
+      "term": 1,
+      "size": 979780,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/TLHT-GiA-o-da-c-mA-i-tr-a-ng-2025.pdf"
+    },
+    {
+      "filename": "TLHT-HA-TN-2024.pdf",
+      "title": "TLHT HA TN 2024 - Tập 1",
+      "grade": 1,
+      "subject": "Khác",
+      "term": 1,
+      "size": 1702578,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/TLHT-HA-TN-2024.pdf"
+    },
+    {
+      "filename": "gt-lich-su-dang-csvn-ban-tuyen-giao-tw.pdf",
+      "title": "Gt lich su dang csvn ban tuyen giao tw - Tập 1",
+      "grade": 1,
+      "subject": "Lịch sử và Địa lí",
+      "term": 1,
+      "size": 1066535,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/gt-lich-su-dang-csvn-ban-tuyen-giao-tw.pdf"
+    },
+    {
+      "filename": "01-sgk-tieng-anh-1-global-success.pdf",
+      "title": "Sgk tieng anh 1 global success - Tập 1",
+      "grade": 1,
+      "subject": "Tiếng Anh",
+      "term": 1,
+      "size": 11913354,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-tieng-anh-1-global-success.pdf"
+    },
+    {
+      "filename": "01-sgk-tieng-viet-1-tap-mot.pdf",
+      "title": "Sgk Tiếng Việt 1 Tập mot - Tập 1",
+      "grade": 1,
+      "subject": "Tiếng Việt",
+      "term": 1,
+      "size": 28040713,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-tieng-viet-1-tap-mot.pdf"
+    },
+    {
+      "filename": "01-sgk-tieng-viet-1-tap-hai.pdf",
+      "title": "Sgk Tiếng Việt 1 Tập hai - Tập 2",
+      "grade": 1,
+      "subject": "Tiếng Việt",
+      "term": 2,
+      "size": 26016986,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-tieng-viet-1-tap-hai.pdf"
+    },
+    {
+      "filename": "01-sgk-toan-1-tap-mot.pdf",
+      "title": "Sgk Toán 1 Tập mot - Tập 1",
+      "grade": 1,
+      "subject": "Toán",
+      "term": 1,
+      "size": 14213488,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-toan-1-tap-mot.pdf"
+    },
+    {
+      "filename": "01-sgk-toan-1-tap-hai.pdf",
+      "title": "Sgk Toán 1 Tập hai - Tập 2",
+      "grade": 1,
+      "subject": "Toán",
+      "term": 2,
+      "size": 13787392,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-toan-1-tap-hai.pdf"
+    },
+    {
+      "filename": "01-sgk-tu-nhien-va-xa-hoi-1.pdf",
+      "title": "Sgk tu nhien va xa hoi 1 - Tập 1",
+      "grade": 1,
+      "subject": "Tự nhiên và Xã hội",
+      "term": 1,
+      "size": 20364012,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/01-sgk-tu-nhien-va-xa-hoi-1.pdf"
+    },
+    {
+      "filename": "02-sgk-dao-duc-2.pdf",
+      "title": "Sgk dao duc 2 - Tập 1",
+      "grade": 2,
+      "subject": "Đạo đức",
+      "term": 1,
+      "size": 10943680,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-dao-duc-2.pdf"
+    },
+    {
+      "filename": "02-sgk-hoat-dong-trai-nghiem-2.pdf",
+      "title": "Sgk hoat dong trai nghiem 2 - Tập 1",
+      "grade": 2,
+      "subject": "Hoạt động trải nghiệm",
+      "term": 1,
+      "size": 13888360,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-hoat-dong-trai-nghiem-2.pdf"
+    },
+    {
+      "filename": "02-sgk-tieng-anh-2-global-success.pdf",
+      "title": "Sgk tieng anh 2 global success - Tập 1",
+      "grade": 2,
+      "subject": "Tiếng Anh",
+      "term": 1,
+      "size": 11734113,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-tieng-anh-2-global-success.pdf"
+    },
+    {
+      "filename": "02-sgk-tieng-viet-2-tap-mot.pdf",
+      "title": "Sgk Tiếng Việt 2 Tập mot - Tập 1",
+      "grade": 2,
+      "subject": "Tiếng Việt",
+      "term": 1,
+      "size": 20940933,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-tieng-viet-2-tap-mot.pdf"
+    },
+    {
+      "filename": "02-sgk-tieng-viet-2-tap-hai.pdf",
+      "title": "Sgk Tiếng Việt 2 Tập hai - Tập 2",
+      "grade": 2,
+      "subject": "Tiếng Việt",
+      "term": 2,
+      "size": 21091882,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-tieng-viet-2-tap-hai.pdf"
+    },
+    {
+      "filename": "02-sgk-toan-2-tap-mot.pdf",
+      "title": "Sgk Toán 2 Tập mot - Tập 1",
+      "grade": 2,
+      "subject": "Toán",
+      "term": 1,
+      "size": 19118323,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-toan-2-tap-mot.pdf"
+    },
+    {
+      "filename": "02-sgk-toan-2-tap-hai.pdf",
+      "title": "Sgk Toán 2 Tập hai - Tập 2",
+      "grade": 2,
+      "subject": "Toán",
+      "term": 2,
+      "size": 20075728,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-toan-2-tap-hai.pdf"
+    },
+    {
+      "filename": "02-sgk-tu-nhien-va-xa-hoi-2.pdf",
+      "title": "Sgk tu nhien va xa hoi 2 - Tập 1",
+      "grade": 2,
+      "subject": "Tự nhiên và Xã hội",
+      "term": 1,
+      "size": 19147226,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/02-sgk-tu-nhien-va-xa-hoi-2.pdf"
+    },
+    {
+      "filename": "03-sgk-cong-nghe-3.pdf",
+      "title": "Sgk cong nghe 3 - Tập 1",
+      "grade": 3,
+      "subject": "Công nghệ",
+      "term": 1,
+      "size": 9233480,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-cong-nghe-3.pdf"
+    },
+    {
+      "filename": "03-sgk-dao-duc-3.pdf",
+      "title": "Sgk dao duc 3 - Tập 1",
+      "grade": 3,
+      "subject": "Đạo đức",
+      "term": 1,
+      "size": 10574554,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-dao-duc-3.pdf"
+    },
+    {
+      "filename": "03-sgk-hoat-dong-trai-nghiem-3.pdf",
+      "title": "Sgk hoat dong trai nghiem 3 - Tập 1",
+      "grade": 3,
+      "subject": "Hoạt động trải nghiệm",
+      "term": 1,
+      "size": 16721765,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-hoat-dong-trai-nghiem-3.pdf"
+    },
+    {
+      "filename": "03-sgk-tieng-anh-3-tap-1-global-success.pdf",
+      "title": "Sgk tieng anh 3 Tập 1 global success",
+      "grade": 3,
+      "subject": "Tiếng Anh",
+      "term": 1,
+      "size": 11492187,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-tieng-anh-3-tap-1-global-success.pdf"
+    },
+    {
+      "filename": "03-sgk-tieng-anh-3-tap-2-global-success.pdf",
+      "title": "Sgk tieng anh 3 Tập 2 global success",
+      "grade": 3,
+      "subject": "Tiếng Anh",
+      "term": 2,
+      "size": 11614131,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-tieng-anh-3-tap-2-global-success.pdf"
+    },
+    {
+      "filename": "03-sgk-tieng-viet-3-tap-mot.pdf",
+      "title": "Sgk Tiếng Việt 3 Tập mot - Tập 1",
+      "grade": 3,
+      "subject": "Tiếng Việt",
+      "term": 1,
+      "size": 24914354,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-tieng-viet-3-tap-mot.pdf"
+    },
+    {
+      "filename": "03-sgk-tieng-viet-3-tap-hai.pdf",
+      "title": "Sgk Tiếng Việt 3 Tập hai - Tập 2",
+      "grade": 3,
+      "subject": "Tiếng Việt",
+      "term": 2,
+      "size": 24616255,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-tieng-viet-3-tap-hai.pdf"
+    },
+    {
+      "filename": "03-sgk-toan-3-tap-mot.pdf",
+      "title": "Sgk Toán 3 Tập mot - Tập 1",
+      "grade": 3,
+      "subject": "Toán",
+      "term": 1,
+      "size": 16953191,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-toan-3-tap-mot.pdf"
+    },
+    {
+      "filename": "03-sgk-toan-3-tap-hai.pdf",
+      "title": "Sgk Toán 3 Tập hai - Tập 2",
+      "grade": 3,
+      "subject": "Toán",
+      "term": 2,
+      "size": 18449187,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-toan-3-tap-hai.pdf"
+    },
+    {
+      "filename": "03-sgk-tu-nhien-va-xa-hoi-3.pdf",
+      "title": "Sgk tu nhien va xa hoi 3 - Tập 1",
+      "grade": 3,
+      "subject": "Tự nhiên và Xã hội",
+      "term": 1,
+      "size": 20049811,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/03-sgk-tu-nhien-va-xa-hoi-3.pdf"
+    },
+    {
+      "filename": "04-sgk-cong-nghe-4.pdf",
+      "title": "Sgk cong nghe 4 - Tập 1",
+      "grade": 4,
+      "subject": "Công nghệ",
+      "term": 1,
+      "size": 9180698,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-cong-nghe-4.pdf"
+    },
+    {
+      "filename": "04-sgk-dao-duc-4.pdf",
+      "title": "Sgk dao duc 4 - Tập 1",
+      "grade": 4,
+      "subject": "Đạo đức",
+      "term": 1,
+      "size": 10054679,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-dao-duc-4.pdf"
+    },
+    {
+      "filename": "04-sgk-hoat-dong-trai-nghiem-4.pdf",
+      "title": "Sgk hoat dong trai nghiem 4 - Tập 1",
+      "grade": 4,
+      "subject": "Hoạt động trải nghiệm",
+      "term": 1,
+      "size": 14767794,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-hoat-dong-trai-nghiem-4.pdf"
+    },
+    {
+      "filename": "04-sgk-khoa-hoc-4.pdf",
+      "title": "Sgk khoa hoc 4 - Tập 1",
+      "grade": 4,
+      "subject": "Khoa học",
+      "term": 1,
+      "size": 20321716,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-khoa-hoc-4.pdf"
+    },
+    {
+      "filename": "04-sgk-lich-su-va-dia-li-4.pdf",
+      "title": "Sgk lich su va dia li 4 - Tập 1",
+      "grade": 4,
+      "subject": "Lịch sử và Địa lí",
+      "term": 1,
+      "size": 24530517,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-lich-su-va-dia-li-4.pdf"
+    },
+    {
+      "filename": "04-sgk-tieng-anh-4-global-success-tap-mot.pdf",
+      "title": "Sgk tieng anh 4 global success Tập mot - Tập 1",
+      "grade": 4,
+      "subject": "Tiếng Anh",
+      "term": 1,
+      "size": 13258100,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-tieng-anh-4-global-success-tap-mot.pdf"
+    },
+    {
+      "filename": "04-sgk-tieng-anh-4-global-success-tap-hai.pdf",
+      "title": "Sgk tieng anh 4 global success Tập hai - Tập 2",
+      "grade": 4,
+      "subject": "Tiếng Anh",
+      "term": 2,
+      "size": 12862909,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-tieng-anh-4-global-success-tap-hai.pdf"
+    },
+    {
+      "filename": "04-sgk-tieng-viet-4-tap-mot.pdf",
+      "title": "Sgk Tiếng Việt 4 Tập mot - Tập 1",
+      "grade": 4,
+      "subject": "Tiếng Việt",
+      "term": 1,
+      "size": 27852752,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-tieng-viet-4-tap-mot.pdf"
+    },
+    {
+      "filename": "04-sgk-tieng-viet-4-tap-hai.pdf",
+      "title": "Sgk Tiếng Việt 4 Tập hai - Tập 2",
+      "grade": 4,
+      "subject": "Tiếng Việt",
+      "term": 2,
+      "size": 26190589,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-tieng-viet-4-tap-hai.pdf"
+    },
+    {
+      "filename": "04-sgk-toan-4-tap-mot.pdf",
+      "title": "Sgk Toán 4 Tập mot - Tập 1",
+      "grade": 4,
+      "subject": "Toán",
+      "term": 1,
+      "size": 19034698,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-toan-4-tap-mot.pdf"
+    },
+    {
+      "filename": "04-sgk-toan-4-tap-hai.pdf",
+      "title": "Sgk Toán 4 Tập hai - Tập 2",
+      "grade": 4,
+      "subject": "Toán",
+      "term": 2,
+      "size": 17103174,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/04-sgk-toan-4-tap-hai.pdf"
+    },
+    {
+      "filename": "05-sgk-cong-nghe-5.pdf",
+      "title": "Sgk cong nghe 5 - Tập 1",
+      "grade": 5,
+      "subject": "Công nghệ",
+      "term": 1,
+      "size": 7934786,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-cong-nghe-5.pdf"
+    },
+    {
+      "filename": "05-sgk-dao-duc-5.pdf",
+      "title": "Sgk dao duc 5 - Tập 1",
+      "grade": 5,
+      "subject": "Đạo đức",
+      "term": 1,
+      "size": 10560948,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-dao-duc-5.pdf"
+    },
+    {
+      "filename": "05-sgk-hoat-dong-trai-nghiem-5.pdf",
+      "title": "Sgk hoat dong trai nghiem 5 - Tập 1",
+      "grade": 5,
+      "subject": "Hoạt động trải nghiệm",
+      "term": 1,
+      "size": 16133863,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-hoat-dong-trai-nghiem-5.pdf"
+    },
+    {
+      "filename": "05-sgk-khoa-hoc-5.pdf",
+      "title": "Sgk khoa hoc 5 - Tập 1",
+      "grade": 5,
+      "subject": "Khoa học",
+      "term": 1,
+      "size": 18811726,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-khoa-hoc-5.pdf"
+    },
+    {
+      "filename": "05-sgk-lich-su-va-dia-li-5.pdf",
+      "title": "Sgk lich su va dia li 5 - Tập 1",
+      "grade": 5,
+      "subject": "Lịch sử và Địa lí",
+      "term": 1,
+      "size": 24393083,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-lich-su-va-dia-li-5.pdf"
+    },
+    {
+      "filename": "05-sgk-tieng-anh-5-global-success-tap-mot.pdf",
+      "title": "Sgk tieng anh 5 global success Tập mot - Tập 1",
+      "grade": 5,
+      "subject": "Tiếng Anh",
+      "term": 1,
+      "size": 13772568,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-tieng-anh-5-global-success-tap-mot.pdf"
+    },
+    {
+      "filename": "05-sgk-tieng-anh-5-global-success-tap-hai.pdf",
+      "title": "Sgk tieng anh 5 global success Tập hai - Tập 2",
+      "grade": 5,
+      "subject": "Tiếng Anh",
+      "term": 2,
+      "size": 13501559,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-tieng-anh-5-global-success-tap-hai.pdf"
+    },
+    {
+      "filename": "05-sgk-tieng-viet-5-tap-mot.pdf",
+      "title": "Sgk Tiếng Việt 5 Tập mot - Tập 1",
+      "grade": 5,
+      "subject": "Tiếng Việt",
+      "term": 1,
+      "size": 32496168,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-tieng-viet-5-tap-mot.pdf"
+    },
+    {
+      "filename": "05-sgk-tieng-viet-5-tap-hai.pdf",
+      "title": "Sgk Tiếng Việt 5 Tập hai - Tập 2",
+      "grade": 5,
+      "subject": "Tiếng Việt",
+      "term": 2,
+      "size": 30897008,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-tieng-viet-5-tap-hai.pdf"
+    },
+    {
+      "filename": "05-sgk-toan-5-tap-mot.pdf",
+      "title": "Sgk Toán 5 Tập mot - Tập 1",
+      "grade": 5,
+      "subject": "Toán",
+      "term": 1,
+      "size": 20191220,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-toan-5-tap-mot.pdf"
+    },
+    {
+      "filename": "05-sgk-toan-5-tap-hai.pdf",
+      "title": "Sgk Toán 5 Tập hai - Tập 2",
+      "grade": 5,
+      "subject": "Toán",
+      "term": 2,
+      "size": 20723145,
+      "url": "https://raw.githubusercontent.com/lllt2klll-droid/SGKBOOKS/main/05-sgk-toan-5-tap-hai.pdf"
+    }
+  ]
+}

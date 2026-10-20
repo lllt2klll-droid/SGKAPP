@@ -1288,7 +1288,7 @@ export default function App() {
         }
         autoIndexedBooksRef.current.add(book.filename);
         try {
-          const pdfUrl = `${API_BASE}/api/books/${encodeURIComponent(book.filename)}`;
+          const pdfUrl = book.url || `${API_BASE}/api/books/${encodeURIComponent(book.filename)}`;
           const pdf = await pdfjsLib.getDocument({ url: pdfUrl, isEvalSupported: false }).promise;
           await buildIndex(book, pdf);
           try {
@@ -1389,6 +1389,37 @@ export default function App() {
     setError("");
     setBackendStatus("checking");
 
+    // Validate + tên tùy chỉnh + ẩn sách trong thùng rác (dùng chung cho backend và catalog tĩnh)
+    const finalizeBooks = (list) => {
+      let out = (Array.isArray(list) ? list : []).filter((book) => {
+        if (!book || typeof book !== "object") return false;
+        if (!book.filename || typeof book.filename !== "string") return false;
+        if (!book.title || typeof book.title !== "string") return false;
+        return true;
+      });
+      const customTitles = safeGetJSON("sgk_custom_titles", {}, (d) => d && typeof d==="object" && !Array.isArray(d));
+      out = out.map((book) => ({ ...book, title: customTitles[book.filename] || book.title }));
+      try {
+        const trashedFiles = new Set(
+          listTrashByType(TRASH_TYPE.BOOK)
+            .map((i) => i && i.meta && i.meta.filename)
+            .filter(Boolean),
+        );
+        if (trashedFiles.size) out = out.filter((b) => !trashedFiles.has(b.filename));
+      } catch {}
+      return out;
+    };
+
+    // Thư viện tĩnh (GitHub Pages): public/books/catalog.json do `npm run books:catalog` sinh ra
+    const fetchStaticCatalog = async () => {
+      const base = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.BASE_URL) || "/";
+      const res = await fetch(`${base}books/catalog.json`, { cache: "no-cache" });
+      if (!res.ok) throw new Error(`Catalog tĩnh không tồn tại (${res.status}).`);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : Array.isArray(data?.books) ? data.books : [];
+      return finalizeBooks(list);
+    };
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
@@ -1433,32 +1464,7 @@ export default function App() {
       }
 
       const data = await res.json();
-      let nextBooks = Array.isArray(data) ? data : [];
-
-      // Validate book objects
-      nextBooks = nextBooks.filter(book => {
-        if (!book || typeof book !== 'object') return false;
-        if (!book.filename || typeof book.filename !== 'string') return false;
-        if (!book.title || typeof book.title !== 'string') return false;
-        return true;
-      });
-
-      // Áp dụng tên tùy chỉnh từ localStorage • an toàn kể cả khi JSON corrupted
-      const customTitles = safeGetJSON("sgk_custom_titles", {}, (d) => d && typeof d==="object" && !Array.isArray(d));
-      nextBooks = nextBooks.map((book) => ({
-        ...book,
-        title: customTitles[book.filename] || book.title,
-      }));
-
-      // A2 • Ẩn những sách đang nằm trong Thùng rác (file vẫn còn trên máy)
-      try {
-        const trashedFiles = new Set(
-          listTrashByType(TRASH_TYPE.BOOK)
-            .map((i) => i && i.meta && i.meta.filename)
-            .filter(Boolean),
-        );
-        if (trashedFiles.size) nextBooks = nextBooks.filter((b) => !trashedFiles.has(b.filename));
-      } catch {}
+      let nextBooks = finalizeBooks(data);
 
       setBooks(nextBooks);
       setBackendStatus(nextBooks.length > 0 ? "ok" : "empty");
@@ -1470,6 +1476,20 @@ export default function App() {
       }
     } catch (err) {
       console.error("fetchBooks failed:", err);
+
+      // Fallback thư viện tĩnh (GitHub Pages / server tắt) — catalog.json trong public/
+      try {
+        const staticBooks = await fetchStaticCatalog();
+        if (staticBooks.length) {
+          setBooks(staticBooks);
+          setBackendStatus("static");
+          setError("");
+          return;
+        }
+        throw new Error("Catalog tĩnh rỗng.");
+      } catch (staticErr) {
+        console.warn("Static catalog fallback failed:", staticErr);
+      }
 
       setBackendStatus("error");
       setBooks((prev) => (prev.length ? prev : []));
@@ -2328,7 +2348,13 @@ export default function App() {
           ) : (
             <>
               <header className="global-header">
-                {backendStatus !== "ok" && !currentBook && (
+                {backendStatus === "static" && !currentBook && (
+                  <div className="dash-notice" role="status">
+                    <span aria-hidden="true">ℹ️</span>
+                    Chế độ trực tuyến: đọc sách từ thư viện tĩnh. Tính năng upload/sửa file cần chạy local (npm start).
+                  </div>
+                )}
+                {backendStatus !== "ok" && backendStatus !== "static" && !currentBook && (
                   <div
                     className={
                       "dash-notice " +

@@ -212,7 +212,7 @@ export default function SearchView({ books, onOpenBook }) {
     setBuilding({ file: book.filename, done: 0, total: 0, kind: "text" });
     try {
       setNotice("");
-      const pdfUrl = `${API_BASE}/api/books/${encodeURIComponent(book.filename)}`;
+      const pdfUrl = book.url || `${API_BASE}/api/books/${encodeURIComponent(book.filename)}`;
       const pdf = await pdfjsLib.getDocument({ url: pdfUrl, isEvalSupported: false }).promise;
       await buildIndex(book, pdf, (pr) => {
         setBuilding({

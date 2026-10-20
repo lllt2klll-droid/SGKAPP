@@ -395,6 +395,8 @@ export default function CompareView({
   const resetSplit = useCallback(() => setSplitRatio(50), []);
 
   const bookList = Array.isArray(books) ? books : [];
+  const bookListRef = useRef(bookList);
+  bookListRef.current = bookList;
   const bookGroups = useMemo(() => groupBooks(bookList), [bookList]);
   const bookA = bookList.find((b) => b.filename === fileA) || null;
   const bookB = bookList.find((b) => b.filename === fileB) || null;
@@ -479,7 +481,7 @@ export default function CompareView({
     setLoading(true);
     setErr("");
     try {
-      const pdfUrl = `${API_BASE}/api/books/${encodeURIComponent(file)}`;
+      const pdfUrl = bookListRef.current.find((b) => b.filename === file)?.url || `${API_BASE}/api/books/${encodeURIComponent(file)}`;
       const loadingTask = pdfjsLib.getDocument({ url: pdfUrl, isEvalSupported: false });
       const pdf = await loadingTask.promise;
       if (gen !== genRef.current) {
