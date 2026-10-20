@@ -681,7 +681,7 @@ export default function BookReader({
         setPdfError("");
         return;
       }
-      const pdfUrl = b.url || `${API_BASE}/api/books/${encodeURIComponent(b.filename)}`;
+      const pdfUrl = `${API_BASE}/api/books/${encodeURIComponent(b.filename)}`;
       let loadingTask = null;
       let pdf = null;
 

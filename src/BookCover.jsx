@@ -90,7 +90,7 @@ export default function BookCover({ book, lastPage = 0, height = 0, numPages = 0
     (async () => {
       try {
         if (!pdfjsLib) return;
-        const url = book?.url || `${API_BASE}/api/books/${encodeURIComponent(filename)}`;
+        const url = `${API_BASE}/api/books/${encodeURIComponent(filename)}`;
         // Bìa chỉ cần trang 1: dùng Range 64KB + tắt auto-fetch/stream để
         // không tải full file 10-28MB cho mỗi bìa (nguyên nhân ERR_FAILED).
         loadingTask = pdfjsLib.getDocument({
@@ -147,7 +147,7 @@ export default function BookCover({ book, lastPage = 0, height = 0, numPages = 0
 
   // Ảnh trang đầu đã có (PDF render xong hoặc file ảnh) -> hiện ảnh
   const imgSrc = isImg
-    ? (book?.url || `${API_BASE}/api/books/${encodeURIComponent(filename)}`)
+    ? `${API_BASE}/api/books/${encodeURIComponent(filename)}`
     : cover;
   if (imgSrc) {
     return (
