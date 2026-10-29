@@ -19,7 +19,12 @@ function vendorChunk(id) {
 }
 
 // https://vite.dev/config/
+// BASE_PATH: GitHub Pages project site host tai /SGKAPP/ (cai dat trong CI),
+// mac dinh "/" khi dev hoac chay server.js local.
+const base = process.env.BASE_PATH || "/";
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -33,16 +38,16 @@ export default defineConfig({
         theme_color: "#2563EB",
         background_color: "#f8fafc",
         display: "standalone",
-        scope: "/",
-        start_url: "/",
+        scope: base,
+        start_url: base,
         lang: "vi",
         orientation: "any",
         categories: ["education"],
         icons: [
-          { src: "/icons/icon-180.png", sizes: "180x180", type: "image/png", purpose: "any" },
-          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/icons/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "icons/icon-180.png", sizes: "180x180", type: "image/png", purpose: "any" },
+          { src: "icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icons/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {
@@ -52,7 +57,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        navigateFallback: "/index.html",
+        navigateFallback: "index.html",
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
