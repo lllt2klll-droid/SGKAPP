@@ -3361,7 +3361,7 @@ function LibraryView({
               ))}
             </div>
             <div className="filter-group compact">
-              <span className="filter-label hide-mobile">Tiến để:</span>
+              <span className="filter-label hide-mobile">Tiến độ:</span>
               <button
                 className={`libx-fbtn ${readingStatusFilter === null ? "active" : ""}`}
                 onClick={() => setReadingStatusFilter(null)}

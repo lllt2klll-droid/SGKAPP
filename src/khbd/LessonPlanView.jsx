@@ -7,7 +7,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Plus, Copy, Trash2, FileText, Download, Database, CheckCircle2, ChevronDown, ChevronUp, Sparkles,
-  Clock, Wand2, Library, ArrowUp, ArrowDown, ListPlus, BookOpen, Wrench,
+  Clock, Wand2, Library, ArrowUp, ArrowDown, ListPlus, BookOpen, Wrench, Search, ArrowLeft, Pencil, Layers,
 } from "lucide-react";
 import {
   mkPlan, mkActivity, mkStep, makeKhbdId, SECTIONS, SECTION_LABEL,
@@ -351,7 +351,11 @@ function FromPagesWizard({
 
 export default function LessonPlanView({ initialPlanId, books }) {
   const [plans, setPlans] = useState(() => getPlans());
-  const [currentId, setCurrentId] = useState(() => initialPlanId || getPlans()[0]?.id || null);
+  const [currentId, setCurrentId] = useState(() => initialPlanId || null);
+  const [planQuery, setPlanQuery] = useState("");
+  const [planSubject, setPlanSubject] = useState("");
+  const [planGrade, setPlanGrade] = useState("");
+  const [planSort, setPlanSort] = useState("updated");
   const [busy, setBusy] = useState(false);
   const [legacy, setLegacy] = useState(() => hasLegacyData());
   // ? Wizard tạo giáo án từ trang sách (không AI: tên bài + trang + thời lượng + cấu trúc khu B) --
@@ -381,6 +385,24 @@ export default function LessonPlanView({ initialPlanId, books }) {
     } catch {}
   }, []);
   const plan = useMemo(() => plans.find((p) => p.id === currentId) || null, [plans, currentId]);
+  const visiblePlans = useMemo(() => {
+    const q = planQuery.trim().toLowerCase();
+    return plans
+      .filter((p) => !q || `${p.title || ""} ${p.monHoc || ""} ${p.lop || ""}`.toLowerCase().includes(q))
+      .filter((p) => !planSubject || p.monHoc === planSubject)
+      .filter((p) => !planGrade || String(p.lop || "") === planGrade)
+      .sort((a, b) => planSort === "title"
+        ? String(a.title || "").localeCompare(String(b.title || ""), "vi")
+        : (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+  }, [plans, planQuery, planSubject, planGrade, planSort]);
+  const planSubjects = useMemo(
+    () => [...new Set(plans.map((p) => p.monHoc).filter(Boolean))].sort((a, b) => a.localeCompare(b, "vi")),
+    [plans],
+  );
+  const planGrades = useMemo(
+    () => [...new Set(plans.map((p) => String(p.lop || "")).filter(Boolean))].sort(),
+    [plans],
+  );
 
   useEffect(() => { setPlans(getPlans()); }, []);
   // Mã plan chỉ định từ nơi khác (VD: BookReader chuyển trang sách sang → Wizard tạo khung)
@@ -665,6 +687,114 @@ export default function LessonPlanView({ initialPlanId, books }) {
     });
   };
 
+  if (!plan && plans.length > 0) {
+    return (
+      <div className="khbd-vault-page">
+        <div className="khbd-vault-page-head">
+          <div className="khbd-vault-page-title">
+            <span className="khbd-vault-page-icon"><Library size={21} /></span>
+            <div>
+              <h2>Kho giáo án</h2>
+              <p>Lưu trữ và quản lý các kế hoạch bài dạy của bạn</p>
+            </div>
+          </div>
+          <div className="khbd-vault-page-stats">
+            <span><Layers size={14} /> {plans.length} giáo án</span>
+            <span><CheckCircle2 size={14} /> Tự động lưu</span>
+          </div>
+        </div>
+        <div className="khbd-vault-page-toolbar">
+          <label className="khbd-vault-search">
+            <Search size={16} />
+            <input
+              value={planQuery}
+              onChange={(e) => setPlanQuery(e.target.value)}
+              placeholder="Tìm tên giáo án, môn học, lớp…"
+              aria-label="Tìm giáo án"
+            />
+            <select value={planSubject} onChange={(e) => setPlanSubject(e.target.value)} aria-label="Lọc môn">
+              <option value="">Mọi môn</option>
+              {planSubjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+            </select>
+            <select value={planGrade} onChange={(e) => setPlanGrade(e.target.value)} aria-label="Lọc lớp">
+              <option value="">Mọi lớp</option>
+              {planGrades.map((grade) => <option key={grade} value={grade}>Lớp {grade}</option>)}
+            </select>
+            <select value={planSort} onChange={(e) => setPlanSort(e.target.value)} aria-label="Sắp xếp">
+              <option value="updated">Mới nhất</option>
+              <option value="title">Tên A–Z</option>
+            </select>
+          </label>
+          <button className="btn btn-primary btn-sm" onClick={createNew}>
+            <Plus size={14} /> Giáo án mới
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={openWizard}>
+            <BookOpen size={14} /> Tạo từ trang sách
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={() => {
+            try {
+              const p = fillSampleLessonPlan();
+              refresh();
+              setCurrentId(p.id);
+            } catch (e) { alert(`Tạo bài mẫu thất bại: ${e.message || e}`); }
+          }}>
+            <Sparkles size={14} /> Bài mẫu
+          </button>
+        </div>
+        {visiblePlans.length ? (
+          <div className="khbd-vault-grid">
+            {visiblePlans.map((p) => (
+              <article
+                key={p.id}
+                className="khbd-vault-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => setCurrentId(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setCurrentId(p.id);
+                  }
+                }}
+                aria-label={`Mở giáo án ${p.title || "chưa đặt tên"}`}
+              >
+                <div className="khbd-vault-card-cover">
+                  <FileText size={30} />
+                  <span>KHBD</span>
+                </div>
+                <div className="khbd-vault-card-body">
+                  <div className="khbd-vault-card-badges">
+                    <span>{p.monHoc || "Chưa chọn môn"}</span>
+                    <span>Lớp {p.lop || "…"}</span>
+                  </div>
+                  <h3>{p.title || "(Chưa đặt tên)"}</h3>
+                  <div className="khbd-vault-card-meta">
+                    <span><ListPlus size={13} /> {p.hoatDong?.length || 0} hoạt động</span>
+                    <span>Cập nhật {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("vi-VN") : "—"}</span>
+                  </div>
+                  <div className="khbd-vault-card-foot">
+                    <button className="btn btn-primary btn-xs" onClick={(e) => { e.stopPropagation(); setCurrentId(p.id); }}>
+                      <Pencil size={12} /> Mở giáo án
+                    </button>
+                    <button className="btn btn-secondary btn-xs" onClick={(e) => { e.stopPropagation(); setCurrentId(p.id); }}>
+                      Xem chi tiết
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="khbd-vault-empty">
+            <Search size={34} />
+            <strong>Không tìm thấy giáo án</strong>
+            <span>Thử đổi từ khóa tìm kiếm.</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (!plan) {
     return (
       <div className="khbd-root">
@@ -710,28 +840,45 @@ export default function LessonPlanView({ initialPlanId, books }) {
     <div className="khbd-root">
       {/* Sidebar */}
       <aside className="khbd-side">
-        <button className="btn btn-primary btn-sm" onClick={createNew}><Plus size={14} /> Kế hoạch mới</button>
-        <button className="btn btn-secondary btn-sm" onClick={() => {
+        <div className="khbd-vault-head">
+          <div className="khbd-vault-title">
+            <span className="khbd-vault-icon"><Library size={17} /></span>
+            <div>
+              <strong>Kho giáo án</strong>
+              <span>{plans.length} kế hoạch đã lưu</span>
+            </div>
+          </div>
+          <span className="khbd-vault-count">{plans.length}</span>
+        </div>
+        <div className="khbd-vault-actions">
+          <button className="btn btn-primary btn-sm" onClick={createNew}><Plus size={14} /> Kế hoạch mới</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => {
           try {
             const p = fillSampleLessonPlan();
             refresh();
             setCurrentId(p.id);
           } catch (e) { alert(`Tạo bài mẫu thất bại: ${e.message || e}`); }
-        }} title="Tạo bài mẫu Toán lớp 1 (Phép cộng trong phạm vi 10)"><Sparkles size={13} /> Bài mẫu</button>
-        <button className="btn btn-secondary btn-sm" onClick={openWizard} title="Tạo khung giáo án từ trang sách (tên bài + từ trang tới trang + thời lượng)">
-          <BookOpen size={13} /> Tạo từ trang sách{pending ? " •" : ""}
-        </button>
+          }} title="Tạo bài mẫu Toán lớp 1 (Phép cộng trong phạm vi 10)"><Sparkles size={13} /> Bài mẫu</button>
+          <button className="btn btn-secondary btn-sm" onClick={openWizard} title="Tạo khung giáo án từ trang sách (tên bài + từ trang tới trang + thời lượng)">
+            <BookOpen size={13} /> Tạo từ trang sách{pending ? " •" : ""}
+          </button>
+        </div>
         {legacy && (
           <button className="btn btn-danger btn-sm khbd-del" onClick={handleClearLegacy} title="Xóa sgk_lessonplans_*, sgk_autosave_*">
             <Database size={13} /> Dọn data cũ
           </button>
         )}
+        <div className="khbd-vault-label">Tất cả giáo án</div>
         <div className="khbd-side-list">
           {plans.map((p) => (
             <button key={p.id} className={`khbd-side-item ${p.id === currentId ? "on" : ""}`}
               onClick={() => setCurrentId(p.id)}>
-              <span className="khbd-side-title">{p.title || "(Chưa đặt tên)"}</span>
-              <span className="khbd-side-sub">{p.monHoc || "—"} · Lớp {p.lop || "…"}</span>
+              <span className="khbd-side-mark"><FileText size={15} /></span>
+              <span className="khbd-side-copy">
+                <span className="khbd-side-title">{p.title || "(Chưa đặt tên)"}</span>
+                <span className="khbd-side-sub">{p.monHoc || "Chưa chọn môn"} · Lớp {p.lop || "…"}</span>
+              </span>
+              <ChevronDown size={14} className="khbd-side-arrow" />
             </button>
           ))}
         </div>
@@ -740,6 +887,9 @@ export default function LessonPlanView({ initialPlanId, books }) {
       {/* Editor */}
       <main className="khbd-main">
         <div className="khbd-toolbar">
+          <button className="btn btn-secondary btn-sm khbd-back-vault" onClick={() => setCurrentId(null)} title="Về kho giáo án">
+            <ArrowLeft size={14} /> Kho giáo án
+          </button>
           <input className="form-control khbd-title" value={plan.title || ""}
             placeholder="Tên bài học (VD: Bài 12 – Phép cộng trong phạm vi 10)"
             onChange={(e) => update({ title: e.target.value })} />

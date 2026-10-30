@@ -56,6 +56,7 @@ import {
   Star,
   Clock,
   ScanText,
+  Camera,
   Database,
   Minus,
   Plus,
@@ -543,6 +544,7 @@ export default function BookReader({
 
   // ── Toasts ─────────────────────────────────────────────────────
   const [toasts, setToasts] = useState([]);
+  const [capturingSpread, setCapturingSpread] = useState(false);
 
   const canvasRef = useRef(null);
   const canvas2Ref = useRef(null);
@@ -768,7 +770,9 @@ export default function BookReader({
   // ── Fit page to container width ──────────────────────────────── (delegated to reader/zoomController)
   const clampZoom = useCallback((value) => clampZoomHelper(value), []);
 
-  // Clamp pan: khi trang nhỏ hơn khung thì khóa ở 0 (không trôi), ngược lại giữ trong biên — origin center center
+  // Keep the page centered while it fits; once zoomed, allow unrestricted pan.
+  // Native scrollbars and panel resize handles are disabled, so this is the only
+  // interaction path for reaching every part of an enlarged page.
   const clampPan = useCallback((px, py, curZoom) => {
     const container = viewportContainerRef.current;
     if (!container || !pageWidthRef.current) return { x: px, y: py };
@@ -779,16 +783,9 @@ export default function BookReader({
     const totalW = (isTwo ? pageWidthRef.current * 2 + gap : pageWidthRef.current) * curZoom;
     const pageH = pageHeightRef.current || pageWidthRef.current * 1.414;
     const totalH = pageH * curZoom;
-    // Nếu nội dung vừa/khít khung → khóa pan = 0 để không trôi ra khoảng trắng
+    // If the content fits, keep it centered instead of allowing empty-space drift.
     if (totalW <= availW && totalH <= availH) return { x: 0, y: 0 };
-    if (totalW <= availW) px = 0;
-    if (totalH <= availH) py = 0;
-    const maxX = totalW > availW ? (totalW - availW) / 2 + 32 : 0;
-    const maxY = totalH > availH ? (totalH - availH) / 2 + 40 : 0;
-    return {
-      x: maxX ? Math.max(-maxX, Math.min(maxX, px)) : 0,
-      y: maxY ? Math.max(-maxY, Math.min(maxY, py)) : 0,
-    };
+    return { x: px, y: py };
   }, []);
 
   const fitToWidth = useCallback((force = false) => {
@@ -1659,6 +1656,71 @@ export default function BookReader({
       return "";
     }
   };
+
+  const captureTwoPageSpread = useCallback(async () => {
+    if (isWordFile || !pdfDoc) {
+      notify("Chỉ có thể chụp hai trang đối với sách PDF.", "warning");
+      return;
+    }
+    const leftPage = Math.max(1, pageNum);
+    const rightPage = leftPage + 1;
+    if (rightPage > numPages) {
+      notify("Trang hiện tại không có đủ hai trang để chụp.", "warning");
+      return;
+    }
+
+    setCapturingSpread(true);
+    try {
+      const renderPage = async (pageNumber) => {
+        const page = await pdfDoc.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 1.8 });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) throw new Error("Không tạo được vùng vẽ ảnh.");
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: context, viewport }).promise;
+        return canvas;
+      };
+
+      const [leftCanvas, rightCanvas] = await Promise.all([
+        renderPage(leftPage),
+        renderPage(rightPage),
+      ]);
+      const gap = 24;
+      const output = document.createElement("canvas");
+      output.width = leftCanvas.width + rightCanvas.width + gap;
+      output.height = Math.max(leftCanvas.height, rightCanvas.height);
+      const outputContext = output.getContext("2d", { alpha: false });
+      if (!outputContext) throw new Error("Không tạo được ảnh chụp hai trang.");
+      outputContext.fillStyle = "#ffffff";
+      outputContext.fillRect(0, 0, output.width, output.height);
+      outputContext.drawImage(leftCanvas, 0, 0);
+      outputContext.drawImage(rightCanvas, leftCanvas.width + gap, 0);
+
+      const blob = await new Promise((resolve) => output.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("Không xuất được ảnh chụp hai trang.");
+      const safeTitle = String(book.title || "sach")
+        .replace(/[\\/:*?"<>|]+/g, " ")
+        .trim()
+        .replace(/\s+/g, "-")
+        .slice(0, 80) || "sach";
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${safeTitle}-trang-${bookPageNumber(leftPage)}-${bookPageNumber(rightPage)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      notify(`Đã chụp hai trang ${bookPageNumber(leftPage)}–${bookPageNumber(rightPage)}.`, "success");
+    } catch (error) {
+      notify(uiMessage(error, "Không thể chụp hai trang. Vui lòng thử lại."), "error");
+    } finally {
+      setCapturingSpread(false);
+    }
+  }, [book, isWordFile, notify, numPages, pageNum, pdfDoc]);
 
   const buildPageParts = async () => {
     // Word (html/txt/md) — dùng nội dung html y hệt PDF
@@ -4690,6 +4752,17 @@ export default function BookReader({
             )}
           </button>
 
+          {/* Chụp trọn hai trang đang mở thành một ảnh PNG */}
+          <button
+            className="btn-icon rtb-icon-btn"
+            onClick={captureTwoPageSpread}
+            disabled={capturingSpread || isWordFile || pageNum >= numPages}
+            title={capturingSpread ? "Đang chụp hai trang…" : "Chụp cả hai trang"}
+            aria-label="Chụp cả hai trang"
+          >
+            {capturingSpread ? <Loader2 size={16} className="spin" /> : <Camera size={16} />}
+          </button>
+
           {/* ✂ Quét vùng — SGK Scan */}
           <button
             className={`btn-icon rtb-icon-btn ${scanMode ? "on" : ""}`}
@@ -5094,16 +5167,6 @@ export default function BookReader({
                     </div>
                   )}
                 </div>
-                {!tocCollapsed && (
-                  <div
-                    className="panel-resizer panel-resizer-right"
-                    onMouseDown={onTocResizeStart}
-                    onTouchStart={onTocResizeStart}
-                    onDoubleClick={()=>{ setTocWidth(280); const r=safeSetString("sgk_toc_w","280"); if(!r.ok) console.warn("[BookReader] Failed to reset sgk_toc_w:", r.error, "giữ dữ liệu cũ"); }}
-                    title="Kéo để đổi độ rộng, double-click để reset"
-                    aria-hidden="true"
-                  />
-                )}
               </div>
             );
           })()}
@@ -5245,14 +5308,6 @@ export default function BookReader({
         )}
         {!aiCollapsed ? (
           <div className="ai-panel" style={{ width: `${aiWidth}px`, flex: `0 0 ${aiWidth}px` }}>
-            <div
-              className="panel-resizer panel-resizer-left"
-              onMouseDown={onAiResizeStart}
-              onTouchStart={onAiResizeStart}
-              onDoubleClick={()=>{ setAiWidth(380); const r=safeSetString("sgk_ai_w","380"); if(!r.ok) console.warn("[BookReader] Failed to reset sgk_ai_w:", r.error, "giữ dữ liệu cũ"); }}
-              title="Kéo để đổi độ rộng, double-click để reset"
-              aria-hidden="true"
-            />
             {/* Section bar */}
             <div className="ai-tabs">
               {AI_SECTIONS.map((section) => (

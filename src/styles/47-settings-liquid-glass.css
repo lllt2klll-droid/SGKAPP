@@ -1,0 +1,263 @@
+/* Settings glass controls: match the sidebar/header navigation language. */
+@keyframes settingsGlassShine {
+  from { transform: translateX(-135%) skewX(-18deg); }
+  to { transform: translateX(260%) skewX(-18deg); }
+}
+
+@keyframes settingsPanelIn {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.st-modal {
+  border-color: color-mix(in srgb, var(--color-action) 24%, var(--border-color));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.16), transparent 38%),
+    color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: 0 28px 80px rgba(2, 6, 23, .28), inset 0 1px 0 rgba(255,255,255,.38);
+  backdrop-filter: blur(24px) saturate(1.15);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15);
+}
+
+.st-head,
+.st-foot,
+.st-side {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.15), transparent 60%),
+    color-mix(in srgb, var(--surface-soft) 78%, transparent);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.st-logo,
+.st-nav-ic,
+.st-icon-btn,
+.st-btn,
+.st-seg-btn,
+.st-toggle,
+.st-dot {
+  transition: transform .22s cubic-bezier(.2,.8,.2,1), color .22s ease, background .22s ease,
+    border-color .22s ease, box-shadow .22s ease, filter .22s ease;
+}
+
+.st-logo {
+  box-shadow: 0 9px 22px color-mix(in srgb, var(--color-action) 27%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.42);
+}
+
+.st-logo:hover {
+  transform: translateY(-2px) rotate(-3deg) scale(1.04);
+}
+
+.st-search {
+  border-color: color-mix(in srgb, var(--color-action) 22%, var(--border-color));
+  background: color-mix(in srgb, var(--surface) 58%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.st-icon-btn,
+.st-btn-ghost,
+.st-btn-danger-ghost,
+.st-seg-btn,
+.st-toggle {
+  border-color: color-mix(in srgb, var(--color-action) 20%, var(--border-color));
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.18), transparent 70%),
+    color-mix(in srgb, var(--surface) 60%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.st-icon-btn:hover,
+.st-btn:hover:not(:disabled),
+.st-seg-btn:hover,
+.st-nav:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-action) 55%, var(--border-color));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-action) 13%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.42);
+}
+
+.st-btn-primary {
+  background: linear-gradient(135deg, var(--color-action), var(--color-action-active, #4f46e5));
+  border-color: color-mix(in srgb, var(--color-action) 70%, #111827);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--color-action-strong) 82%, #111827),
+    inset 0 1px 0 rgba(255,255,255,.3);
+}
+
+.st-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08) saturate(1.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-action) 24%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.42);
+}
+
+.st-btn:disabled,
+.st-toggle:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+  transform: none;
+}
+
+.st-nav {
+  position: relative;
+  overflow: hidden;
+  border-color: transparent;
+  transition: transform .22s cubic-bezier(.2,.8,.2,1), background .22s ease,
+    border-color .22s ease, box-shadow .22s ease;
+}
+
+.st-nav::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -45%;
+  width: 28%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
+  pointer-events: none;
+}
+
+.st-nav:hover::after,
+.st-nav.active::after {
+  animation: settingsGlassShine .7s ease;
+}
+
+.st-nav.active {
+  background:
+    linear-gradient(105deg, color-mix(in srgb, var(--color-action-soft) 86%, transparent), transparent),
+    color-mix(in srgb, var(--surface) 58%, transparent);
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--color-action) 12%, transparent),
+    inset 3px 0 0 var(--color-action), inset 0 1px 0 rgba(255,255,255,.34);
+}
+
+.st-nav:hover .st-nav-ic,
+.st-nav.active .st-nav-ic {
+  transform: scale(1.07) rotate(-3deg);
+}
+
+.st-card {
+  border-color: color-mix(in srgb, var(--color-action) 16%, var(--border-color));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.12), transparent 58%),
+    color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: 0 10px 24px rgba(15,23,42,.045), inset 0 1px 0 rgba(255,255,255,.25);
+  backdrop-filter: blur(14px) saturate(1.06);
+  -webkit-backdrop-filter: blur(14px) saturate(1.06);
+  animation: settingsPanelIn .35s ease both;
+}
+
+.st-card:hover {
+  border-color: color-mix(in srgb, var(--color-action) 32%, var(--border-color));
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--color-action) 8%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.34);
+}
+
+.st-select,
+.st-input,
+.st-color,
+.st-pct {
+  border-color: color-mix(in srgb, var(--color-action) 18%, var(--input-border, var(--border-color)));
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+}
+
+.st-select:hover,
+.st-input:hover,
+.st-color:hover {
+  border-color: color-mix(in srgb, var(--color-action) 42%, var(--border-color));
+}
+
+.st-toggle.on {
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--color-action) 28%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.32);
+}
+
+.st-toggle:hover {
+  transform: scale(1.05);
+}
+
+.st-backup-actions {
+  position: relative;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--color-action) 18%, var(--border-color));
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.16), transparent 68%),
+    color-mix(in srgb, var(--surface-soft) 64%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.st-backup-actions .st-btn {
+  min-height: 34px;
+}
+
+.st-backup-export {
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--color-action) 22%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.38);
+}
+
+.st-restore-zone {
+  position: relative;
+  margin-top: .6rem;
+  padding: 10px;
+  border: 1px dashed color-mix(in srgb, var(--color-action) 40%, var(--border-color));
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--color-action) 13%, transparent), transparent 38%),
+    color-mix(in srgb, var(--surface) 52%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
+  backdrop-filter: blur(13px) saturate(1.08);
+  -webkit-backdrop-filter: blur(13px) saturate(1.08);
+}
+
+.st-restore-zone::before {
+  content: "KHÔI PHỤC DỮ LIỆU";
+  display: block;
+  margin: 0 0 7px 2px;
+  color: var(--color-action);
+  font-size: .64rem;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.st-restore-zone .file-dropzone,
+.st-restore-zone [class*="dropzone"] {
+  border-color: color-mix(in srgb, var(--color-action) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.24);
+  transition: border-color .22s ease, background .22s ease, box-shadow .22s ease, transform .22s ease;
+}
+
+.st-restore-zone:hover .file-dropzone,
+.st-restore-zone:hover [class*="dropzone"] {
+  border-color: var(--color-action);
+  background: color-mix(in srgb, var(--color-action-soft) 45%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-action) 10%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-modal,
+  .st-card,
+  .st-nav::after {
+    animation: none !important;
+  }
+
+  .st-logo:hover,
+  .st-icon-btn:hover,
+  .st-btn:hover,
+  .st-nav:hover,
+  .st-nav:hover .st-nav-ic,
+  .st-toggle:hover {
+    transform: none;
+  }
+
+  .st-restore-zone .file-dropzone,
+  .st-restore-zone [class*="dropzone"] {
+    transition: none;
+  }
+}

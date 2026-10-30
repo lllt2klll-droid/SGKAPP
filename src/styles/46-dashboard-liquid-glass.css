@@ -1,0 +1,316 @@
+/* Dashboard liquid-glass system: one surface language for hero, cards and controls. */
+@keyframes dbFloatingSway {
+  0%, 100% { rotate: -1.2deg; filter: brightness(1); }
+  25% { rotate: .8deg; filter: brightness(1.05); }
+  50% { rotate: 1.4deg; filter: brightness(1.02); }
+  75% { rotate: -.7deg; filter: brightness(1.06); }
+}
+
+@keyframes dbFloatingGlow {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.24), 0 8px 18px rgba(15,23,42,.08); }
+  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), 0 13px 25px rgba(15,23,42,.15); }
+}
+.db-root {
+  --db-glass: color-mix(in srgb, var(--surface) 66%, transparent);
+  --db-glass-strong: color-mix(in srgb, var(--surface) 78%, transparent);
+  --db-glass-border: color-mix(in srgb, var(--color-action) 22%, rgba(255,255,255,.5));
+  --db-glass-highlight: rgba(255,255,255,.34);
+  position: relative;
+}
+
+.db-root::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -18px;
+  right: 4%;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-action) 9%, transparent);
+  filter: blur(46px);
+  pointer-events: none;
+}
+
+.db-root .db-hero {
+  height: var(--db-hero-height, auto);
+  min-height: 238px;
+  padding: 26px 28px 20px;
+  border: 1px solid rgba(255,255,255,.26);
+  background:
+    linear-gradient(115deg, rgba(20, 74, 180, .96), rgba(91, 45, 205, .88) 58%, rgba(125, 72, 235, .92)),
+    radial-gradient(circle at 85% 20%, rgba(255,255,255,.27), transparent 30%);
+  box-shadow: 0 24px 54px rgba(37, 76, 182, .25), inset 0 1px 0 rgba(255,255,255,.28);
+}
+
+.db-root .db-hero-resize {
+  position: absolute;
+  z-index: 4;
+  right: 18px;
+  bottom: 8px;
+  width: 64px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+  cursor: ns-resize;
+  opacity: .7;
+  transition: opacity .2s ease, background .2s ease;
+}
+
+.db-root .db-hero-resize:hover,
+.db-root .db-hero-resize:focus-visible {
+  opacity: 1;
+  background: rgba(255,255,255,.22);
+}
+
+.db-root .db-hero-resize span {
+  display: block;
+  width: 28px;
+  height: 3px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: rgba(255,255,255,.78);
+  box-shadow: 0 -4px 0 rgba(255,255,255,.38), 0 4px 0 rgba(255,255,255,.38);
+}
+
+.db-root .db-hero::after {
+  right: -40px;
+  top: -100px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(255,255,255,.28), rgba(255,255,255,.04) 28%, transparent 68%);
+}
+
+.db-root .db-hero::before {
+  right: 31%;
+  bottom: -170px;
+  width: 360px;
+  height: 260px;
+  background: radial-gradient(ellipse, rgba(109, 211, 255, .18), transparent 70%);
+}
+
+.db-root .db-hello {
+  max-width: 62%;
+  font-size: clamp(1.55rem, 2.8vw, 2.25rem);
+  text-shadow: 0 3px 18px rgba(15,23,42,.16);
+}
+
+.db-root .db-date {
+  opacity: .82;
+}
+
+.db-root .db-hero-sub {
+  display: flex;
+  max-width: none;
+  margin-top: 0;
+}
+
+.db-root .db-hero-status-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(100%, 980px);
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.db-root .db-hero-status-row .db-backup-pill {
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+.db-root .db-hero-sub b,
+.db-root .db-backup-pill {
+  border: 1px solid rgba(255,255,255,.28) !important;
+  background: rgba(255,255,255,.14) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 5px 14px rgba(15,23,42,.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.db-root .db-backup-pill {
+  color: #fff !important;
+}
+
+.db-root .db-quick {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 24px;
+}
+
+.db-root .db-qa {
+  min-width: 0;
+  min-height: 62px;
+  padding: 10px 11px;
+  border-color: rgba(255,255,255,.28);
+  background: linear-gradient(145deg, rgba(255,255,255,.2), rgba(255,255,255,.08));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 8px 18px rgba(15,23,42,.08);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.db-root [data-floating-id] {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  will-change: transform;
+  animation: dbFloatingSway 5.8s ease-in-out infinite;
+}
+
+.db-root [data-floating-id]:nth-child(2n) {
+  animation-delay: -1.7s;
+  animation-duration: 6.6s;
+}
+
+.db-root [data-floating-id]:nth-child(3n) {
+  animation-delay: -3.1s;
+  animation-duration: 7.4s;
+}
+
+.db-root .db-qa {
+  animation-name: dbFloatingSway, dbFloatingGlow;
+  animation-duration: 5.8s, 4.8s;
+  animation-timing-function: ease-in-out, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+}
+
+.db-root [data-floating-id].is-floating-dragging {
+  animation-play-state: paused;
+  filter: brightness(1.08);
+}
+
+.db-root .db-hero-art {
+  pointer-events: auto;
+}
+
+.db-root [data-floating-id]:active {
+  cursor: grabbing;
+}
+
+.db-root .db-qa:active {
+  cursor: grabbing;
+}
+
+.db-root .db-qa-ic {
+  background: linear-gradient(145deg, rgba(255,255,255,.38), rgba(255,255,255,.14));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.38);
+}
+
+.db-root .db-qa > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-root .db-sec {
+  border-color: var(--db-glass-border);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.12), transparent 45%),
+    var(--db-glass);
+  box-shadow: 0 14px 30px rgba(15,23,42,.05), inset 0 1px 0 var(--db-glass-highlight);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.db-root .db-sec-head {
+  min-height: 28px;
+}
+
+.db-root .db-kpi,
+.db-root .db-row,
+.db-root .db-subj-card,
+.db-root .db-tool,
+.db-root .db-item {
+  border-color: color-mix(in srgb, var(--border-color) 72%, var(--color-action) 28%);
+  background: linear-gradient(145deg, rgba(255,255,255,.13), transparent 70%), var(--db-glass-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.db-root .db-kpi:hover,
+.db-root .db-row:hover,
+.db-root .db-subj-card:hover,
+.db-root .db-tool:hover,
+.db-root .db-item:hover {
+  background: linear-gradient(145deg, rgba(255,255,255,.22), transparent 70%), var(--db-glass-strong);
+  box-shadow: 0 12px 24px rgba(15,23,42,.09), inset 0 1px 0 rgba(255,255,255,.3);
+}
+
+.db-root .db-stage:hover {
+  background: color-mix(in srgb, var(--color-action-soft) 72%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.db-root .db-stage-ic,
+.db-root .db-item-ic,
+.db-root .db-doc,
+.db-root .db-tool-ic {
+  border: 1px solid color-mix(in srgb, var(--color-action) 20%, var(--border-color));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+}
+
+.db-root .db-insight {
+  border: 1px solid rgba(255,255,255,.2);
+  box-shadow: 0 14px 25px rgba(15,23,42,.1), inset 0 1px 0 rgba(255,255,255,.25);
+}
+
+@media (max-width: 1280px) {
+  .db-root .db-quick {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .db-root .db-hero {
+    min-height: 0;
+    padding: 22px 18px 18px;
+  }
+
+  .db-root .db-hero-resize {
+    right: 12px;
+    bottom: 6px;
+  }
+
+  .db-root .db-hello,
+  .db-root .db-hero-sub,
+  .db-root .db-hero-status-row {
+    max-width: 78%;
+  }
+
+  .db-root .db-hero-status-row {
+    align-items: flex-start;
+  }
+
+  .db-root .db-hero-status-row .db-backup-pill {
+    max-width: 100%;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .db-root .db-quick {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .db-root::before {
+    display: none;
+  }
+
+  .db-root .db-qa {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .db-root [data-floating-id] {
+    animation: none !important;
+  }
+}

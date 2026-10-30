@@ -699,11 +699,11 @@ function BackupSection({ settings, onChange, onImportFile, importErr, onExport }
             </Field>
           </>
         )}
-        <div className="st-btn-row">
-          <button className="st-btn st-btn-primary st-btn-sm" onClick={onExport}><Download size={13} /> Xuất file sao lưu</button>
-          <button className="st-btn st-btn-ghost st-btn-sm" disabled={wiping} onClick={wipeCache}>{wiping ? "Đang dọn…" : "Dọn cache"}</button>
+        <div className="st-btn-row st-backup-actions">
+          <button className="st-btn st-btn-primary st-btn-sm st-backup-export" onClick={onExport}><Download size={13} /> Xuất file sao lưu</button>
+          <button className="st-btn st-btn-ghost st-btn-sm st-backup-clean" disabled={wiping} onClick={wipeCache}>{wiping ? "Đang dọn…" : "Dọn cache"}</button>
         </div>
-        <div style={{ marginTop: "0.6rem" }}>
+        <div className="st-restore-zone">
           <FileDropzone
             accept="application/json,.json"
             multiple={false}

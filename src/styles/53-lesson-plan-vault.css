@@ -1,0 +1,245 @@
+/* ============================================================
+   Lesson Plan - library/vault presentation
+   ============================================================ */
+
+.khbd-root {
+  gap: 16px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 28%),
+    var(--bg-main);
+}
+
+.khbd-side {
+  width: 292px;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--border-color));
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.08), transparent 42%),
+    color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: 0 16px 34px rgba(2, 6, 23, .16), inset 0 1px 0 rgba(255,255,255,.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.khbd-vault-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 15%, var(--border-color));
+}
+
+.khbd-vault-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.khbd-vault-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, transparent);
+  border-radius: 11px;
+  color: var(--primary-dark);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 24%, transparent), color-mix(in srgb, var(--secondary) 18%, transparent));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 13%, transparent);
+}
+
+.khbd-vault-title strong,
+.khbd-vault-title span {
+  display: block;
+}
+
+.khbd-vault-title strong {
+  color: var(--text-dark);
+  font-size: .92rem;
+}
+
+.khbd-vault-title div span {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: .68rem;
+}
+
+.khbd-vault-count {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border-color));
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  font-size: .7rem;
+  font-weight: 800;
+}
+
+.khbd-vault-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.khbd-vault-actions .btn:first-child {
+  grid-column: 1 / -1;
+}
+
+.khbd-vault-actions .btn {
+  min-height: 36px;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.khbd-side > .khbd-del {
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.khbd-vault-label {
+  padding: 4px 3px 0;
+  color: var(--text-muted);
+  font-size: .67rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.khbd-side-list {
+  gap: 7px;
+  padding: 1px 2px 4px;
+}
+
+.khbd-side-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 8px;
+  min-height: 62px;
+  padding: 9px 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 85%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 64%, transparent);
+  text-align: left;
+  transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.khbd-side-item:hover {
+  transform: translateX(3px);
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border-color));
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  box-shadow: 0 8px 18px rgba(2, 6, 23, .12);
+}
+
+.khbd-side-item.on {
+  border-color: color-mix(in srgb, var(--primary) 62%, transparent);
+  background: linear-gradient(105deg, color-mix(in srgb, var(--primary) 18%, var(--surface)), color-mix(in srgb, var(--secondary) 10%, var(--surface)));
+  box-shadow: inset 3px 0 0 var(--primary), 0 10px 22px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.khbd-side-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--primary-dark);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.khbd-side-copy {
+  min-width: 0;
+}
+
+.khbd-side-title {
+  display: block;
+  overflow: hidden;
+  color: var(--text-dark);
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.khbd-side-sub {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: .67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.khbd-side-arrow {
+  color: var(--text-muted);
+  transform: rotate(-90deg);
+}
+
+.khbd-main {
+  gap: 12px;
+}
+
+.khbd-toolbar,
+.khbd-timebar,
+.khbd-card {
+  border-color: color-mix(in srgb, var(--primary) 16%, var(--border-color));
+  border-radius: 15px;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.07), transparent 46%),
+    color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, .1), inset 0 1px 0 rgba(255,255,255,.07);
+}
+
+.khbd-toolbar {
+  padding: 12px;
+}
+
+[data-theme="light"] .khbd-side,
+[data-theme="light"] .khbd-toolbar,
+[data-theme="light"] .khbd-timebar,
+[data-theme="light"] .khbd-card {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.95), rgba(239,246,255,.46)),
+    rgba(255,255,255,.9);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--border-strong));
+  box-shadow: 0 14px 30px rgba(30, 64, 175, .1), inset 0 1px 0 rgba(255,255,255,.95);
+}
+
+@media (max-width: 900px) {
+  .khbd-root {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .khbd-side {
+    width: auto;
+    padding: 10px;
+  }
+
+  .khbd-side-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    max-height: 220px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .khbd-side-item {
+    transition: none;
+  }
+
+  .khbd-side-item:hover {
+    transform: none;
+  }
+}

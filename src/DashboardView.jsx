@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -123,6 +123,17 @@ export default function DashboardView({
   const [lessonPlans, setLessonPlans] = useState([]);
   const [showAllTools, setShowAllTools] = useState(false);
   const [toolQuery, setToolQuery] = useState("");
+  const heroRef = useRef(null);
+  const floatingItemsRef = useRef(new Map());
+  const floatingStateRef = useRef(new Map());
+  const floatingDragRef = useRef(null);
+  const floatingFramesRef = useRef(new Map());
+  const suppressFloatingClickRef = useRef(false);
+  const [heroHeight, setHeroHeight] = useState(() => {
+    const stored = Number(safeGetString("sgk_dashboard_hero_height", "0"));
+    return Number.isFinite(stored) && stored >= 238 && stored <= 620 ? stored : 0;
+  });
+  const heroResizeRef = useRef(null);
   const [workflowCollapsed, setWorkflowCollapsed] = useState(() => {
     try {
       return safeGetString("sgk_workflow_collapsed", "false") === "true";
@@ -485,6 +496,155 @@ export default function DashboardView({
 
   // Danh sách rút gọn theo module đang bật (Tính năng) — dùng cho nút nhanh + modal "Tất cả công cụ"
   const visibleQuickActions = mainQuickActions.filter((a) => moduleOn(a.view));
+
+  const setFloatingTransform = (id, x, y, transition = "none") => {
+    const node = floatingItemsRef.current.get(id);
+    if (!node) return;
+    node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    node.style.transition = transition;
+    floatingStateRef.current.set(id, { ...(floatingStateRef.current.get(id) || {}), x, y });
+  };
+
+  const clampFloatingOffset = (id, x, y) => {
+    const node = floatingItemsRef.current.get(id);
+    const hero = heroRef.current;
+    if (!node || !hero) return { x, y };
+    const state = floatingStateRef.current.get(id) || { x: 0, y: 0 };
+    const rect = node.getBoundingClientRect();
+    const heroRect = hero.getBoundingClientRect();
+    const baseLeft = rect.left - state.x;
+    const baseTop = rect.top - state.y;
+    return {
+      x: Math.max(heroRect.left - baseLeft, Math.min(heroRect.right - (baseLeft + rect.width), x)),
+      y: Math.max(heroRect.top - baseTop, Math.min(heroRect.bottom - (baseTop + rect.height), y)),
+    };
+  };
+
+  const animateFloatingBack = (id, velocityX, velocityY) => {
+    const previousFrame = floatingFramesRef.current.get(id);
+    if (previousFrame) cancelAnimationFrame(previousFrame);
+    let position = { ...(floatingStateRef.current.get(id) || { x: 0, y: 0 }) };
+    let velocity = { x: velocityX, y: velocityY };
+    let lastTime = performance.now();
+    const tick = (now) => {
+      const dt = Math.min(32, now - lastTime) / 16;
+      lastTime = now;
+      const stiffness = 0.045;
+      const damping = Math.pow(0.82, dt);
+      velocity.x = (velocity.x - position.x * stiffness * dt) * damping;
+      velocity.y = (velocity.y - position.y * stiffness * dt) * damping;
+      position.x += velocity.x * dt;
+      position.y += velocity.y * dt;
+      position = clampFloatingOffset(id, position.x, position.y);
+      setFloatingTransform(id, position.x, position.y);
+      if (Math.abs(position.x) > 0.25 || Math.abs(position.y) > 0.25 || Math.abs(velocity.x) > 0.08 || Math.abs(velocity.y) > 0.08) {
+        floatingFramesRef.current.set(id, requestAnimationFrame(tick));
+      } else {
+        setFloatingTransform(id, 0, 0);
+        floatingFramesRef.current.delete(id);
+      }
+    };
+    floatingFramesRef.current.set(id, requestAnimationFrame(tick));
+  };
+
+  const handleFloatingPointerDown = (event) => {
+    const target = event.target.closest?.("[data-floating-id]");
+    const hero = heroRef.current;
+    if (!target || !hero || (event.button !== undefined && event.button !== 0)) return;
+    const id = target.dataset.floatingId;
+    const start = floatingStateRef.current.get(id) || { x: 0, y: 0 };
+    let lastX = event.clientX;
+    let lastY = event.clientY;
+    let velocityX = 0;
+    let velocityY = 0;
+    let moved = false;
+    event.preventDefault();
+    target.setPointerCapture?.(event.pointerId);
+    target.classList.add("is-floating-dragging");
+    floatingDragRef.current = { id };
+
+    const move = (moveEvent) => {
+      const dx = moveEvent.clientX - lastX;
+      const dy = moveEvent.clientY - lastY;
+      velocityX = velocityX * 0.65 + dx * 0.35;
+      velocityY = velocityY * 0.65 + dy * 0.35;
+      if (Math.abs(moveEvent.clientX - (lastX - velocityX)) > 3 || Math.abs(moveEvent.clientY - (lastY - velocityY)) > 3) moved = true;
+      lastX = moveEvent.clientX;
+      lastY = moveEvent.clientY;
+      const current = floatingStateRef.current.get(id) || start;
+      const nextX = current.x + dx;
+      const nextY = current.y + dy;
+      const bounded = clampFloatingOffset(id, nextX, nextY);
+      setFloatingTransform(id, bounded.x, bounded.y);
+
+      for (const [otherId, otherNode] of floatingItemsRef.current.entries()) {
+        if (otherId === id) continue;
+        const otherRect = otherNode.getBoundingClientRect();
+        const draggedRect = target.getBoundingClientRect();
+        const overlaps = draggedRect.left < otherRect.right && draggedRect.right > otherRect.left &&
+          draggedRect.top < otherRect.bottom && draggedRect.bottom > otherRect.top;
+        if (overlaps) {
+          const pushX = draggedRect.left < otherRect.left ? 8 : -8;
+          const pushY = draggedRect.top < otherRect.top ? 5 : -5;
+          const otherState = floatingStateRef.current.get(otherId) || { x: 0, y: 0 };
+          const pushed = clampFloatingOffset(otherId, otherState.x + pushX, otherState.y + pushY);
+          setFloatingTransform(otherId, pushed.x, pushed.y);
+        }
+      }
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      target.classList.remove("is-floating-dragging");
+      floatingDragRef.current = null;
+      if (moved) {
+        suppressFloatingClickRef.current = true;
+        window.setTimeout(() => { suppressFloatingClickRef.current = false; }, 700);
+      }
+      animateFloatingBack(id, velocityX, velocityY);
+      for (const otherId of floatingItemsRef.current.keys()) {
+        if (otherId !== id) animateFloatingBack(otherId, 0, 0);
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up, { once: true });
+  };
+
+  const handleHeroResizePointerDown = (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = heroRef.current?.getBoundingClientRect().height || 238;
+    heroResizeRef.current = { startY, startHeight };
+    const move = (moveEvent) => {
+      const nextHeight = Math.max(238, Math.min(620, startHeight + moveEvent.clientY - startY));
+      setHeroHeight(nextHeight);
+    };
+    const up = () => {
+      const current = heroRef.current?.getBoundingClientRect().height || startHeight;
+      safeSetString("sgk_dashboard_hero_height", String(Math.round(current)));
+      heroResizeRef.current = null;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up, { once: true });
+  };
+
+  useEffect(() => {
+    if (!heroHeight) return undefined;
+    const frame = requestAnimationFrame(() => {
+      for (const [id, state] of floatingStateRef.current.entries()) {
+        const bounded = clampFloatingOffset(id, state.x, state.y);
+        if (bounded.x !== state.x || bounded.y !== state.y) {
+          setFloatingTransform(id, bounded.x, bounded.y);
+        }
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [heroHeight]);
+
   const visibleTools = allTools.filter((t) => moduleOn(t.view));
 
   const handleNavigate = (view, opts) => {
@@ -497,6 +657,11 @@ export default function DashboardView({
     if (onNavigate) {
       onNavigate(view, opts);
     }
+  };
+
+  const handleQuickClick = (action) => {
+    if (suppressFloatingClickRef.current) return;
+    handleNavigate(action.view);
   };
 
   const filteredTools = visibleTools.filter((tool) =>
@@ -605,25 +770,48 @@ export default function DashboardView({
   return (
     <div className="db-root">
       <style>{`
-        .db-root { display:flex; flex-direction:column; gap:14px; }
-        .db-hero { position:relative; overflow:hidden; border-radius:16px; padding:20px 22px; color:#fff;
-          background:linear-gradient(120deg, var(--color-action-strong, #1e3a8a) 0%, var(--color-action, #2563eb) 55%, #8b5cf6 100%);
-          box-shadow:0 12px 30px color-mix(in srgb, var(--color-action, #2563eb) 28%, transparent); }
+        .db-root { display:flex; flex-direction:column; gap:16px; }
+        .db-hero { position:relative; isolation:isolate; overflow:hidden; border-radius:22px; padding:26px 28px 22px; color:#fff;
+          background:linear-gradient(120deg, var(--color-action-strong, #1e3a8a) 0%, var(--color-action, #2563eb) 50%, #7c3aed 100%);
+          background-size:180% 180%; box-shadow:0 18px 42px color-mix(in srgb, var(--color-action, #2563eb) 30%, transparent);
+          animation:dbHeroGradient 14s ease-in-out infinite; }
         .db-hero::after { content:""; position:absolute; right:-70px; top:-70px; width:250px; height:250px; border-radius:50%;
-          background:radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 65%); pointer-events:none; }
+          background:radial-gradient(circle, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.08) 28%, transparent 68%);
+          pointer-events:none; z-index:-1; animation:dbOrbFloat 8s ease-in-out infinite; }
         .db-hero::before { content:""; position:absolute; right:60px; bottom:-90px; width:190px; height:190px; border-radius:50%;
-          background:radial-gradient(circle, rgba(255,255,255,0.13) 0%, transparent 65%); pointer-events:none; }
-        .db-hello { margin:0; font-size:1.35rem; font-weight:800; letter-spacing:-0.2px; }
-        .db-date { margin:5px 0 0; font-size:12.5px; opacity:0.92; }
-        .db-hero-sub { margin:8px 0 0; font-size:12.5px; opacity:0.92; display:flex; gap:7px; flex-wrap:wrap; }
-        .db-hero-sub b { background:rgba(255,255,255,0.18); padding:2px 9px; border-radius:999px; font-weight:700; }
-        .db-quick { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:9px; margin-top:15px; position:relative; z-index:1; }
-        .db-qa { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.25);
-          background:rgba(255,255,255,0.14); color:#fff; cursor:pointer; font-size:13px; font-weight:700; backdrop-filter:blur(6px); text-align:left; }
-        .db-qa:hover { background:rgba(255,255,255,0.24); }
-        .db-qa small { display:block; font-size:10.5px; font-weight:500; opacity:0.85; }
-        .db-qa-ic { width:34px; height:34px; border-radius:10px; background:rgba(255,255,255,0.22); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
-        .db-sec { background:var(--surface); border:1px solid var(--border-color); border-radius:14px; padding:14px 16px; }
+          background:radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 66%); pointer-events:none; z-index:-1;
+          animation:dbOrbFloat 10s ease-in-out -3s infinite reverse; }
+        .db-hello { position:relative; z-index:1; margin:0; max-width:58%; font-size:clamp(1.45rem, 2.4vw, 2rem); font-weight:850; letter-spacing:-0.04em;
+          line-height:1.12; text-wrap:balance; animation:dbHelloIn .65s cubic-bezier(.2,.8,.2,1) both; }
+        .db-date { position:relative; z-index:1; margin:8px 0 0; font-size:12.5px; opacity:0.9; letter-spacing:0.01em; animation:dbHelloIn .7s .08s cubic-bezier(.2,.8,.2,1) both; }
+        .db-hero-sub { position:relative; z-index:1; margin:8px 0 0; font-size:12.5px; opacity:0.92; display:flex; gap:7px; flex-wrap:wrap; }
+        .db-hero-sub b { background:rgba(255,255,255,0.16); padding:5px 10px; border:1px solid rgba(255,255,255,0.16); border-radius:999px; font-weight:700; backdrop-filter:blur(8px); }
+        .db-quick { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-top:22px; position:relative; z-index:2; }
+        .db-qa { display:flex; align-items:center; min-height:58px; gap:10px; padding:10px 12px; border-radius:13px; border:1px solid rgba(255,255,255,0.25);
+          background:rgba(255,255,255,0.13); color:#fff; cursor:pointer; font-size:13px; font-weight:700; backdrop-filter:blur(10px); text-align:left;
+          transition:transform .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+        .db-qa:hover { background:rgba(255,255,255,0.23); border-color:rgba(255,255,255,0.42); transform:translateY(-3px); box-shadow:0 10px 22px rgba(15,23,42,.14); }
+        .db-qa small { display:block; max-width:130px; font-size:10.5px; font-weight:500; line-height:1.25; opacity:0.85; }
+        .db-qa-ic { width:36px; height:36px; border-radius:11px; background:rgba(255,255,255,0.22); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .db-hero-art { position:absolute; top:8px; right:3.5%; width:260px; height:170px; pointer-events:none; z-index:0; }
+        .db-hero-art::before { content:""; position:absolute; inset:24px 18px 2px 38px; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.2), transparent 68%); filter:blur(4px); }
+        .db-hero-orbit { position:absolute; border:1px solid rgba(255,255,255,.22); border-radius:50%; transform:rotate(-18deg); }
+        .db-hero-orbit--one { inset:16px 18px 12px 35px; animation:dbOrbitSpin 18s linear infinite; }
+        .db-hero-orbit--two { inset:34px -4px 28px 51px; transform:rotate(42deg); border-color:rgba(255,255,255,.13); animation:dbOrbitSpin 13s linear infinite reverse; }
+        .db-hero-spark { position:absolute; color:rgba(255,255,255,.85); font-weight:800; }
+        .db-hero-spark--one { top:15px; right:26px; font-size:18px; animation:dbSpark 3.2s ease-in-out infinite; }
+        .db-hero-spark--two { bottom:30px; left:28px; font-size:26px; animation:dbSpark 4s .5s ease-in-out infinite reverse; }
+        .db-hero-float { position:absolute; display:flex; align-items:center; gap:9px; color:#fff; border:1px solid rgba(255,255,255,.3); background:rgba(255,255,255,.14); box-shadow:0 12px 25px rgba(15,23,42,.16), inset 0 1px 0 rgba(255,255,255,.22); backdrop-filter:blur(10px); }
+        .db-hero-float--main { top:43px; left:64px; padding:11px 14px; border-radius:15px; animation:dbFloatMain 5.5s ease-in-out infinite; }
+        .db-hero-float--main b, .db-hero-float--main small { display:block; white-space:nowrap; }
+        .db-hero-float--main b { font-size:12px; }
+        .db-hero-float--main small { margin-top:2px; font-size:10px; opacity:.76; }
+        .db-hero-float-icon { display:grid; width:38px; height:38px; place-items:center; border-radius:12px; color:#fff; background:linear-gradient(145deg, rgba(255,255,255,.36), rgba(255,255,255,.12)); }
+        .db-hero-float--mini { right:0; bottom:17px; padding:7px 10px 7px 7px; border-radius:999px; font-size:10px; font-weight:800; animation:dbFloatMini 4.5s 1s ease-in-out infinite; }
+        .db-hero-mini-check { display:grid; width:22px; height:22px; place-items:center; border-radius:50%; background:#4ade80; color:#14532d; }
+        .db-sec { background:var(--surface); border:1px solid color-mix(in srgb, var(--border-color) 82%, var(--color-action) 18%); border-radius:16px; padding:16px 18px;
+          box-shadow:0 5px 18px rgba(15,23,42,.035); transition:box-shadow .22s ease, border-color .22s ease, transform .22s ease; }
+        .db-sec:hover { border-color:color-mix(in srgb, var(--border-color) 60%, var(--color-action) 40%); box-shadow:0 12px 28px rgba(15,23,42,.07); }
         .db-sec-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:11px; }
         .db-sec-title { margin:0; font-size:0.95rem; font-weight:800; color:var(--text-dark); display:flex; align-items:center; gap:8px; }
         .db-sec-title svg { color:var(--color-action, var(--primary)); }
@@ -716,51 +904,90 @@ export default function DashboardView({
 
       {/* Hero — Cài đặt → Bảng điều khiển: tắt lời chào / thao tác nhanh là biến mất */}
       {(dashCfg.showGreeting || dashCfg.showQuickActions) && (
-      <div className="db-hero">
+      <div className="db-hero" ref={heroRef} onPointerDown={handleFloatingPointerDown}
+        style={heroHeight ? { "--db-hero-height": `${heroHeight}px` } : undefined}>
+        <div className="db-hero-art" aria-hidden="true">
+          <span className="db-hero-orbit db-hero-orbit--one" />
+          <span className="db-hero-orbit db-hero-orbit--two" />
+          <span className="db-hero-spark db-hero-spark--one">✦</span>
+          <span className="db-hero-spark db-hero-spark--two">·</span>
+          <div className="db-hero-float db-hero-float--main" data-floating-id="hero-card"
+            ref={(node) => node ? floatingItemsRef.current.set("hero-card", node) : floatingItemsRef.current.delete("hero-card")}>
+            <span className="db-hero-float-icon"><BookOpen size={22} /></span>
+            <span><b>Không gian</b><small>chuẩn bị bài dạy</small></span>
+          </div>
+          <div className="db-hero-float db-hero-float--mini" data-floating-id="hero-status"
+            ref={(node) => node ? floatingItemsRef.current.set("hero-status", node) : floatingItemsRef.current.delete("hero-status")}>
+            <span className="db-hero-mini-check"><Check size={13} /></span>
+            <span>Đã sẵn sàng</span>
+          </div>
+        </div>
         {dashCfg.showGreeting && (
           <>
             <h1 className="db-hello">Chào {displayName ? displayName : "thầy/cô"} 👋</h1>
             <p className="db-date">{todayLabel}</p>
-            <div className="db-hero-sub">
-              <b>📚 {totalBooks} sách</b>
-              {wordBooks > 0 && <b>📝 {wordBooks} Word</b>}
-              {pendingTasks > 0 ? <b>📌 {pendingTasks} việc cần làm</b> : <b>✅ Không còn việc tồn</b>}
-              {scans.length > 0 && <b>📷 {scans.length} scan SGK</b>}
-            </div>
           </>
         )}
-        {/* A3 • Dấu mốc sao lưu — bấm là mở Sao lưu & Khôi phục */}
-        {backupStatus && (
-          <button
-            type="button"
-            onClick={() => handleNavigate("datatools")}
-            title="Mở Sao lưu & Khôi phục"
-            className="db-backup-pill"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, margin: "0 0 8px",
-              padding: "4px 11px", borderRadius: 999, fontSize: 12, fontWeight: 700,
-              cursor: "pointer",
-              border: `1px solid ${(backupStatus.never || backupStatus.stale) ? "rgba(245,158,11,0.45)" : "var(--border-color)"}`,
-              background: (backupStatus.never || backupStatus.stale) ? "rgba(245,158,11,0.12)" : "var(--surface)",
-              color: (backupStatus.never || backupStatus.stale) ? "var(--warning-deep, #b45309)" : "var(--text-mid)",
-            }}
-          >
-            {backupStatus.never
-              ? "⚠️ Chưa từng sao lưu — bấm để sao lưu ngay"
-              : backupStatus.stale
-                ? `💾 Đã ${Math.max(1, Math.round((Date.now() - backupStatus.at) / 86400000))} ngày chưa sao lưu — bấm vào đây`
-                : `💾 Đã sao lưu ${new Date(backupStatus.at).toLocaleString("vi-VN")}`}
-          </button>
+        {(dashCfg.showGreeting || backupStatus) && (
+          <div className="db-hero-status-row">
+            {dashCfg.showGreeting && (
+              <div className="db-hero-sub">
+                <b data-floating-id="stat-books" ref={(node) => node ? floatingItemsRef.current.set("stat-books", node) : floatingItemsRef.current.delete("stat-books")}>📚 {totalBooks} sách</b>
+                {wordBooks > 0 && <b data-floating-id="stat-word" ref={(node) => node ? floatingItemsRef.current.set("stat-word", node) : floatingItemsRef.current.delete("stat-word")}>📝 {wordBooks} Word</b>}
+                {pendingTasks > 0 ? <b data-floating-id="stat-tasks" ref={(node) => node ? floatingItemsRef.current.set("stat-tasks", node) : floatingItemsRef.current.delete("stat-tasks")}>📌 {pendingTasks} việc cần làm</b> : <b data-floating-id="stat-tasks" ref={(node) => node ? floatingItemsRef.current.set("stat-tasks", node) : floatingItemsRef.current.delete("stat-tasks")}>✅ Không còn việc tồn</b>}
+                {scans.length > 0 && <b data-floating-id="stat-scans" ref={(node) => node ? floatingItemsRef.current.set("stat-scans", node) : floatingItemsRef.current.delete("stat-scans")}>📷 {scans.length} scan SGK</b>}
+              </div>
+            )}
+            {backupStatus && (
+              <button data-floating-id="backup" ref={(node) => node ? floatingItemsRef.current.set("backup", node) : floatingItemsRef.current.delete("backup")}
+                type="button"
+                onClick={() => handleNavigate("datatools")}
+                title="Mở Sao lưu & Khôi phục"
+                className="db-backup-pill"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, margin: 0,
+                  padding: "4px 11px", borderRadius: 999, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer",
+                  border: `1px solid ${(backupStatus.never || backupStatus.stale) ? "rgba(245,158,11,0.45)" : "var(--border-color)"}`,
+                  background: (backupStatus.never || backupStatus.stale) ? "rgba(245,158,11,0.12)" : "var(--surface)",
+                  color: (backupStatus.never || backupStatus.stale) ? "var(--warning-deep, #b45309)" : "var(--text-mid)",
+                }}
+              >
+                {backupStatus.never
+                  ? "⚠️ Chưa từng sao lưu — bấm để sao lưu ngay"
+                  : backupStatus.stale
+                    ? `💾 Đã ${Math.max(1, Math.round((Date.now() - backupStatus.at) / 86400000))} ngày chưa sao lưu — bấm vào đây`
+                    : `💾 Đã sao lưu ${new Date(backupStatus.at).toLocaleString("vi-VN")}`}
+              </button>
+            )}
+            <button className="db-hero-resize" type="button" aria-label="Điều chỉnh chiều cao thẻ xin chào"
+              onPointerDown={handleHeroResizePointerDown} title="Kéo để điều chỉnh chiều cao thẻ xin chào">
+              <span />
+            </button>
+          </div>
         )}
         {dashCfg.showQuickActions && (
         <div className="db-quick">
           {visibleQuickActions.map((action) => (
-            <button key={action.id} className="db-qa" onClick={() => handleNavigate(action.view)}>
+            <button
+              key={action.id}
+              data-floating-id={`quick-${action.id}`}
+              ref={(node) => node ? floatingItemsRef.current.set(`quick-${action.id}`, node) : floatingItemsRef.current.delete(`quick-${action.id}`)}
+              className="db-qa"
+              onClick={() => handleQuickClick(action)}
+            >
               <span className="db-qa-ic">{action.icon}</span>
               <span>{action.label}<small>{action.description}</small></span>
             </button>
           ))}
-          <button className="db-qa" onClick={() => setShowAllTools(true)}>
+          <button
+            data-floating-id="quick-all-tools"
+            ref={(node) => node ? floatingItemsRef.current.set("quick-all-tools", node) : floatingItemsRef.current.delete("quick-all-tools")}
+            className="db-qa"
+            onClick={() => {
+              if (!suppressFloatingClickRef.current) setShowAllTools(true);
+            }}
+          >
             <span className="db-qa-ic"><MoreHorizontal size={20} /></span>
             <span>Tất cả công cụ<small>{visibleTools.length} khu vực</small></span>
           </button>

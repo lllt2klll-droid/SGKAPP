@@ -1,0 +1,23 @@
+/* The PDF reader uses pointer pan + wheel gestures, not native scrollbars. */
+.pdf-viewport-container {
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.pdf-viewport-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.pdf-view-inner {
+  overflow: visible;
+}
+
+/* Panel widths stay stable; no invisible resize hit area can steal book drags. */
+.reader-main .panel-resizer,
+.reader-toc-panel .panel-resizer,
+.ai-panel .panel-resizer {
+  display: none;
+}

@@ -1,0 +1,134 @@
+/* Light theme contrast pass: keep glass visible on bright surfaces. */
+[data-theme="light"] {
+  --glass-bg: color-mix(in srgb, var(--surface) 94%, var(--color-action-soft) 6%);
+  --glass-bg-strong: color-mix(in srgb, var(--surface) 97%, var(--color-action-soft) 3%);
+  --glass-border: color-mix(in srgb, var(--color-action) 28%, var(--border-strong));
+  --glass-highlight: rgba(255,255,255,.82);
+  --glass-shadow: 0 12px 28px rgba(30, 41, 59, .11), 0 2px 6px rgba(30, 41, 59, .05);
+}
+
+[data-theme="light"] .app-shell .panel-box,
+[data-theme="light"] .app-shell .card,
+[data-theme="light"] .app-shell .view-card,
+[data-theme="light"] .app-shell .content-card,
+[data-theme="light"] .app-shell .data-table,
+[data-theme="light"] .app-shell .whiteboard-header,
+[data-theme="light"] .app-shell .whiteboard-topbar,
+[data-theme="light"] .app-shell .book-card,
+[data-theme="light"] .app-shell .learning-hub-card,
+[data-theme="light"] .app-shell .tool-card {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.78), rgba(255,255,255,.22) 46%, transparent 75%),
+    var(--glass-bg);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+}
+
+[data-theme="light"] .app-shell .panel-box:hover,
+[data-theme="light"] .app-shell .card:hover,
+[data-theme="light"] .app-shell .view-card:hover,
+[data-theme="light"] .app-shell .content-card:hover,
+[data-theme="light"] .app-shell .book-card:hover,
+[data-theme="light"] .app-shell .learning-hub-card:hover,
+[data-theme="light"] .app-shell .tool-card:hover {
+  border-color: color-mix(in srgb, var(--color-action) 48%, var(--border-strong));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.92), rgba(239,246,255,.32) 48%, transparent 78%),
+    var(--glass-bg-strong);
+  box-shadow: 0 18px 36px rgba(30, 41, 59, .14),
+    0 4px 10px color-mix(in srgb, var(--color-action) 12%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.95);
+}
+
+[data-theme="light"] .app-shell .btn:not(.btn-primary):not(.btn-accent),
+[data-theme="light"] .app-shell .btn-tool,
+[data-theme="light"] .app-shell .btn-icon,
+[data-theme="light"] .app-shell .action-btn,
+[data-theme="light"] .app-shell .toolbar-btn,
+[data-theme="light"] .app-shell .filter-btn,
+[data-theme="light"] .app-shell .tab-btn {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.9), rgba(239,246,255,.34)),
+    var(--glass-bg);
+  border-color: color-mix(in srgb, var(--color-action) 24%, var(--border-strong));
+  color: var(--text-dark);
+  box-shadow: 0 3px 9px rgba(30,41,59,.07), inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+[data-theme="light"] .app-shell .btn-primary,
+[data-theme="light"] .app-shell .btn-accent {
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--color-action) 24%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.48);
+}
+
+[data-theme="light"] .app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+[data-theme="light"] .app-shell select,
+[data-theme="light"] .app-shell textarea,
+[data-theme="light"] .app-shell .form-control,
+[data-theme="light"] .app-shell .search-input,
+[data-theme="light"] .app-shell .sort-select {
+  background: rgba(255,255,255,.9);
+  border-color: color-mix(in srgb, var(--color-action) 18%, var(--border-strong));
+  box-shadow: inset 0 1px 2px rgba(30,41,59,.04), inset 0 1px 0 rgba(255,255,255,.95);
+}
+
+[data-theme="light"] .modal-content,
+[data-theme="light"] .global-search-modal,
+[data-theme="light"] .help-modal,
+[data-theme="light"] .app-shell .popover,
+[data-theme="light"] .app-shell .dropdown-menu,
+[data-theme="light"] .app-shell .context-menu,
+[data-theme="light"] .st-modal {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.88), rgba(239,246,255,.38)),
+    rgba(255,255,255,.94);
+  border-color: color-mix(in srgb, var(--color-action) 30%, var(--border-strong));
+  box-shadow: 0 28px 70px rgba(30,41,59,.2), inset 0 1px 0 rgba(255,255,255,.96);
+}
+
+[data-theme="light"] .st-card,
+[data-theme="light"] .help-v2 .help-header,
+[data-theme="light"] .help-v2 .help-hero,
+[data-theme="light"] .help-v2 .help-walk,
+[data-theme="light"] .help-v2 .help-modules,
+[data-theme="light"] .help-v2 .help-footer-card {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.88), rgba(239,246,255,.3)),
+    rgba(255,255,255,.9);
+  border-color: color-mix(in srgb, var(--color-action) 22%, var(--border-strong));
+  box-shadow: 0 12px 28px rgba(30,41,59,.09), inset 0 1px 0 rgba(255,255,255,.95);
+}
+
+[data-theme="light"] .help-v2 .help-quick-card,
+[data-theme="light"] .help-v2 .help-shortcuts,
+[data-theme="light"] .help-v2 .help-kbd,
+[data-theme="light"] .help-v2 .help-walk-step,
+[data-theme="light"] .help-v2 .help-walk-card,
+[data-theme="light"] .help-v2 .help-mod,
+[data-theme="light"] .help-v2 .help-step,
+[data-theme="light"] .help-v2 .help-ai-card,
+[data-theme="light"] .help-v2 .help-empty,
+[data-theme="light"] .st-backup-actions,
+[data-theme="light"] .st-restore-zone {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.86), rgba(239,246,255,.28)),
+    rgba(255,255,255,.82);
+  border-color: color-mix(in srgb, var(--color-action) 20%, var(--border-strong));
+  box-shadow: 0 5px 16px rgba(30,41,59,.07), inset 0 1px 0 rgba(255,255,255,.92);
+}
+
+[data-theme="light"] .db-root .db-sec,
+[data-theme="light"] .db-root .db-kpi,
+[data-theme="light"] .db-root .db-row,
+[data-theme="light"] .db-root .db-subj-card,
+[data-theme="light"] .db-root .db-tool {
+  border-color: color-mix(in srgb, var(--color-action) 18%, var(--border-strong));
+  box-shadow: 0 10px 24px rgba(30,41,59,.07), inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+[data-theme="light"] .db-root .db-hero-sub b,
+[data-theme="light"] .db-root .db-backup-pill {
+  background: rgba(255,255,255,.22) !important;
+  border-color: rgba(255,255,255,.5) !important;
+  box-shadow: 0 5px 14px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.5);
+}

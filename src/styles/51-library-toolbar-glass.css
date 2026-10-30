@@ -1,0 +1,212 @@
+/* Library filter redesign: compact glass command center. */
+.library-workspace .libx-toolbar,
+.library-view .libx-toolbar,
+.libx-toolbar {
+  position: relative;
+  overflow: visible;
+  gap: 12px;
+  padding: 14px;
+  border-color: color-mix(in srgb, var(--color-action) 22%, var(--border-strong));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.16), transparent 58%),
+    color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: 0 14px 32px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.35);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.libx-toolbar > .libx-trow:first-child {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, var(--color-action) 28%);
+}
+
+.libx-toolbar > .libx-trow:nth-child(2) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.libx-toolbar > .libx-trow:last-child {
+  min-height: 28px;
+  padding-top: 2px;
+}
+
+.libx-search {
+  min-width: 0;
+}
+
+.libx-search input,
+.libx-toolbar select {
+  height: 38px;
+  border-color: color-mix(in srgb, var(--color-action) 20%, var(--border-strong));
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+
+.libx-search input:focus,
+.libx-toolbar select:focus {
+  border-color: var(--color-action);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-action) 16%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.55);
+  outline: none;
+}
+
+.toolbar-sort,
+.libx-seg {
+  height: 38px;
+  border: 1px solid color-mix(in srgb, var(--color-action) 18%, var(--border-strong));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+}
+
+.toolbar-sort {
+  padding: 0 4px 0 9px;
+}
+
+.toolbar-sort select {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.libx-seg {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 3px;
+}
+
+.libx-seg button {
+  height: 30px;
+  min-width: 34px;
+  border-radius: 8px;
+  transition: background .2s ease, color .2s ease, transform .2s ease;
+}
+
+.libx-seg button:hover {
+  transform: translateY(-1px);
+  color: var(--color-action);
+  background: var(--color-action-soft);
+}
+
+.libx-seg button.active {
+  background: linear-gradient(135deg, var(--color-action), var(--color-action-active, #4f46e5));
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--color-action) 22%, transparent);
+}
+
+.libx-toolbar > .libx-trow:nth-child(2) .filter-group {
+  width: auto !important;
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 9px !important;
+  gap: 5px !important;
+  border: 1px solid color-mix(in srgb, var(--color-action) 13%, var(--border-color));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 64%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
+}
+
+.libx-toolbar .filter-label {
+  min-width: 48px !important;
+  padding-top: 0 !important;
+  color: var(--color-action-strong, var(--color-action)) !important;
+  font-size: .64rem !important;
+}
+
+.libx-fbtn {
+  padding: 5px 10px;
+  border-color: color-mix(in srgb, var(--color-action) 20%, var(--border-strong));
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+  transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.libx-fbtn:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-action);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--color-action) 12%, transparent);
+}
+
+.libx-fbtn.active {
+  background: linear-gradient(135deg, var(--color-action), var(--color-action-active, #4f46e5));
+  border-color: transparent;
+  box-shadow: 0 5px 12px color-mix(in srgb, var(--color-action) 22%, transparent);
+}
+
+.libx-count {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--color-action) 14%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-soft) 66%, transparent);
+}
+
+.libx-toolbar > .libx-trow:last-child .btn {
+  border-radius: 999px;
+}
+
+[data-theme="light"] .libx-toolbar {
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.9), rgba(239,246,255,.28)),
+    rgba(255,255,255,.92);
+  border-color: color-mix(in srgb, var(--color-action) 25%, var(--border-strong));
+  box-shadow: 0 16px 34px rgba(30,41,59,.11), inset 0 1px 0 rgba(255,255,255,.95);
+}
+
+[data-theme="light"] .libx-toolbar > .libx-trow:nth-child(2) .filter-group {
+  background: rgba(248,250,252,.72);
+  border-color: color-mix(in srgb, var(--color-action) 16%, var(--border-strong));
+}
+
+@media (max-width: 760px) {
+  .libx-toolbar {
+    padding: 11px;
+  }
+
+  .libx-toolbar > .libx-trow:first-child {
+    grid-template-columns: 1fr auto;
+  }
+
+  .libx-search {
+    grid-column: 1 / -1;
+  }
+
+  .libx-toolbar > .libx-trow:nth-child(2) {
+    grid-template-columns: 1fr;
+  }
+
+  .libx-toolbar > .libx-trow:nth-child(2) .filter-group {
+    width: 100% !important;
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+  }
+
+  .libx-toolbar .filter-label {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .libx-seg button,
+  .libx-fbtn {
+    transition: none;
+  }
+
+  .libx-seg button:hover,
+  .libx-fbtn:hover {
+    transform: none;
+  }
+}

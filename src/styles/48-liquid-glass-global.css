@@ -1,0 +1,189 @@
+/* Global liquid-glass language for reusable app surfaces. */
+@keyframes glassSweep {
+  from { transform: translateX(-140%) skewX(-18deg); }
+  to { transform: translateX(260%) skewX(-18deg); }
+}
+
+:root {
+  --glass-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--surface) 84%, transparent);
+  --glass-border: color-mix(in srgb, var(--color-action) 16%, var(--border-color));
+  --glass-highlight: rgba(255,255,255,.32);
+  --glass-shadow: 0 12px 30px rgba(15,23,42,.07);
+}
+
+/* Common cards and panels, excluding the PDF/canvas internals. */
+.app-shell .panel-box,
+.app-shell .card,
+.app-shell .view-card,
+.app-shell .content-card,
+.app-shell .data-table,
+.app-shell .whiteboard-header,
+.app-shell .whiteboard-topbar,
+.app-shell .book-card,
+.app-shell .learning-hub-card,
+.app-shell .tool-card {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.13), transparent 58%),
+    var(--glass-bg);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  transition: border-color .22s ease, box-shadow .22s ease, background .22s ease;
+}
+
+.app-shell .panel-box:hover,
+.app-shell .card:hover,
+.app-shell .view-card:hover,
+.app-shell .content-card:hover,
+.app-shell .book-card:hover,
+.app-shell .learning-hub-card:hover,
+.app-shell .tool-card:hover {
+  border-color: color-mix(in srgb, var(--color-action) 34%, var(--border-color));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.2), transparent 62%),
+    var(--glass-bg-strong);
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--color-action) 9%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+/* Shared buttons: soft glass, animated highlight and a restrained lift. */
+.app-shell .btn,
+.app-shell button.btn,
+.app-shell .btn-tool,
+.app-shell .btn-icon,
+.app-shell .action-btn,
+.app-shell .toolbar-btn,
+.app-shell .filter-btn,
+.app-shell .tab-btn {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--color-action) 22%, var(--border-color));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+  transition: transform .22s cubic-bezier(.2,.8,.2,1), background .22s ease,
+    border-color .22s ease, box-shadow .22s ease, color .22s ease;
+}
+
+.app-shell .btn::after,
+.app-shell .btn-tool::after,
+.app-shell .btn-icon::after,
+.app-shell .action-btn::after,
+.app-shell .toolbar-btn::after,
+.app-shell .filter-btn::after,
+.app-shell .tab-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -45%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent);
+  pointer-events: none;
+}
+
+.app-shell .btn:hover:not(:disabled)::after,
+.app-shell .btn-tool:hover:not(:disabled)::after,
+.app-shell .btn-icon:hover:not(:disabled)::after,
+.app-shell .action-btn:hover:not(:disabled)::after,
+.app-shell .toolbar-btn:hover:not(:disabled)::after,
+.app-shell .filter-btn:hover:not(:disabled)::after,
+.app-shell .tab-btn:hover:not(:disabled)::after {
+  animation: glassSweep .65s ease;
+}
+
+.app-shell .btn:hover:not(:disabled),
+.app-shell .btn-tool:hover:not(:disabled),
+.app-shell .btn-icon:hover:not(:disabled),
+.app-shell .action-btn:hover:not(:disabled),
+.app-shell .toolbar-btn:hover:not(:disabled),
+.app-shell .filter-btn:hover:not(:disabled),
+.app-shell .tab-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-action) 48%, var(--border-color));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-action) 14%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.42);
+}
+
+.app-shell .btn-primary,
+.app-shell .btn-accent {
+  background: linear-gradient(135deg, var(--color-action), var(--color-action-active, #4f46e5));
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--color-action) 22%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.32);
+}
+
+.app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.app-shell select,
+.app-shell textarea,
+.app-shell .form-control,
+.app-shell .search-input,
+.app-shell .sort-select {
+  border-color: color-mix(in srgb, var(--color-action) 16%, var(--input-border, var(--border-color)));
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22);
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+
+.app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+.app-shell select:focus,
+.app-shell textarea:focus,
+.app-shell .form-control:focus,
+.app-shell .search-input:focus,
+.app-shell .sort-select:focus {
+  border-color: var(--color-action);
+  background: var(--glass-bg-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-action) 18%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.35);
+}
+
+.modal-content,
+.global-search-modal,
+.help-modal,
+.app-shell .popover,
+.app-shell .dropdown-menu,
+.app-shell .context-menu {
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.16), transparent 50%),
+    var(--glass-bg-strong);
+  box-shadow: 0 24px 60px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.38);
+  backdrop-filter: blur(22px) saturate(1.12);
+  -webkit-backdrop-filter: blur(22px) saturate(1.12);
+}
+
+.toast,
+.whiteboard-toast,
+.reader-toast {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border-color: var(--glass-border) !important;
+  box-shadow: 0 16px 34px rgba(15,23,42,.16), inset 0 1px 0 rgba(255,255,255,.3) !important;
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .btn,
+  .app-shell .btn-tool,
+  .app-shell .btn-icon,
+  .app-shell .action-btn,
+  .app-shell .toolbar-btn,
+  .app-shell .filter-btn,
+  .app-shell .tab-btn,
+  .app-shell .panel-box,
+  .app-shell .card,
+  .app-shell .view-card,
+  .app-shell .content-card,
+  .app-shell .book-card,
+  .app-shell .learning-hub-card,
+  .app-shell .tool-card {
+    transition: none;
+  }
+
+  .app-shell .btn:hover:not(:disabled),
+  .app-shell .btn-tool:hover:not(:disabled),
+  .app-shell .btn-icon:hover:not(:disabled),
+  .app-shell .action-btn:hover:not(:disabled),
+  .app-shell .toolbar-btn:hover:not(:disabled),
+  .app-shell .filter-btn:hover:not(:disabled),
+  .app-shell .tab-btn:hover:not(:disabled) {
+    transform: none;
+  }
+}

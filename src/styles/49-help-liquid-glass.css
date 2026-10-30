@@ -1,0 +1,165 @@
+/* Help center glass layer: readable guidance with the same app surface language. */
+@keyframes helpGlassSweep {
+  from { transform: translateX(-140%) skewX(-18deg); }
+  to { transform: translateX(280%) skewX(-18deg); }
+}
+
+.help-v2 {
+  --help-glass: color-mix(in srgb, var(--surface) 72%, transparent);
+  --help-glass-strong: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+
+.help-v2 .help-header,
+.help-v2 .help-hero,
+.help-v2 .help-walk,
+.help-v2 .help-modules,
+.help-v2 .help-footer-card {
+  border-color: color-mix(in srgb, var(--color-action) 18%, var(--border-color));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.14), transparent 58%),
+    var(--help-glass);
+  box-shadow: 0 12px 30px rgba(15,23,42,.06), inset 0 1px 0 rgba(255,255,255,.3);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.help-v2 .help-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.help-v2 .help-hero::after {
+  content: "";
+  position: absolute;
+  right: -80px;
+  top: -110px;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-action) 18%, transparent), transparent 68%);
+  pointer-events: none;
+}
+
+.help-v2 .help-iconBox,
+.help-v2 .help-hero-badge,
+.help-v2 .help-progress-text,
+.help-v2 .help-info-badge,
+.help-v2 .help-count,
+.help-v2 .help-mod-pct {
+  border-color: color-mix(in srgb, var(--color-action) 22%, var(--border-color));
+  background: color-mix(in srgb, var(--color-action-soft) 54%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.help-v2 .help-iconBox {
+  transition: transform .24s cubic-bezier(.2,.8,.2,1), box-shadow .24s ease;
+}
+
+.help-v2 .help-header:hover .help-iconBox {
+  transform: translateY(-2px) rotate(-4deg);
+  box-shadow: 0 9px 18px color-mix(in srgb, var(--color-action) 18%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+.help-v2 .help-search {
+  border-color: color-mix(in srgb, var(--color-action) 24%, var(--border-color));
+  background: color-mix(in srgb, var(--surface) 56%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3);
+  backdrop-filter: blur(13px);
+  -webkit-backdrop-filter: blur(13px);
+}
+
+.help-v2 .help-search:focus-within {
+  border-color: var(--color-action);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-action) 16%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+.help-v2 .help-quick-card,
+.help-v2 .help-shortcuts,
+.help-v2 .help-kbd,
+.help-v2 .help-walk-step,
+.help-v2 .help-walk-card,
+.help-v2 .help-mod,
+.help-v2 .help-step,
+.help-v2 .help-ai-card,
+.help-v2 .help-empty {
+  border-color: color-mix(in srgb, var(--color-action) 15%, var(--border-color));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.12), transparent 70%),
+    color-mix(in srgb, var(--surface) 66%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.24);
+  backdrop-filter: blur(11px) saturate(1.05);
+  -webkit-backdrop-filter: blur(11px) saturate(1.05);
+  transition: transform .22s cubic-bezier(.2,.8,.2,1), border-color .22s ease,
+    background .22s ease, box-shadow .22s ease;
+}
+
+.help-v2 .help-quick-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.help-v2 .help-quick-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 -45%;
+  width: 25%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
+  pointer-events: none;
+}
+
+.help-v2 .help-quick-card:hover,
+.help-v2 .help-walk-step:hover,
+.help-v2 .help-mod:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-action) 42%, var(--border-color));
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.2), transparent 70%),
+    var(--help-glass-strong);
+  box-shadow: 0 9px 20px color-mix(in srgb, var(--color-action) 10%, transparent),
+    inset 0 1px 0 rgba(255,255,255,.38);
+}
+
+.help-v2 .help-quick-card:hover::after {
+  animation: helpGlassSweep .65s ease;
+}
+
+.help-v2 .help-walk-step.active,
+.help-v2 .help-mod.open {
+  border-color: var(--color-action);
+  box-shadow: 0 9px 22px color-mix(in srgb, var(--color-action) 12%, transparent),
+    inset 3px 0 0 var(--color-action), inset 0 1px 0 rgba(255,255,255,.35);
+}
+
+.help-v2 .help-mod-body {
+  background: color-mix(in srgb, var(--surface-soft) 54%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.help-v2 .help-tip,
+.help-v2 .help-ai-status,
+.help-v2 .help-celebrate {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .help-v2 .help-iconBox,
+  .help-v2 .help-quick-card,
+  .help-v2 .help-walk-step,
+  .help-v2 .help-mod {
+    transition: none;
+  }
+
+  .help-v2 .help-header:hover .help-iconBox,
+  .help-v2 .help-quick-card:hover,
+  .help-v2 .help-walk-step:hover,
+  .help-v2 .help-mod:hover {
+    transform: none;
+  }
+}

@@ -1,0 +1,115 @@
+/* Dashboard premium motion and visual rhythm. */
+@keyframes dbHeroGradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes dbOrbFloat {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-18px, 12px, 0) scale(1.08); }
+}
+
+@keyframes dbHelloIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dbOrbitSpin {
+  from { transform: rotate(-18deg) scale(1); }
+  to { transform: rotate(342deg) scale(1.04); }
+}
+
+@keyframes dbFloatMain {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-1deg); }
+  50% { transform: translate3d(0, -11px, 0) rotate(1deg); }
+}
+
+@keyframes dbFloatMini {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(7px, -8px, 0); }
+}
+
+@keyframes dbSpark {
+  0%, 100% { opacity: .38; transform: scale(.8) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(18deg); }
+}
+
+.db-root > .db-sec,
+.db-root > .db-main,
+.db-root > .db-hero {
+  animation: dbHelloIn .55s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.db-root > .db-sec:nth-of-type(2) { animation-delay: .06s; }
+.db-root > .db-sec:nth-of-type(3) { animation-delay: .11s; }
+.db-root .db-kpi,
+.db-root .db-stage,
+.db-root .db-row,
+.db-root .db-subj-card,
+.db-root .db-insight {
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background-color .2s ease;
+}
+
+.db-root .db-kpi:hover,
+.db-root .db-stage:hover,
+.db-root .db-subj-card:hover {
+  transform: translateY(-3px);
+}
+
+.db-root .db-insight {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 8px 18px rgba(15,23,42,.09);
+}
+
+.db-root .db-insight::after {
+  content: "";
+  position: absolute;
+  width: 110px;
+  height: 110px;
+  right: -34px;
+  bottom: -48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.12);
+  pointer-events: none;
+}
+
+.db-hero .db-qa:focus-visible {
+  outline: 2px solid rgba(255,255,255,.92);
+  outline-offset: 3px;
+}
+
+.db-hero .db-qa > span:last-child {
+  min-width: 0;
+  line-height: 1.15;
+}
+
+@media (max-width: 640px) {
+  .db-hero { padding: 22px 18px 18px; border-radius: 18px; }
+  .db-sec { padding: 14px; border-radius: 14px; }
+  .db-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .db-qa { padding: 10px; }
+  .db-hero-art { right: -54px; top: 2px; opacity: .42; transform: scale(.78); transform-origin: top right; }
+  .db-hello { max-width: 78%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .db-hero,
+  .db-hero::before,
+  .db-hero::after,
+  .db-hero-art,
+  .db-hero-orbit,
+  .db-hero-float,
+  .db-hero-spark,
+  .db-hello,
+  .db-date,
+  .db-root > .db-sec,
+  .db-root > .db-main,
+  .db-root > .db-hero {
+    animation: none;
+  }
+  .db-qa:hover,
+  .db-root .db-kpi:hover,
+  .db-root .db-stage:hover,
+  .db-root .db-subj-card:hover {
+    transform: none;
+  }
+}

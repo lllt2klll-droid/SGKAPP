@@ -116,6 +116,70 @@
 }
 
 /* ============================================================
+   O2. WORD READER PHONE
+   - Trang Word phải co theo khung đọc, không giữ chiều rộng A4 cố định.
+   - Bảng Word rộng được cuộn trong chính nội dung thay vì cắt mất cột.
+   - Header/footer và ảnh không được tạo tràn ngang trên màn hình hẹp.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  .pdf-panel:has(.word-book-pages) {
+    min-width: 0;
+  }
+
+  .pdf-panel > div:has(> .word-book-pages) {
+    min-width: 0;
+    padding: 10px 6px calc(84px + env(safe-area-inset-bottom)) !important;
+    overflow-x: hidden !important;
+  }
+
+  .word-book-pages {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+    padding: 2px 0 8px;
+    gap: 12px;
+  }
+
+  .word-book-page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 18px 14px 24px;
+    overflow: visible;
+  }
+
+  .word-book-content {
+    min-width: 0;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  .word-book-page-header,
+  .word-book-page-footer {
+    min-width: 0;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .word-book-content .docx-import table {
+    display: block;
+    width: 100% !important;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .word-book-content .docx-import img,
+  .word-book-content .docx-import svg,
+  .word-book-content .docx-import video {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}
+
+/* ============================================================
    P. READER PHONE (BookReader.jsx dùng .ai-panel thật)
    P1: panel-resizer-left của AI vẫn mount + onTouchStart -> vuốt nhầm
        đổi aiWidth. 33 mới ẩn .panel-resizer chung -> ẩn nốt bản -left.
