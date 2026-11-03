@@ -10,7 +10,7 @@ import {
   buildReportText,
   buildReportTableHtml,
   buildPrintHtml,
-} from "../src/compareUtils.js";
+} from "../src/reader/compareUtils.js";
 import {
   cloneBoard,
   boardSnap,

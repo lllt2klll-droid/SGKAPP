@@ -1,7 +1,7 @@
 // ── Source Badge — "📚 Nguồn: SGK …" + Xem nguồn → mở đúng trang ─────
 import React from "react";
 import { BookOpen, Eye } from "lucide-react";
-import { emitOpenSource } from "./sourceBadgeUtils";
+import { emitOpenSource } from "./sourceBadgeUtils.js";
 
 /**
  * Renders a provenance badge for any record that has `source.type === 'sgk_scan'`.
@@ -34,7 +34,7 @@ export default function SourceBadge({ source, books, onOpen, compact = false }) 
       style={{
         display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap",
         background: "var(--surface-soft)", border: "1px solid var(--border-color)", borderRadius: 8,
-        padding: "4px 8px", fontSize: 11, color: "var(--text-mid)",
+        padding: "4px 8px", fontSize: "0.6875rem", color: "var(--text-mid)",
       }}
     >
       <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontWeight: 800 }}>📚 Nguồn: {label}</span>

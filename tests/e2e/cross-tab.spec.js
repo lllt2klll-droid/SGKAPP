@@ -53,6 +53,13 @@ async function waitFor(fn, { timeout = 15000, interval = 250, message = "" } = {
   throw new Error(`waitFor timeout: ${message} (last=${JSON.stringify(last)})`);
 }
 
+async function waitForToast(page, text, options) {
+  return waitFor(async () => {
+    const toast = page.locator(".whiteboard-toast");
+    return (await toast.count()) > 0 && ((await toast.textContent()) || "").includes(text);
+  }, options);
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Bấm nav trong sidebar KHÔNG reload trang (reload sẽ xoá listener đã cài). */
@@ -69,6 +76,7 @@ async function openWhiteboard(page) {
   await clickNav(page, "Bảng trắng");
   await page.waitForSelector("svg.wb-svg", { timeout: 20000 });
   // Tour "30 giây" tự mở ở profile mới khi bảng trống → che nút.
+  await page.waitForTimeout(500);
   await dismissTourIfOpen(page);
 }
 
@@ -209,30 +217,89 @@ test("H4 • tab A lưu bảng đang mở chung → tab B hiện banner, Tải b
   await openWhiteboard(pageA);
   await sleep(800);
   await pageA.locator('button[title="Tạo bảng mới"]').click();
-  await waitFor(async () => ((await pageA.locator(".whiteboard-toast").textContent()) || "").includes("Đã tạo bảng mới"), {
+  await waitForToast(pageA, "Đã tạo bảng mới", {
     timeout: 15000, message: "toast Đã tạo bảng mới (A)",
   });
   // Đổi tên để tab B tìm đúng bảng
   await pageA.locator(".wb-uni-title").fill(boardName);
   await pageA.keyboard.press("Enter");
-  await waitFor(async () => ((await pageA.locator(".whiteboard-toast").textContent()) || "").includes("Đã đổi tên"), {
+  await waitForToast(pageA, "Đã đổi tên", {
     timeout: 15000, message: "toast Đã đổi tên (A)",
   });
 
-  // B mount mới (thấy bảng A vừa tạo) rồi mở đúng bảng đó qua drawer
-  await openBase(pageB);
+  // B đang ở Dashboard; mount lại view để đọc danh sách vừa cập nhật từ IDB.
   await openWhiteboard(pageB);
   await sleep(800);
-  await pageB.locator('button[title="Danh sách bảng — chuyển bảng, đổi tên, nhân bản"]').click();
-  await pageB.locator(".whiteboard-drawer-item", { hasText: boardName }).first().locator(".wb-board-main").click();
-  // B có thể đã tự mở sẵn đúng bảng này (activeId) nên switchBoard im lặng, không phát toast "Đã mở".
-  // Chốt chắc B đang đứng trên bảng của A qua tiêu đề bảng, không phụ thuộc toast.
+  if ((await pageB.locator(".wb-uni-title").inputValue()) !== boardName) {
+    await pageB.locator('button[title="Danh sách bảng — chuyển bảng, đổi tên, nhân bản"]').click();
+    const sharedBoard = pageB.locator(".whiteboard-drawer-item", { hasText: boardName }).first();
+    await waitFor(async () => (await sharedBoard.count()) > 0, {
+      timeout: 15000, message: "tab B tải bảng vừa được tạo và đổi tên ở tab A",
+    });
+    // Nếu B đang trỏ tới đúng ID nhưng title còn cũ, chuyển bảng rồi mở lại
+    // để buộc đọc bản mới nhất.
+    const boardRows = pageB.locator(".whiteboard-drawer-item");
+    let otherBoard = null;
+    for (let i = 0; i < await boardRows.count(); i++) {
+      const row = boardRows.nth(i);
+      if (!(await row.innerText()).includes(boardName)) {
+        otherBoard = row;
+        break;
+      }
+    }
+    assert.ok(otherBoard, "phải có bảng khác để chuyển khỏi activeId cũ");
+    await otherBoard.locator(".wb-board-main").click();
+    await pageB.locator('button[title="Danh sách bảng — chuyển bảng, đổi tên, nhân bản"]').click();
+    await sharedBoard.locator(".wb-board-main").click();
+  }
+  // Chốt chắc B đang đứng trên bảng của A, không phụ thuộc toast.
   await waitFor(async () => (await pageB.locator(".wb-uni-title").inputValue()) === boardName, {
     timeout: 15000, message: "tab B mở đúng bảng của A",
   });
+  const activeBoardId = await pageB.evaluate(async (name) => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("SGKAppDB");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const rows = await new Promise((resolve, reject) => {
+      const request = db.transaction("whiteboard_boards", "readonly").objectStore("whiteboard_boards").getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return rows.find((row) => row.name === name)?.id || null;
+  }, boardName);
+  assert.ok(activeBoardId, "tab B phải có ID của bảng đang mở trong IndexedDB");
+
+  // B có thể phát một event autosave khi vừa tải bảng; dọn trạng thái đó
+  // trước khi kiểm tra riêng event do thao tác lưu tay của A.
+  await pageA.waitForTimeout(1200);
+  const priorNotice = pageA.locator(".whiteboard-remote-bar");
+  if (await priorNotice.count()) {
+    await priorNotice.locator('button[title="Để sau"]').click();
+    await pageA.waitForSelector(".whiteboard-remote-bar", { state: "detached", timeout: 10000 });
+  }
 
   // A lưu tay → B phải hiện banner (không tự ghi đè), A không có banner của chính mình
+  await installCapture(pageA);
+  await clearCapture(pageA);
+  await installCapture(pageB);
+  await clearCapture(pageB);
   await pageA.locator('button[title="Lưu ngay (Ctrl+S)"]').click();
+  const localSaveEvent = await waitFor(
+    async () => (await readCapture(pageA)).find(
+      (x) => x.detail?.action === "save" && x.detail?.boardId === activeBoardId,
+    ) || null,
+    { timeout: 10000, message: "tab A phát event save" },
+  );
+  assert.equal(localSaveEvent.detail.boardId, activeBoardId, "event save của A phải nhắm đúng bảng B đang mở");
+  await waitFor(
+    async () => (await readCapture(pageB)).find(
+      (x) => x.detail?.action === "save" && x.detail?.boardId === localSaveEvent.detail.boardId && x.detail?.origin === localSaveEvent.detail.origin,
+    ) || null,
+    { timeout: 10000, message: "tab B nhận event save tương ứng từ A" },
+  );
   await pageB.waitForSelector(".whiteboard-remote-bar", { timeout: 20000 });
   assert.equal(await pageB.locator(".whiteboard-remote-bar").count(), 1, "tab B phải hiện banner bản mới");
   assert.equal(await pageA.locator(".whiteboard-remote-bar").count(), 0, "tab A không được hiện banner của chính mình");

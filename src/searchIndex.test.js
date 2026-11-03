@@ -1,7 +1,7 @@
 // ─── Test for normMap() Vietnamese search mapping fix ─────────────────────
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { normMap } from "./searchIndex.js";
+import { normMap } from "./data/searchIndex.js";
 
 globalThis.__SGK_TEST__ = true;
 

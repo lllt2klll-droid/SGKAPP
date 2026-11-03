@@ -1,7 +1,7 @@
 // ─── Lỗi #15 + #17 — vocab bookTitle guard & coverage hở ────────────────────
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveVocabBookTitle } from "./vocabSearch.js";
+import { resolveVocabBookTitle } from "./data/vocabSearch.js";
 
 globalThis.__SGK_TEST__ = true;
 

@@ -9,7 +9,7 @@ import {
   getDisabledViews,
   isViewEnabled,
   parseSettingsBackup,
-} from "./settingsStore.js";
+} from "./services/settingsStore.js";
 import { buildNavSections } from "./core/navigationRegistry.js";
 
 globalThis.__SGK_TEST__ = true;

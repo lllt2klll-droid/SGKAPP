@@ -1,7 +1,7 @@
 // ─── WebToolboxView — chống vòng lặp echo save→emit→setState ───
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { pickExternalTools } from "./webtoolsSync.js";
+import { pickExternalTools } from "./data/webtoolsSync.js";
 
 globalThis.__SGK_TEST__ = true;
 

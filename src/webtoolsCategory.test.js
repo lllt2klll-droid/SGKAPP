@@ -7,7 +7,7 @@ import {
   isKnownCategory,
   inferCategory,
   normalizeCategory,
-} from "./webtoolsCategory.js";
+} from "./data/webtoolsCategory.js";
 
 test("CATEGORIES: id duy nhất, đủ nhãn, 'other' luôn có", () => {
   const ids = CATEGORIES.map((c) => c.id);

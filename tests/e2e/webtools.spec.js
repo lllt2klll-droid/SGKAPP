@@ -155,3 +155,39 @@ test("Phím tắt '/' không đánh cắp focus khi modal Thêm/Sửa đang mở
     await page.close();
   }
 });
+
+test("Lối tắt công cụ web trên toolbar BookReader được lưu và bỏ ghim được", async () => {
+  const page = await freshPage();
+  try {
+    await openWebtools(page);
+
+    const addShortcut = page.getByRole("button", {
+      name: "Thêm GitHub vào toolbar BookReader",
+    });
+    await addShortcut.click();
+    assert.deepEqual(
+      await page.evaluate(() => JSON.parse(localStorage.getItem("readerToolbarTools") || "[]")),
+      ["webtool:gh"],
+    );
+    assert.equal(await page.getByRole("button", {
+      name: "Gỡ GitHub khỏi toolbar BookReader",
+    }).getAttribute("aria-pressed"), "true");
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".app-shell", { timeout: 20000 });
+    await openWebtools(page);
+    assert.equal(await page.getByRole("button", {
+      name: "Gỡ GitHub khỏi toolbar BookReader",
+    }).getAttribute("aria-pressed"), "true");
+
+    await page.getByRole("button", {
+      name: "Gỡ GitHub khỏi toolbar BookReader",
+    }).click();
+    assert.deepEqual(
+      await page.evaluate(() => JSON.parse(localStorage.getItem("readerToolbarTools") || "[]")),
+      [],
+    );
+  } finally {
+    await page.close();
+  }
+});

@@ -221,7 +221,7 @@ export default function ScanOverlay({ containerRef, onSelect, onCancel, active }
           border: "1px solid rgba(226,232,240,1)",
           borderRadius: 999,
           padding: "6px 10px 6px 8px",
-          fontSize: 11.5,
+          fontSize: "0.7188rem",
           fontWeight: 700,
           color: "#0f172a",
           boxShadow: "0 4px 16px rgba(15,23,42,0.10), 0 1px 2px rgba(15,23,42,0.06)",
@@ -281,7 +281,7 @@ export default function ScanOverlay({ containerRef, onSelect, onCancel, active }
           {hasSelection && (
             <span style={{
               position:"absolute", left:"50%", top:-22, transform:"translateX(-50%)",
-              background:"#0f172a", color:"#fff", fontSize:10, fontWeight:800, letterSpacing:0.3,
+              background:"#0f172a", color:"#fff", fontSize: "0.625rem", fontWeight:800, letterSpacing:0.3,
               padding:"3px 7px", borderRadius:999, whiteSpace:"nowrap",
               boxShadow:"0 4px 12px rgba(15,23,42,0.22)",
               border:"1px solid rgba(255,255,255,0.14)",
@@ -290,7 +290,7 @@ export default function ScanOverlay({ containerRef, onSelect, onCancel, active }
             </span>
           )}
           {tooSmall && (
-            <span style={{ position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)", background:"rgba(15,23,42,0.78)", color:"#fff", fontSize:11, fontWeight:800, padding:"4px 8px", borderRadius:999, whiteSpace:"nowrap", backdropFilter:"blur(6px)", border:"1px solid rgba(255,255,255,0.12)" }}>
+            <span style={{ position:"absolute", left:"50%", top:"50%", transform:"translate(-50%,-50%)", background:"rgba(15,23,42,0.78)", color:"#fff", fontSize: "0.6875rem", fontWeight:800, padding:"4px 8px", borderRadius:999, whiteSpace:"nowrap", backdropFilter:"blur(6px)", border:"1px solid rgba(255,255,255,0.12)" }}>
               Vùng quá nhỏ — kéo rộng thêm
             </span>
           )}

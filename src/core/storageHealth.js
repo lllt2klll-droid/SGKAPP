@@ -4,7 +4,7 @@
 
 import { STORAGE_KEYS, BACKUP_KEYS, isBackupKey, isCacheKey } from "./storageKeys.js";
 import { safeGetWithStatus, isCorrupted, safeGetString, listKeys, safeRemove } from "../safeStorage.js";
-import { STORES } from "../indexedDB.js";
+import { STORES } from "../data/indexedDB.js";
 
 function classifyKey(key) {
   if (isBackupKey(key)) return "backup";
@@ -115,7 +115,7 @@ export async function runStorageHealth({ books = [], includeIDB = true } = {}) {
   // IDB quick counts
   if (includeIDB && idb.available) {
     try {
-      const { default: idx } = await import("../indexedDB.js");
+      const { default: idx } = await import("../data/indexedDB.js");
       for (const store of Object.values(STORES)) {
         try { const all = await idx.getAll(store); idb.stores[store] = { count: Array.isArray(all) ? all.length : 0 }; } catch (e) { idb.stores[store] = { count: -1, error: e.message }; }
       }
@@ -288,7 +288,7 @@ export async function repairStorageHealth({ dryRun = false } = {}) {
         try {
           const { safeSetJSON } = await import("../safeStorage.js");
           // Đồng bộ LS = IDB (xóa LS nếu IDB đủ)
-          const { default: idx } = await import("../indexedDB.js");
+          const { default: idx } = await import("../data/indexedDB.js");
           const all = await idx.getAll(m.store);
           safeSetJSON(m.lsKey, []); // clear LS, IDB là nguồn chính
         } catch {}

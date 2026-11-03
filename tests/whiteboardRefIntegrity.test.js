@@ -10,7 +10,7 @@ globalThis.window = { dispatchEvent: () => {} };
 globalThis.indexedDB = undefined; // force LS fallback (IDB unavailable in Node)
 
 const wb = await import("../src/whiteboard/whiteboardStore.js");
-const storage = await import("../src/storage.js");
+const storage = await import("../src/data/storage.js");
 
 function makeBoard(name, refs) {
   const b = wb.blankBoard(name);

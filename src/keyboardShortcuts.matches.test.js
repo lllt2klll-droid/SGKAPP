@@ -3,7 +3,7 @@
 // → "Ctrl+K" không bao giờ khớp Cmd+K trên macOS.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { matchesShortcut, DEFAULT_SHORTCUTS, SHORTCUT_META, getShortcuts, getShortcut, comboToString, splitCombo } from "./keyboardShortcuts.js";
+import { matchesShortcut, DEFAULT_SHORTCUTS, SHORTCUT_META, getShortcuts, getShortcut, comboToString, splitCombo } from "./services/keyboardShortcuts.js";
 
 globalThis.__SGK_TEST__ = true;
 

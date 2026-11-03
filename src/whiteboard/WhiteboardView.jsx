@@ -5,7 +5,9 @@ import {
   Group, Ungroup, AlignLeft, AlignCenter, AlignRight, Save, Download, Upload, Plus, FilePlus,
   LayoutTemplate, Sparkles, X, Check, Search,
   PaintBucket, Square, Bold, Italic, AlignJustify, BookOpen,
-  ChevronLeft, ChevronRight, SlidersHorizontal, Wand2, Magnet, History
+  ChevronLeft, ChevronRight, SlidersHorizontal, Wand2, Magnet, History, Lock, LockOpen, ListOrdered, MoreHorizontal,
+  ArrowLeftRight, CornerDownRight, Spline, Palette, Tag, RotateCcw, ChevronDown,
+  ArrowRight, Lightbulb
 } from "lucide-react";
 import WhiteboardCanvas from "./WhiteboardCanvas.jsx";
 import ConfirmDialog from "../ui/ConfirmDialog.jsx";
@@ -19,9 +21,9 @@ import {
 } from "./whiteboardStore.js";
 import { generateMindmap, buildTemplate, TEMPLATES, autoLayout, applyLayoutAnchors, aiPlanToGraph, distToConnector, sanitizePlanForApply, MINDMAP_THEMES, applyBranchTheme, textOnFill, numberBranchChildren, BULLET_STYLES, CONN_HEAD_OPTS, CONN_DASH_OPTS, CONN_COLORS, CONN_WIDTHS, connHeads, connDash, connTypeForHeads, flipConn } from "./mindmapEngine.js";
 import { exportSVG, exportJSON, exportRaster, exportPDF, boardBounds, stripBoardForExport } from "./exportManager.js";
-import { loadSettings } from "../settingsStore.js";
+import { loadSettings } from "../services/settingsStore.js";
 import { soundManager } from "../audio/soundManager.js";
-import { getShortcut, matchesShortcut } from "../keyboardShortcuts.js";
+import { getShortcut, matchesShortcut } from "../services/keyboardShortcuts.js";
 import { trackWhiteboardAction, isRemoteWhiteboardEvent } from "./whiteboardIntegration.js";
 import { __crossTabSenderId as WB_TAB_ID } from "../core/crossTab.js";
 import { appEvents, AppEvents } from "../core/appEvents.js";
@@ -57,12 +59,17 @@ export default function WhiteboardView() {
   const [branchDrag, setBranchDrag] = useState(true);
   // Mũi tên 4 hướng quanh khối chọn → bấm tạo nhánh nhanh, có thể tắt
   const [showBranchArrows, setShowBranchArrows] = useState(() => {
-    try { return safeGetString("sgk:whiteboard-branch-arrows", "1") !== "0"; } catch { return true; }
+    try {
+      const saved = loadSettings().whiteboard?.showBranchArrows;
+      if (typeof saved === "boolean") return saved;
+      return safeGetString("sgk:whiteboard-branch-arrows", "1") !== "0";
+    } catch { return true; }
   });
   useEffect(() => {
     try { safeSetString("sgk:whiteboard-branch-arrows", showBranchArrows ? "1" : "0"); } catch {}
   }, [showBranchArrows]);
   const [contextMenu, setContextMenu] = useState(null); // {x,y, wx,wy, id, kind}
+  const [connectorMenuSection, setConnectorMenuSection] = useState("");
   const [connLabelEdit, setConnLabelEdit] = useState(null); // {id, x, y} — sửa nhãn đường nối
   const [connLabelDraft, setConnLabelDraft] = useState("");
   const [requestEditId, setRequestEditId] = useState(null);
@@ -157,6 +164,7 @@ export default function WhiteboardView() {
   }, [defaultFontFamily]);
   const [selection, setSelection] = useState([]);
   const [selectedConn, setSelectedConn] = useState(null);
+  const [objectStyleMenuOpen, setObjectStyleMenuOpen] = useState(false);
   const [showBoardList, setShowBoardList] = useState(false);
   const [showMindModal, setShowMindModal] = useState(false);
   const [mindTopic, setMindTopic] = useState("");
@@ -261,11 +269,22 @@ export default function WhiteboardView() {
       if (ws.defaultPenColor) setPenColor(ws.defaultPenColor);
       if (ws.defaultPenWidth) setPenWidth(ws.defaultPenWidth);
       if (typeof ws.branchDrag === "boolean") setBranchDrag(ws.branchDrag);
+      if (typeof ws.showBranchArrows === "boolean") setShowBranchArrows(ws.showBranchArrows);
     } catch {}
     const onSettings = () => {
       try {
         const ws = loadSettings().whiteboard || {};
+        if (ws.defaultPenColor) setPenColor(ws.defaultPenColor);
+        if (ws.defaultPenWidth) setPenWidth(ws.defaultPenWidth);
         if (typeof ws.branchDrag === "boolean") setBranchDrag(ws.branchDrag);
+        if (typeof ws.showBranchArrows === "boolean") setShowBranchArrows(ws.showBranchArrows);
+        setBoard((previous) => {
+          const patch = {};
+          for (const key of ["grid", "snap", "smartAlign", "smartSpacing"]) {
+            if (typeof ws[key] === "boolean" && previous[key] !== ws[key]) patch[key] = ws[key];
+          }
+          return Object.keys(patch).length ? { ...previous, ...patch } : previous;
+        });
       } catch {}
     };
     window.addEventListener("sgk:settings-updated", onSettings);
@@ -1995,7 +2014,7 @@ export default function WhiteboardView() {
   const recentPayloadRef = useRef(new Map());
   const isDuplicatePayload = useCallback((detail) => {
     if (!detail) return true;
-    const contentKey = `${detail.title || ""}|${(detail.text || "").slice(0, 60)}|${detail.imageDataUrl ? "img:" + detail.imageDataUrl.slice(0, 40) : ""}|${detail.sourceRef?.filename || ""}|${detail.sourceRef?.page || ""}|${detail.mindmapBranches ? "mm:" + detail.mindmapBranches.length : ""}`;
+    const contentKey = `${detail.title || ""}|${(detail.text || "").slice(0, 60)}|${detail.imageId || (detail.imageDataUrl ? "img:" + detail.imageDataUrl.slice(0, 40) : "")}|${detail.sourceRef?.filename || ""}|${detail.sourceRef?.page || ""}|${detail.mindmapBranches ? "mm:" + detail.mindmapBranches.length : ""}`;
     const now = Date.now();
     // dọn quá hạn 5s
     for (const [k, t] of recentPayloadRef.current) if (now - t > 5000) recentPayloadRef.current.delete(k);
@@ -2016,14 +2035,16 @@ export default function WhiteboardView() {
       try {
         const p = safeGetJSON(WB_PENDING_KEY, null);
         if (p) {
-          const sameContent = p && p.title === detail.title && (p.text || "").slice(0,60) === (detail.text || "").slice(0,60) && !!p.imageDataUrl === !!detail.imageDataUrl;
+          const sameImage = (p?.imageId || null) === (detail.imageId || null)
+            && (p?.imageDataUrl || null) === (detail.imageDataUrl || null);
+          const sameContent = p && p.title === detail.title && (p.text || "").slice(0,60) === (detail.text || "").slice(0,60) && sameImage;
           if (sameContent || (p.at && detail.at && String(p.at) === String(detail.at))) safeRemove(WB_PENDING_KEY);
         }
       } catch {}
       const title = String(detail.title || detail.text || "Nội dung").slice(0, 80);
       const sourceRef = detail.sourceRef || null;
       const citation = sourceRef?.citation || detail.citation || "";
-      const hasImage = !!detail.imageDataUrl;
+      const hasImage = !!(detail.imageDataUrl || detail.imageId);
       const hasMindmap = Array.isArray(detail.mindmapBranches) && detail.mindmapBranches.length >= 2;
       checkpoint();
       const { cx, cy } = findFreeSpot(520, 340);
@@ -2031,10 +2052,18 @@ export default function WhiteboardView() {
       // 1) Ảnh scan → tạo node ảnh + note chữ (nếu có)
       if (hasImage) {
         try {
-          const res = await fetch(detail.imageDataUrl);
-          const blob = await res.blob();
-          const { saveImageBlob, blobToObjectURL } = await import("./imageStore.js");
-          const imageId = await saveImageBlob(blob);
+          const { getImageBlob, saveImageBlob, blobToObjectURL } = await import("./imageStore.js");
+          let blob;
+          let imageId = detail.imageId || null;
+          if (imageId) {
+            blob = await getImageBlob(imageId);
+            if (!blob) throw new Error("Không tìm thấy ảnh trang sách trong bộ nhớ.");
+          } else {
+            const res = await fetch(detail.imageDataUrl);
+            if (!res.ok) throw new Error(`Không tải được ảnh (${res.status}).`);
+            blob = await res.blob();
+            imageId = await saveImageBlob(blob);
+          }
           const url = blobToObjectURL(blob);
           imageUrlMapRef.current.set(imageId, url);
           const img = new window.Image();
@@ -2051,11 +2080,12 @@ export default function WhiteboardView() {
             pushHistory(nb); return nb;
           });
           setSelection([imgObj.id]);
-          notify(`Đã đưa ảnh scan “${title.slice(0, 24)}” vào Whiteboard`); playWb("success"); trackWhiteboardAction("add_image_from_book", { filename: sourceRef?.filename });
+          notify(`Đã đưa ảnh “${title.slice(0, 24)}” vào Whiteboard`); playWb("success"); trackWhiteboardAction("add_image_from_book", { filename: sourceRef?.filename });
           return;
         } catch (err) {
           console.error("send image to board failed", err);
-          // fallback to text
+          notify("Không thể thêm ảnh trang sách vào Whiteboard. Hãy thử lại.", "error");
+          return;
         }
       }
 
@@ -2097,7 +2127,7 @@ export default function WhiteboardView() {
       const p = safeGetJSON(WB_PENDING_KEY, null);
       if (p && (p.text || p.imageDataUrl || p.title)) {
           // Nếu live event vừa xử lý (cùng content) thì bỏ pending để tránh lặp — dùng contentKey giống isDuplicatePayload
-          const contentKey = `${p.title || ""}|${(p.text || "").slice(0, 60)}|${p.imageDataUrl ? "img:" + p.imageDataUrl.slice(0, 40) : ""}|${p.sourceRef?.filename || ""}|${p.sourceRef?.page || ""}`;
+          const contentKey = `${p.title || ""}|${(p.text || "").slice(0, 60)}|${p.imageId || (p.imageDataUrl ? "img:" + p.imageDataUrl.slice(0, 40) : "")}|${p.sourceRef?.filename || ""}|${p.sourceRef?.page || ""}`;
           const isDup = recentPayloadRef.current.has(contentKey) || (p.at && recentPayloadRef.current.has(String(p.at)));
           safeRemove(WB_PENDING_KEY);
           if (!isDup) setTimeout(() => onSend({ detail: p }), 300);
@@ -2125,7 +2155,7 @@ export default function WhiteboardView() {
         if (structural || showBoardListRef.current) {
           listBoardsAsync().then((idx) => setBoards(idx)).catch(() => {});
         }
-        if (!remoteBoardId || remoteBoardId !== activeIdRef.current) return;
+        if (!remoteBoardId || (remoteBoardId !== activeIdRef.current && remoteBoardId !== boardRef.current?.id)) return;
         setRemoteNotice((prev) => prev || { boardId: remoteBoardId, at: detail?.at || Date.now() });
       } catch {}
     });
@@ -2344,8 +2374,7 @@ export default function WhiteboardView() {
     const r = svg.getBoundingClientRect();
     const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
     const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-    const panelW = Math.min(560, vw - 16);
-    const place = (bx, by, bw, bh, estH) => {
+    const place = (bx, by, bw, bh, estH, panelW = Math.min(560, vw - 16)) => {
       const sxVp = bx + r.left, syVp = by + r.top;
       const est = Math.min(estH, vh * 0.7);
       let leftVp = sxVp + bw / 2 - panelW / 2;
@@ -2363,8 +2392,8 @@ export default function WhiteboardView() {
       const bx = obj.x * board.zoom + board.pan.x;
       const by = obj.y * board.zoom + board.pan.y;
       // toolbar gọn chảy 1-3 dòng + dải emoji/theme khi mở
-      const estH = 230 + (showEmoji ? 60 : 0) + (showThemes ? 200 : 0);
-      return place(bx, by, obj.width * board.zoom, obj.height * board.zoom, estH);
+      const estH = 160;
+      return place(bx, by, obj.width * board.zoom, obj.height * board.zoom, estH, Math.min(380, vw - 16));
     }
     if (selection.length > 1) {
       const objs = visibleObjects.filter((o) => selection.includes(o.id));
@@ -2379,7 +2408,43 @@ export default function WhiteboardView() {
     }
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, single, selection, visibleObjects, contextMenu, wbViewportTick, showEmoji, showThemes]);
+  }, [board, single, selection, visibleObjects, contextMenu, wbViewportTick]);
+
+  const textBarPos = useMemo(() => {
+    if (!board || !single || selection.length !== 1 || contextMenu) return null;
+    const svg = svgRef.current;
+    if (!svg) return null;
+
+    const rect = svg.getBoundingClientRect();
+    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800;
+    const viewportLeft = Math.max(8, rect.left);
+    const viewportRight = Math.min(viewportWidth - 8, rect.right);
+    const viewportTop = Math.max(8, rect.top);
+    const viewportBottom = Math.min(viewportHeight - 8, rect.bottom);
+    const gap = 12;
+    const nodeLeft = rect.left + single.x * board.zoom + board.pan.x;
+    const nodeTop = rect.top + single.y * board.zoom + board.pan.y;
+    const nodeRight = nodeLeft + single.width * board.zoom;
+    const nodeBottom = nodeTop + single.height * board.zoom;
+    const rightSpace = Math.max(0, viewportRight - nodeRight - gap);
+    const leftSpace = Math.max(0, nodeLeft - viewportLeft - gap);
+    const side = rightSpace >= 280 || (leftSpace < 280 && rightSpace >= leftSpace) ? "right" : "left";
+    const availableSpace = side === "right" ? rightSpace : leftSpace;
+    const width = Math.max(180, Math.min(340, availableSpace));
+    const maxHeight = Math.max(120, Math.min(viewportHeight - 16, viewportHeight * 0.7));
+    const estimatedHeight = Math.min(maxHeight, 250 + (showEmoji ? 60 : 0) + (showThemes ? 200 : 0));
+    const rawLeft = side === "right" ? nodeRight + gap : nodeLeft - gap - width;
+    const left = Math.max(viewportLeft, Math.min(rawLeft, viewportRight - width));
+    const top = Math.max(viewportTop, Math.min((nodeTop + nodeBottom - estimatedHeight) / 2, viewportBottom - estimatedHeight));
+
+    return {
+      left: left - rect.left,
+      top: top - rect.top,
+      width,
+      maxHeight,
+    };
+  }, [board, single, selection, contextMenu, wbViewportTick, showEmoji, showThemes]);
 
   // Chọn khối → giữ nguyên trạng thái mở rộng (mặc định mở đủ thông tin, không tự thu gọn)
   // user vẫn bấm 🎚 để thu gọn thủ công nếu muốn gọn
@@ -2419,7 +2484,7 @@ export default function WhiteboardView() {
   const saveDotTitle = saveState === "saving" ? "Đang lưu…" : saveState === "error" ? "Lưu thất bại — bấm Ctrl+S để thử lại" : savedAt ? `Đã lưu lúc ${savedAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : "Đã lưu";
 
   return (
-    <div className={`whiteboard-root ${touchMode ? "is-touch" : ""}`} ref={rootRef}>
+    <div className={`whiteboard-root ${touchMode ? "is-touch" : ""} ${showAI ? "has-ai-modal" : ""}`} ref={rootRef}>
       {boardsLoading && (
         <div className="whiteboard-loading-bar" role="status">Đang tải bảng từ IndexedDB…</div>
       )}
@@ -2606,7 +2671,7 @@ export default function WhiteboardView() {
                       );
                     })}
                     {!filteredBoards.length && (
-                      <div style={{ fontSize: 12, opacity: 0.65, padding: "8px 4px" }}>
+                      <div style={{ fontSize: "0.75rem", opacity: 0.65, padding: "8px 4px" }}>
                         {searchBoard ? `Không tìm thấy bảng nào khớp “${searchBoard}”.` : "Chưa có bảng nào."}
                       </div>
                     )}
@@ -2629,7 +2694,7 @@ export default function WhiteboardView() {
                 <div className="wb-popover-title">Lịch sử bản — {board?.name || "Bảng"}</div>
                 <button onClick={handleSaveVersion}>＋ Lưu bản hiện tại</button>
                 <div className="whiteboard-export-divider" />
-                {!versions.length && <div style={{ fontSize: 12, opacity: 0.65, padding: "4px 10px" }}>Chưa có bản nào. Lưu bản trước khi thử nghiệm lớn.</div>}
+                {!versions.length && <div style={{ fontSize: "0.75rem", opacity: 0.65, padding: "4px 10px" }}>Chưa có bản nào. Lưu bản trước khi thử nghiệm lớn.</div>}
                 {versions.map((v) => (
                   <div key={v.vid} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px" }}>
                     <button style={{ flex: 1 }} onClick={() => handleRestoreVersion(v.vid)} title="Khôi phục bản này">↩ {v.name}</button>
@@ -2713,6 +2778,7 @@ export default function WhiteboardView() {
           }}
           onContextMenu={(e) => {
           e.preventDefault();
+          setObjectStyleMenuOpen(false);
           const svg = svgRef.current;
           const r = svg ? svg.getBoundingClientRect() : null;
           const wx = r ? (e.clientX - r.left - board.pan.x) / board.zoom : 0;
@@ -2724,10 +2790,9 @@ export default function WhiteboardView() {
               // nếu multi-select và hit thuộc selection → giữ nguyên multi
               const isMulti = selection.length > 1 && selection.includes(hit.id);
               if (!isMulti && !selection.includes(hit.id)) setSelection([hit.id]);
-              if (hit.locked) {
-                // vẫn cho mở menu nhưng chỉ hiện Mở khóa
-              }
-              setContextMenu({ x: e.clientX, y: e.clientY, wx, wy, id: hit.id, kind: hit.kind });
+              setSelectedConn(null);
+              setContextMenu(null);
+              setObjectStyleMenuOpen(true);
               return;
             }
             // hit connector (khoảng cách < 10px) — dùng hình học edge/elbow thật như canvas
@@ -2742,7 +2807,7 @@ export default function WhiteboardView() {
                 if (!a || !b) continue;
                 let d = Infinity;
                 try {
-                  d = distToConnector(wx, wy, a, b, c.type, c.sourceAnchor, c.targetAnchor, c.bend);
+                  d = distToConnector(wx, wy, a, b, c.type, c.sourceAnchor, c.targetAnchor, c.bend, c.routeOffset, c.bendAlong);
                 } catch {
                   continue;
                 }
@@ -2753,6 +2818,8 @@ export default function WhiteboardView() {
             if (hitConn) {
               setSelectedConn(hitConn.id);
               setSelection([]);
+              setConnectorMenuSection("");
+              setObjectStyleMenuOpen(false);
               setContextMenu({ x: e.clientX, y: e.clientY, wx, wy, id: hitConn.id, kind: "connector" });
               return;
             }
@@ -2769,9 +2836,11 @@ export default function WhiteboardView() {
             penColor={penColor}
             penWidth={penWidth}
             selection={selection}
-            onSelectionChange={(ids) => { setSelection(ids); if (ids.length) setSelectedConn(null); }}
+            onSelectionChange={(ids) => { setSelection(ids); setObjectStyleMenuOpen(false); if (ids.length) setSelectedConn(null); }}
+            onObjectPointerDown={() => setObjectStyleMenuOpen(false)}
             selectedConnId={selectedConn}
             onConnSelection={(id, additive) => {
+              setObjectStyleMenuOpen(false);
               if (additive) setSelectedConn((prev) => prev === id ? null : id);
               else { setSelectedConn(id); setSelection([]); }
             }}
@@ -2797,102 +2866,129 @@ export default function WhiteboardView() {
             touchMode={touchMode}
             boardFont={board?.defaultFontFamily || defaultFontFamily || ""}
           />
-          {/* Thanh ngữ cảnh gọn: cụm chảy liền mạch — thao tác | khung | chữ | tệp */}
-          {single && (
+          {/* Thanh khung và thao tác nằm phía trên; bảng chữ được neo cạnh khối. */}
+          {single && objectStyleMenuOpen && (
             <div
               className="whiteboard-stylebar whiteboard-stylebar--single whiteboard-ctxbar wb-ctx-grid"
               style={quickBarPos ? { left: quickBarPos.left, top: quickBarPos.top, maxWidth: quickBarPos.maxWidth, ...(quickBarPos.placement === "above" ? { transform: "translateY(-100%)" } : null) } : undefined}
             >
               <div className="wb-style-group wb-ctx-actions" title="Thao tác nhanh">
-                <button className="wb-style-btn-icon" onClick={() => setRequestEditId(single.id)} title="Sửa chữ (F2)"><Type size={15} /></button>
+                <button className="wb-style-btn-icon" onClick={() => setRequestEditId(single.id)} title="Sửa chữ (F2)" aria-label="Sửa chữ"><Type size={15} /></button>
                 {single.kind === "node" && (
                   <>
-                    <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => handleMindAdd(single)} title="Thêm nhánh con">＋</button>
-                    <button className="wb-style-btn-icon" onClick={() => setTool("connector")} title="Nối từ khối này"><ArrowUpRight size={15} /></button>
+                    <button className="wb-style-btn-icon" onClick={() => handleMindAdd(single)} title="Thêm nhánh con" aria-label="Thêm nhánh con"><Plus size={15} /></button>
+                    <button className="wb-style-btn-icon" onClick={() => setTool("connector")} title="Nối từ khối này" aria-label="Nối khối"><ArrowUpRight size={15} /></button>
                   </>
                 )}
                 {single.kind === "note" && (
-                  <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => handleChangeNoteColor(single.id)} title="Đổi màu ghi chú">🎨</button>
+                  <button className="wb-style-btn-icon" onClick={() => handleChangeNoteColor(single.id)} title="Đổi màu ghi chú" aria-label="Đổi màu ghi chú"><PaintBucket size={15} /></button>
                 )}
                 {single.kind === "image" && (
-                  <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => { setReplaceImageId(single.id); replaceImageRef.current?.click(); }} title="Thay ảnh">🖼</button>
+                  <button className="wb-style-btn-icon" onClick={() => { setReplaceImageId(single.id); replaceImageRef.current?.click(); }} title="Thay ảnh" aria-label="Thay ảnh"><ImageIcon size={15} /></button>
                 )}
-                <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={centerOnSelection} title="Về giữa khối này (Shift+F)">◎</button>
-                <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => toggleLock(single.id)} title={single.locked ? "Mở khóa khối" : "Khóa khối"}>{single.locked ? "🔓" : "🔒"}</button>
+                <button className="wb-style-btn-icon" onClick={centerOnSelection} title="Về giữa khối này (Shift+F)" aria-label="Đưa khối vào giữa"><Maximize2 size={15} /></button>
+                <button className="wb-style-btn-icon" onClick={() => toggleLock(single.id)} title={single.locked ? "Mở khóa khối" : "Khóa khối"} aria-label={single.locked ? "Mở khóa khối" : "Khóa khối"}>{single.locked ? <LockOpen size={15} /> : <Lock size={15} />}</button>
                 <button
                   className={`wb-style-btn-icon ${ctxStyleOpen ? "active" : ""}`}
                   onClick={() => setCtxStyleOpen((v) => !v)}
                   title={ctxStyleOpen ? "Thu gọn style" : "Mở đầy đủ style (viền, căn lề, bullets…)"}
-                >🎚</button>
+                  aria-label={ctxStyleOpen ? "Thu gọn kiểu dáng" : "Mở rộng kiểu dáng"}
+                ><SlidersHorizontal size={15} /></button>
                 <button
-                  className={`wb-style-btn-icon wb-style-btn-icon--text ${showBranchArrows ? "active" : ""}`}
+                  className={`wb-style-btn-icon ${showBranchArrows ? "active" : ""}`}
                   onClick={() => setShowBranchArrows((v) => !v)}
                   title={showBranchArrows ? "Tắt mũi tên 4 hướng" : "Bật mũi tên 4 hướng tạo nhánh nhanh"}
-                >✛</button>
-                <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setContextMenu({ x: r.left, y: r.bottom + 6, wx: single.x + single.width / 2, wy: single.y + single.height / 2, id: single.id, kind: single.kind }); }} title="Thêm tác vụ (chuột phải)">⋮</button>
+                  aria-label="Bật hoặc tắt mũi tên tạo nhánh"
+                ><Network size={15} /></button>
+                <button className="wb-style-btn-icon" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setContextMenu({ x: r.left, y: r.bottom + 6, wx: single.x + single.width / 2, wy: single.y + single.height / 2, id: single.id, kind: single.kind }); }} title="Thao tác khác" aria-label="Thao tác khác"><MoreHorizontal size={16} /></button>
               </div>
               <div className="wb-style-group" title="Khung: nền, viền, tự nở">
-                <label className="wb-color-btn" style={{ background: /^#[0-9A-Fa-f]{6}$/.test(single.fill) ? single.fill : "#ffffff" }} title={`Nền: ${single.fill}`}>
+                <span className="wb-ctx-group-icon" title="Màu nền"><PaintBucket size={15} /></span>
+                <label className="wb-color-btn" style={{ background: /^#[0-9A-Fa-f]{6}$/.test(single.fill) ? single.fill : "#ffffff" }} title={`Nền: ${single.fill}`} aria-label="Màu nền">
                   <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(single.fill) ? single.fill : "#ffffff"} onChange={(e) => updateSingle({ fill: e.target.value })} />
                 </label>
-                {ctxStyleOpen && (
-                <>
-                <label className="wb-color-btn wb-color-btn--stroke" style={{ background: /^#[0-9A-Fa-f]{6}$/.test(single.stroke) ? single.stroke : "#334155" }} title={`Viền: ${single.stroke}`}>
+              </div>
+              {ctxStyleOpen && (
+              <div className="wb-style-group wb-frame-stroke-group" title="Viền khung">
+                <span className="wb-ctx-group-icon" title="Viền khung"><Square size={14} strokeWidth={3} /></span>
+                <label className="wb-color-btn wb-color-btn--stroke" style={{ background: /^#[0-9A-Fa-f]{6}$/.test(single.stroke) ? single.stroke : "#334155" }} title={`Viền: ${single.stroke}`} aria-label="Màu viền">
                   <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(single.stroke) ? single.stroke : "#334155"} onChange={(e) => updateSingle({ stroke: e.target.value })} />
                 </label>
-                <select className="wb-style-select wb-style-select--sm" value={single.strokeWidth || 2} onChange={(e) => updateSingle({ strokeWidth: parseInt(e.target.value, 10) })} title="Độ dày viền">
+                <select className="wb-style-select wb-style-select--sm" value={single.strokeWidth || 2} onChange={(e) => updateSingle({ strokeWidth: parseInt(e.target.value, 10) })} title="Độ dày viền" aria-label="Độ dày viền">
                   {[1, 2, 3, 4, 6, 8].map((w) => <option key={w} value={w}>{w}px</option>)}
                   {![1, 2, 3, 4, 6, 8].includes(Number(single.strokeWidth)) && <option value={single.strokeWidth}>{single.strokeWidth}px</option>}
                 </select>
-                <select className="wb-style-select wb-style-select--sm" value={single.strokeDash || ""} onChange={(e) => updateSingle({ strokeDash: e.target.value })} title="Kiểu viền">
+                <select className="wb-style-select wb-style-select--sm wb-select-outline" value={single.strokeDash || ""} onChange={(e) => updateSingle({ strokeDash: e.target.value })} title="Kiểu viền" aria-label="Kiểu viền">
                   <option value="">Liền</option>
                   <option value="6 4">Đứt</option>
                   <option value="2 4">Chấm</option>
                 </select>
-                <label className="wb-style-check" title="Tự co giãn theo nội dung"><input type="checkbox" checked={!!single.autoSize} onChange={(e) => updateSingle({ autoSize: e.target.checked })} /> Tự nở</label>
-                </>
-                )}
+                <button className={`wb-style-btn-icon ${single.autoSize ? "active" : ""}`} onClick={() => updateSingle({ autoSize: !single.autoSize })} title="Tự co giãn theo nội dung" aria-label="Tự co giãn theo nội dung" aria-pressed={!!single.autoSize}><Maximize2 size={14} /></button>
               </div>
-              <div className="wb-style-group" title="Chữ">
-                <label className="wb-color-btn" style={{ background: /^#[0-9A-Fa-f]{6}$/.test(single.color) ? single.color : "#1e293b" }} title={`Chữ: ${single.color}`}>
+              )}
+              <div className="wb-style-group">
+                <button className="wb-style-btn-icon" onClick={handleCopy} title="Sao chép" aria-label="Sao chép"><Copy size={15} /></button>
+                <button className="wb-style-btn-icon" onClick={handleDuplicateSel} title="Nhân bản" aria-label="Nhân bản"><CopyPlus size={15} /></button>
+                <button className="wb-style-btn-icon wb-style-btn--danger" onClick={deleteSelection} title="Xóa" aria-label="Xóa"><Trash2 size={15} /></button>
+              </div>
+            </div>
+          )}
+          {single && objectStyleMenuOpen && (
+            <div
+              className="whiteboard-stylebar whiteboard-stylebar--single whiteboard-ctxbar wb-ctx-grid wb-textbar"
+              style={textBarPos ? { left: textBarPos.left, top: textBarPos.top, width: textBarPos.width, maxWidth: textBarPos.width, maxHeight: textBarPos.maxHeight } : undefined}
+            >
+              <div className="wb-textbar-title" title="Chữ" aria-label="Chữ"><Type size={15} /></div>
+              <div className="wb-style-group wb-text-color-group" title="Màu chữ và phông chữ">
+                <span className="wb-ctx-group-icon" title="Màu chữ"><PaintBucket size={15} /></span>
+                <label className="wb-color-btn" style={{ background: /^#[0-9A-Fa-f]{6}$/.test(single.color) ? single.color : "#1e293b" }} title={`Chữ: ${single.color}`} aria-label="Màu chữ">
                   <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(single.color) ? single.color : "#1e293b"} onChange={(e) => updateSingle({ color: e.target.value })} />
                 </label>
-                <select className="wb-style-select wb-style-select--sm" value={single.fontFamily || ""} onChange={(e) => updateSingle({ fontFamily: e.target.value })} title="Phông chữ — chọn 'Theo bảng' để ăn theo font mặc định của bảng (file tải về giữ đúng font này)">
+                <select className="wb-style-select wb-style-select--sm wb-font-select" value={single.fontFamily || ""} onChange={(e) => updateSingle({ fontFamily: e.target.value })} title="Phông chữ — chọn 'Theo bảng' để ăn theo font mặc định của bảng (file tải về giữ đúng font này)" aria-label="Phông chữ">
                   {WB_FONTS.map((f) => <option key={f.id} value={f.value} style={f.value ? { fontFamily: f.value } : undefined}>{f.id === "default" ? "Theo bảng" : f.label}</option>)}
                   {single.fontFamily && !WB_FONTS.some((f) => f.value === single.fontFamily) && <option value={single.fontFamily}>{single.fontFamily.slice(0, 24)}</option>}
                 </select>
-                <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => handleBumpFont(-2)} title="Thu nhỏ chữ">A−</button>
+              </div>
+              <div className="wb-style-group wb-text-size-group" title="Cỡ chữ và kiểu chữ">
+                <span className="wb-ctx-group-icon" title="Cỡ chữ"><Type size={14} /></span>
+                <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => handleBumpFont(-2)} title="Thu nhỏ chữ" aria-label="Thu nhỏ chữ">A−</button>
                 <select className="wb-style-select wb-style-select--sz" value={single.fontSize || 15} onChange={(e) => updateSingle({ fontSize: parseInt(e.target.value, 10) })} title="Cỡ chữ">
                   {[10, 12, 14, 15, 16, 18, 20, 24, 28, 32].map((s) => <option key={s} value={s}>{s}</option>)}
                   {![10, 12, 14, 15, 16, 18, 20, 24, 28, 32].includes(Number(single.fontSize)) && <option value={single.fontSize}>{single.fontSize}</option>}
                 </select>
-                <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => handleBumpFont(2)} title="Phóng to chữ">A+</button>
-                <button className={`wb-style-btn-icon ${single.bold ? "active" : ""}`} onClick={() => updateSingle({ bold: !single.bold })} title="Chữ đậm"><Bold size={15} /></button>
-                <button className={`wb-style-btn-icon ${single.italic ? "active" : ""}`} onClick={() => updateSingle({ italic: !single.italic })} title="Chữ nghiêng"><Italic size={15} /></button>
-                {ctxStyleOpen && (
-                <>
-                <select className="wb-style-select wb-style-select--sm" value={single.align || "center"} onChange={(e) => updateSingle({ align: e.target.value })} title="Căn lề">
-                  <option value="left">Trái</option>
-                  <option value="center">Giữa</option>
-                  <option value="right">Phải</option>
-                </select>
-                <button className={`wb-style-btn-icon wb-style-btn-icon--text ${showEmoji ? "active" : ""}`} onClick={() => setShowEmoji((v) => !v)} title="Chèn emoji nhanh">😊</button>
-                <select className="wb-style-select wb-style-select--sm" value={typeof single.bullets === "string" ? single.bullets : single.bullets ? "dot" : ""} onChange={(e) => updateSingle({ bullets: e.target.value || false })} title="Gạch đầu dòng (nhiều kiểu)">
-                  {BULLET_STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
-                </>
-                )}
+                <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => handleBumpFont(2)} title="Phóng to chữ" aria-label="Phóng to chữ">A+</button>
+                <button className={`wb-style-btn-icon ${single.bold ? "active" : ""}`} onClick={() => updateSingle({ bold: !single.bold })} title="Chữ đậm" aria-label="Chữ đậm" aria-pressed={!!single.bold}><Bold size={15} /></button>
+                <button className={`wb-style-btn-icon ${single.italic ? "active" : ""}`} onClick={() => updateSingle({ italic: !single.italic })} title="Chữ nghiêng" aria-label="Chữ nghiêng" aria-pressed={!!single.italic}><Italic size={15} /></button>
               </div>
+              {ctxStyleOpen && (
+                <div className="wb-style-group wb-text-align-group" title="Căn lề và danh sách">
+                  <span className="wb-ctx-group-icon" title="Căn lề"><AlignJustify size={14} /></span>
+                  <button className={`wb-style-btn-icon ${single.align === "left" ? "active" : ""}`} onClick={() => updateSingle({ align: "left" })} title="Căn trái" aria-label="Căn trái" aria-pressed={single.align === "left"}><AlignLeft size={14} /></button>
+                  <button className={`wb-style-btn-icon ${!single.align || single.align === "center" ? "active" : ""}`} onClick={() => updateSingle({ align: "center" })} title="Căn giữa" aria-label="Căn giữa" aria-pressed={!single.align || single.align === "center"}><AlignCenter size={14} /></button>
+                  <button className={`wb-style-btn-icon ${single.align === "right" ? "active" : ""}`} onClick={() => updateSingle({ align: "right" })} title="Căn phải" aria-label="Căn phải" aria-pressed={single.align === "right"}><AlignRight size={14} /></button>
+                  <select className="wb-style-select wb-style-select--sm wb-select-symbol" value={typeof single.bullets === "string" ? single.bullets : single.bullets ? "dot" : ""} onChange={(e) => updateSingle({ bullets: e.target.value || false })} title="Kiểu danh sách" aria-label="Kiểu danh sách">
+                    <option value="">∅</option>
+                    <option value="dot">•</option>
+                    <option value="dash">–</option>
+                    <option value="num">1.</option>
+                    <option value="square">▪</option>
+                    <option value="arrow">➤</option>
+                    <option value="check">✓</option>
+                  </select>
+                  <button className={`wb-style-btn-icon ${showEmoji ? "active" : ""}`} onClick={() => setShowEmoji((v) => !v)} title="Chèn emoji nhanh" aria-label="Mở emoji"><Sparkles size={15} /></button>
+                </div>
+              )}
               {ctxStyleOpen && single.kind === "node" && (
-                <div className="wb-style-group" title="Trang trí nhánh: tô theme + đánh số con">
-                  <button className={`wb-style-btn-icon wb-style-btn-icon--text ${showThemes ? "active" : ""}`} onClick={() => setShowThemes((v) => !v)} title="Tô theme màu cho cả nhánh (1-click)">🎨</button>
-                  <button className="wb-style-btn-icon wb-style-btn-icon--text" onClick={() => handleNumberChildren()} title="Đánh số nhánh con (1. 2. 3.)">🔢</button>
+                <div className="wb-style-group" title="Trang trí nhánh">
+                    <span className="wb-ctx-group-icon" title="Trang trí nhánh"><Sparkles size={14} /></span>
+                    <button className={`wb-style-btn-icon ${showThemes ? "active" : ""}`} onClick={() => setShowThemes((v) => !v)} title="Tô theme màu cho cả nhánh (1-click)" aria-label="Tô màu theme"><PaintBucket size={14} /></button>
+                    <button className="wb-style-btn-icon" onClick={() => handleNumberChildren()} title="Đánh số nhánh con (1. 2. 3.)" aria-label="Đánh số nhánh con"><ListOrdered size={14} /></button>
                 </div>
               )}
               {ctxStyleOpen && showEmoji && (
                 <div className="wb-style-group" title="Emoji nhanh — bấm để chèn vào đầu khối">
                   {QUICK_EMOJIS.map((em) => (
-                    <button key={em} className="wb-style-btn-icon wb-style-btn-icon--emoji" onClick={() => handlePrependEmoji(em)} title={`Chèn ${em}`}>{em}</button>
+                    <button key={em} className="wb-style-btn-icon wb-style-btn-icon--emoji" onClick={() => handlePrependEmoji(em)} title={`Chèn ${em}`} aria-label={`Chèn ${em}`}>{em}</button>
                   ))}
                 </div>
               )}
@@ -2910,19 +3006,13 @@ export default function WhiteboardView() {
                             <i key={c} style={{ width: 8, height: 8, borderRadius: "50%", background: c, border: "1px solid rgba(15,23,42,0.2)" }} />
                           ))}
                         </span>
-                        <span>{t.label}</span>
                     </button>
                   ))}
                 </div>
               )}
-              <div className="wb-style-group">
-                <button className="wb-style-btn-icon" onClick={handleCopy} title="Sao chép" aria-label="Sao chép"><Copy size={15} /></button>
-                <button className="wb-style-btn-icon" onClick={handleDuplicateSel} title="Nhân bản" aria-label="Nhân bản"><CopyPlus size={15} /></button>
-                <button className="wb-style-btn-icon wb-style-btn--danger" onClick={deleteSelection} title="Xóa" aria-label="Xóa"><Trash2 size={15} /></button>
-              </div>
             </div>
           )}
-          {selection.length > 1 && (
+          {selection.length > 1 && objectStyleMenuOpen && (
             <div
               className="whiteboard-stylebar whiteboard-stylebar--single whiteboard-ctxbar wb-ctx-grid"
               style={quickBarPos ? { left: quickBarPos.left, top: quickBarPos.top, maxWidth: quickBarPos.maxWidth, ...(quickBarPos.placement === "above" ? { transform: "translateY(-100%)" } : null) } : undefined}
@@ -2997,7 +3087,7 @@ export default function WhiteboardView() {
           )}
           {/* quickbar multi cũ đã gộp vào toolbar trên (◎ + ⋮ nằm ở hàng Thao tác) */}
           {/* ── Mũi tên 4 hướng quanh khối chọn → bấm tạo nhánh nhanh ── */}
-          {showBranchArrows && branchArrowPos && !contextMenu && selection.length === 1 && single && single.kind !== "stroke" && !single.locked && (
+          {objectStyleMenuOpen && showBranchArrows && branchArrowPos && !contextMenu && selection.length === 1 && single && single.kind !== "stroke" && !single.locked && (
             <div className="wb-branch-arrows" onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
               <button className="wb-branch-arrow wb-branch-arrow--up" style={{ left: branchArrowPos.bx + branchArrowPos.bw / 2, top: branchArrowPos.by }} onClick={(e) => { e.stopPropagation(); handleQuickBranch("up"); }} title="Thêm nhánh phía trên (Alt+↑)">▲</button>
               <button className="wb-branch-arrow wb-branch-arrow--down" style={{ left: branchArrowPos.bx + branchArrowPos.bw / 2, top: branchArrowPos.by + branchArrowPos.bh }} onClick={(e) => { e.stopPropagation(); handleQuickBranch("down"); }} title="Thêm nhánh phía dưới (Alt+↓)">▼</button>
@@ -3007,15 +3097,47 @@ export default function WhiteboardView() {
           )}
           {/* ── Bảng trống: gợi ý bắt đầu nhanh (tự ẩn khi có khối) ── */}
           {!boardsLoading && (board?.objects || []).length === 0 && !showAI && !showMindModal && !showTemplate && !showTour && (
-            <div className="wb-empty-state wb-empty-state--compact" onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
-              <div className="wb-empty-title">Bảng trống — chọn 1 cách để bắt đầu</div>
-              <div className="wb-empty-row">
-                <button className="btn btn-primary btn-sm" onClick={() => setShowAI(true)}>✦ AI vẽ sơ đồ</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowMindModal(true)}>🧠 Sơ đồ nhanh</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setTool("shape")}>▣ Hình khối</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setTourStep(0); setShowTour(true); }} title="Xem hướng dẫn 30 giây">?</button>
+              <div className="wb-empty-state wb-empty-state--welcome" onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
+                <div className="wb-empty-hero">
+                  <div className="wb-empty-art" aria-hidden="true">
+                    <span className="wb-empty-art-line wb-empty-art-line--one" />
+                    <span className="wb-empty-art-line wb-empty-art-line--two" />
+                    <span className="wb-empty-art-node wb-empty-art-node--main"><Lightbulb size={23} /></span>
+                    <span className="wb-empty-art-node wb-empty-art-node--left"><Type size={18} /></span>
+                    <span className="wb-empty-art-node wb-empty-art-node--right"><Network size={18} /></span>
+                  </div>
+                  <div className="wb-empty-copy">
+                    <span className="wb-empty-eyebrow">KHÔNG GIAN SÁNG TẠO</span>
+                    <div className="wb-empty-title">Bắt đầu từ một ý tưởng</div>
+                    <p>Tạo sơ đồ, chọn bố cục có sẵn hoặc tự do sắp xếp nội dung trên bảng.</p>
+                  </div>
+                </div>
+                <div className="wb-empty-choices">
+                  <button className="wb-empty-choice wb-empty-choice--featured" onClick={() => setShowMindModal(true)}>
+                    <span className="wb-empty-choice-icon"><Network size={18} /></span>
+                    <span className="wb-empty-choice-copy"><strong>Sơ đồ tư duy</strong><small>Nhập chủ đề, tạo nhánh tức thì</small></span>
+                    <ArrowRight size={16} className="wb-empty-choice-arrow" />
+                  </button>
+                  <button className="wb-empty-choice" onClick={() => setShowTemplate(true)}>
+                    <span className="wb-empty-choice-icon"><LayoutTemplate size={18} /></span>
+                    <span className="wb-empty-choice-copy"><strong>Chọn mẫu</strong><small>Bắt đầu với bố cục dựng sẵn</small></span>
+                    <ArrowRight size={16} className="wb-empty-choice-arrow" />
+                  </button>
+                  <button className="wb-empty-choice" onClick={() => setShowAI(true)}>
+                    <span className="wb-empty-choice-icon"><Sparkles size={18} /></span>
+                    <span className="wb-empty-choice-copy"><strong>AI tạo sơ đồ</strong><small>Biến nội dung thành sơ đồ</small></span>
+                    <ArrowRight size={16} className="wb-empty-choice-arrow" />
+                  </button>
+                </div>
+                <div className="wb-empty-divider"><span>HOẶC BẮT ĐẦU TỰ DO</span></div>
+                <div className="wb-empty-tools">
+                  <button onClick={() => { setTool("text"); notify("Bấm vào bảng để thêm văn bản"); }}><Type size={15} />Văn bản</button>
+                  <button onClick={() => { setTool("note"); notify("Bấm vào bảng để thêm ghi chú"); }}><StickyNote size={15} />Ghi chú</button>
+                  <button onClick={() => { setTool("shape"); notify("Bấm vào bảng để thêm hình khối"); }}><Shapes size={15} />Hình khối</button>
+                  <button onClick={() => { setTourStep(0); setShowTour(true); }} title="Xem hướng dẫn"><Lightbulb size={15} />Hướng dẫn</button>
+                </div>
+                <div className="wb-empty-footnote"><MousePointer2 size={13} /> Chọn công cụ rồi bấm vào bảng để đặt nội dung</div>
               </div>
-            </div>
           )}
           {/* ── Minimap: bản đồ thu nhỏ — bấm/kéo để di chuyển khung nhìn ── */}
           {minimap && (
@@ -3088,8 +3210,9 @@ export default function WhiteboardView() {
             // Kẹp menu vào viewport: menu không bao giờ cao hơn 70vh (CSS đã overflow:auto)
             const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
             const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-            const menuW = Math.min(isBg ? 400 : 240, vw - 16);
-            const menuH = Math.min(isBg ? 380 : 420, vh * 0.7);
+            const isConnectorMenu = contextMenu.kind === "connector";
+            const menuW = Math.min(isBg ? 400 : isConnectorMenu ? 300 : 240, vw - 16);
+            const menuH = Math.min(isBg ? 380 : isConnectorMenu ? 380 : 420, vh * 0.7);
             const mp = clampToViewport(contextMenu.x, contextMenu.y, menuW, menuH);
             const left = mp.left, top = mp.top;
             const wx = contextMenu.wx ?? 0, wy = contextMenu.wy ?? 0;
@@ -3099,7 +3222,7 @@ export default function WhiteboardView() {
             const toggleView = (key) => setBoard((p) => ({ ...p, [key]: !p[key] }));
             return (
               <>
-              <div className="whiteboard-context-menu" style={{ left, top }} onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
+              <div className={`whiteboard-context-menu${isConnectorMenu ? " whiteboard-connector-menu" : ""}`} style={{ left, top }} onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
                 {contextMenu.kind === "canvas" ? (
                   <>
                     <div className="whiteboard-context-title">Thêm tại đây</div>
@@ -3142,69 +3265,116 @@ export default function WhiteboardView() {
                   </>
                 ) : contextMenu.kind === "connector" && contextConn ? (
                   <>
-                    <div className="whiteboard-context-title">Mũi tên — đầu ←</div>
-                    <div className="whiteboard-context-row whiteboard-context-row--fit">
-                      {CONN_HEAD_OPTS.map((h) => (
-                        <button key={`s-${h.id}`} className={connHeads(contextConn).start === h.id ? "active" : ""} title={h.label} onClick={() => setConnHead(contextConn, "start", h.id)}>{h.glyph}</button>
-                      ))}
-                    </div>
-                    <div className="whiteboard-context-subtitle">Đuôi →</div>
-                    <div className="whiteboard-context-row whiteboard-context-row--fit">
-                      {CONN_HEAD_OPTS.map((h) => (
-                        <button key={`e-${h.id}`} className={connHeads(contextConn).end === h.id ? "active" : ""} title={h.label} onClick={() => setConnHead(contextConn, "end", h.id)}>{h.glyph}</button>
-                      ))}
-                    </div>
-                    <div className="whiteboard-context-subtitle">Dáng đường</div>
-                    <div className="whiteboard-context-row">
-                      <button className={contextConn.type !== "elbow" && contextConn.type !== "curve" ? "active" : ""} onClick={() => act(() => patchConn(contextConn.id, { type: connTypeForHeads({ type: "line" }, connHeads(contextConn).start, connHeads(contextConn).end) }))}>Thẳng</button>
-                      <button className={contextConn.type === "curve" ? "active" : ""} onClick={() => act(() => patchConn(contextConn.id, { type: "curve" }))}>Cong</button>
-                      <button className={contextConn.type === "elbow" ? "active" : ""} onClick={() => act(() => patchConn(contextConn.id, { type: "elbow" }))}>Vuông</button>
-                    </div>
-                    {contextConn.type === "curve" && (
-                      <>
-                        <div className="whiteboard-context-subtitle">Độ cong</div>
-                        <div className="whiteboard-context-row">
-                          <input
-                            type="range" min={0} max={150} step={5} style={{ flex: 1 }}
-                            title={`Độ cong ${Number.isFinite(Number(contextConn.bend)) ? Math.round(Number(contextConn.bend)) : 100} — 0 là thẳng`}
-                            value={Number.isFinite(Number(contextConn.bend)) ? Math.max(0, Math.min(150, Number(contextConn.bend))) : 100}
-                            onChange={(e) => patchConnLive(contextConn.id, { bend: Number(e.target.value) })}
-                            onPointerUp={() => commitConnLive()}
-                            onBlur={() => commitConnLive()}
-                          />
-                          <button title="Cong tự động" onClick={() => { patchConn(contextConn.id, { bend: undefined }); commitConnLive(); }}>Auto</button>
-                        </div>
-                      </>
-                    )}
-                    <div className="whiteboard-context-subtitle">Màu</div>
-                    <div className="whiteboard-context-row whiteboard-context-row--fit">
-                      {CONN_COLORS.map((col) => (
-                        <button key={col} className={(contextConn.color || "#475569").toLowerCase() === col ? "active" : ""} title={col} onClick={() => patchConn(contextConn.id, { color: col })}><i style={{ width: 14, height: 14, borderRadius: 4, background: col, display: "inline-block" }} /></button>
-                      ))}
-                      <label className="wb-conn-color-custom" title="Màu tùy chọn">
-                        <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(contextConn.color || "") ? contextConn.color : "#475569"} onChange={(e) => patchConn(contextConn.id, { color: e.target.value })} />
-                        <span>🎨</span>
-                      </label>
-                    </div>
-                    <div className="whiteboard-context-subtitle">Độ dày</div>
-                    <div className="whiteboard-context-row whiteboard-context-row--fit">
-                      {CONN_WIDTHS.map((w) => (
-                        <button key={w} className={Number(contextConn.width) === w ? "active" : ""} onClick={() => patchConn(contextConn.id, { width: w })}>{w}</button>
-                      ))}
-                    </div>
-                    <div className="whiteboard-context-subtitle">Nét</div>
-                    <div className="whiteboard-context-row">
-                      {CONN_DASH_OPTS.map((d) => (
-                        <button key={d.id || "solid"} className={connDash(contextConn) === d.id ? "active" : ""} onClick={() => patchConn(contextConn.id, { dash: d.id })}>{d.label}</button>
-                      ))}
-                    </div>
+                    <div className="whiteboard-context-title wb-connector-title"><ArrowLeftRight size={15} /> Đường nối</div>
+                    {(() => {
+                      const heads = connHeads(contextConn);
+                      const startGlyph = CONN_HEAD_OPTS.find((h) => h.id === heads.start)?.glyph || "○";
+                      const endGlyph = CONN_HEAD_OPTS.find((h) => h.id === heads.end)?.glyph || "➤";
+                      const typeLabel = contextConn.type === "curve" ? "Cong" : contextConn.type === "elbow" ? "Vuông" : "Thẳng";
+                      const dash = connDash(contextConn);
+                      const dashLabel = CONN_DASH_OPTS.find((d) => d.id === dash)?.label || "Liền";
+                      const section = (key) => connectorMenuSection === key;
+                      const toggleSection = (key) => setConnectorMenuSection((current) => current === key ? "" : key);
+                      return (
+                        <>
+                          <section className="wb-connector-accordion">
+                            <button type="button" className={`wb-connector-accordion-trigger${section("heads") ? " is-open" : ""}`} aria-expanded={section("heads")} aria-controls="wb-connector-heads" onClick={() => toggleSection("heads")}>
+                              <span className="wb-connector-accordion-label"><ArrowLeftRight size={15} />Đầu mũi tên</span>
+                              <span className="wb-connector-accordion-summary">{startGlyph}<span>→</span>{endGlyph}</span>
+                              <ChevronDown size={15} className="wb-connector-chevron" />
+                            </button>
+                            {section("heads") && (
+                              <div className="wb-connector-accordion-content" id="wb-connector-heads">
+                                <div className="whiteboard-context-subtitle wb-connector-subtitle">Bắt đầu</div>
+                                <div className="whiteboard-context-row whiteboard-context-row--fit wb-connector-options">
+                                  {CONN_HEAD_OPTS.map((h) => (
+                                    <button key={`s-${h.id}`} className={heads.start === h.id ? "active" : ""} aria-label={`Đầu bắt đầu: ${h.label}`} aria-pressed={heads.start === h.id} title={h.label} onClick={() => setConnHead(contextConn, "start", h.id)}>{h.glyph}</button>
+                                  ))}
+                                </div>
+                                <div className="whiteboard-context-subtitle wb-connector-subtitle">Kết thúc</div>
+                                <div className="whiteboard-context-row whiteboard-context-row--fit wb-connector-options">
+                                  {CONN_HEAD_OPTS.map((h) => (
+                                    <button key={`e-${h.id}`} className={heads.end === h.id ? "active" : ""} aria-label={`Đầu kết thúc: ${h.label}`} aria-pressed={heads.end === h.id} title={h.label} onClick={() => setConnHead(contextConn, "end", h.id)}>{h.glyph}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </section>
+                          <section className="wb-connector-accordion">
+                            <button type="button" className={`wb-connector-accordion-trigger${section("shape") ? " is-open" : ""}`} aria-expanded={section("shape")} aria-controls="wb-connector-shape" onClick={() => toggleSection("shape")}>
+                              <span className="wb-connector-accordion-label"><Spline size={15} />Kiểu đường</span>
+                              <span className="wb-connector-accordion-value">{typeLabel}</span>
+                              <ChevronDown size={15} className="wb-connector-chevron" />
+                            </button>
+                            {section("shape") && (
+                              <div className="wb-connector-accordion-content" id="wb-connector-shape">
+                                <div className="whiteboard-context-row wb-connector-types">
+                                  <button className={contextConn.type !== "elbow" && contextConn.type !== "curve" ? "active" : ""} aria-pressed={contextConn.type !== "elbow" && contextConn.type !== "curve"} title="Đường thẳng" onClick={() => patchConn(contextConn.id, { type: connTypeForHeads({ type: "line" }, heads.start, heads.end) })}><ArrowLeftRight size={15} />Thẳng</button>
+                                  <button className={contextConn.type === "curve" ? "active" : ""} aria-pressed={contextConn.type === "curve"} title="Đường cong" onClick={() => patchConn(contextConn.id, { type: "curve" })}><Spline size={15} />Cong</button>
+                                  <button className={contextConn.type === "elbow" ? "active" : ""} aria-pressed={contextConn.type === "elbow"} title="Đường vuông góc" onClick={() => patchConn(contextConn.id, { type: "elbow" })}><CornerDownRight size={15} />Vuông</button>
+                                </div>
+                                {contextConn.type === "curve" && (
+                                  <>
+                                    <div className="whiteboard-context-subtitle wb-connector-subtitle">Độ cong</div>
+                                    <div className="whiteboard-context-row">
+                                      <input
+                                        type="range" min={-150} max={150} step={5} style={{ flex: 1 }}
+                                        title={`Độ cong ${Number.isFinite(Number(contextConn.bend)) ? Math.round(Number(contextConn.bend)) : 100} — 0 là thẳng, giá trị âm cong sang phía đối diện`}
+                                        value={Number.isFinite(Number(contextConn.bend)) ? Math.max(-150, Math.min(150, Number(contextConn.bend))) : 100}
+                                        onChange={(e) => patchConnLive(contextConn.id, { bend: Number(e.target.value) })}
+                                        onPointerUp={() => commitConnLive()}
+                                        onBlur={() => commitConnLive()}
+                                      />
+                                      <button title="Cong tự động" onClick={() => { patchConn(contextConn.id, { bend: undefined, bendAlong: undefined }); commitConnLive(); }}>Auto</button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </section>
+                          <section className="wb-connector-accordion">
+                            <button type="button" className={`wb-connector-accordion-trigger${section("style") ? " is-open" : ""}`} aria-expanded={section("style")} aria-controls="wb-connector-style" onClick={() => toggleSection("style")}>
+                              <span className="wb-connector-accordion-label"><Palette size={15} />Nét & màu</span>
+                              <span className="wb-connector-accordion-value"><i style={{ background: contextConn.color || "#475569" }} />{dashLabel} · {Number(contextConn.width) || 2}px</span>
+                              <ChevronDown size={15} className="wb-connector-chevron" />
+                            </button>
+                            {section("style") && (
+                              <div className="wb-connector-accordion-content" id="wb-connector-style">
+                                <div className="whiteboard-context-subtitle wb-connector-subtitle">Màu đường</div>
+                                <div className="whiteboard-context-row whiteboard-context-row--fit wb-connector-colors">
+                                  {CONN_COLORS.map((col) => (
+                                    <button key={col} className={(contextConn.color || "#475569").toLowerCase() === col ? "active" : ""} aria-label={`Màu ${col}`} aria-pressed={(contextConn.color || "#475569").toLowerCase() === col} title={col} onClick={() => patchConn(contextConn.id, { color: col })}><i style={{ width: 14, height: 14, borderRadius: 4, background: col, display: "inline-block" }} /></button>
+                                  ))}
+                                  <label className="wb-conn-color-custom" title="Màu tùy chọn" aria-label="Màu tùy chọn">
+                                    <input type="color" value={/^#[0-9A-Fa-f]{6}$/.test(contextConn.color || "") ? contextConn.color : "#475569"} onChange={(e) => patchConn(contextConn.id, { color: e.target.value })} />
+                                    <Palette size={15} />
+                                  </label>
+                                </div>
+                                <div className="whiteboard-context-subtitle wb-connector-subtitle">Độ dày</div>
+                                <div className="whiteboard-context-row whiteboard-context-row--fit wb-connector-options">
+                                  {CONN_WIDTHS.map((w) => (
+                                    <button key={w} className={Number(contextConn.width) === w ? "active" : ""} aria-pressed={Number(contextConn.width) === w} title={`${w}px`} onClick={() => patchConn(contextConn.id, { width: w })}><span className="wb-connector-width-preview" style={{ borderTopWidth: Math.min(w, 6) }} /><span>{w}</span></button>
+                                  ))}
+                                </div>
+                                <div className="whiteboard-context-subtitle wb-connector-subtitle">Kiểu nét</div>
+                                <div className="whiteboard-context-row wb-connector-dashes">
+                                  {CONN_DASH_OPTS.map((d) => (
+                                    <button key={d.id || "solid"} className={dash === d.id ? "active" : ""} aria-pressed={dash === d.id} onClick={() => patchConn(contextConn.id, { dash: d.id })}><span className={`wb-connector-dash-preview${d.id === "6 4" ? " is-dashed" : d.id === "2 4" ? " is-dotted" : ""}`} />{d.label}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </section>
+                        </>
+                      );
+                    })()}
                     <div className="whiteboard-context-sep" />
-                    <button onClick={() => act(() => { const cc = contextConn; setConnLabelDraft(cc.label || ""); setConnLabelEdit({ id: cc.id, x: contextMenu.x, y: contextMenu.y }); })}>✏️ Nhãn{contextConn.label ? ` — “${String(contextConn.label).slice(0, 20)}”` : ""}</button>
+                    <button onClick={() => act(() => { const cc = contextConn; setConnLabelDraft(cc.label || ""); setConnLabelEdit({ id: cc.id, x: contextMenu.x, y: contextMenu.y }); })}><Tag size={14} />Nhãn{contextConn.label ? ` — “${String(contextConn.label).slice(0, 20)}”` : ""}</button>
                     <div className="whiteboard-context-row">
-                      <button onClick={() => act(() => { checkpoint(); const flipped = flipConn(contextConn); setBoard((prev) => { const nb = { ...prev, connectors: prev.connectors.map((c) => c.id === contextConn.id ? flipped : c) }; pushHistory(nb); return nb; }); playWb("click"); })} title="Đảo chiều mũi tên">⇄ Đảo chiều</button>
-                      <button onClick={() => act(() => { checkpoint(); setBoard((prev) => { const nb = { ...prev, connectors: prev.connectors.filter((c) => c.id !== contextConn.id) }; pushHistory(nb); return nb; }); setSelectedConn(null); })} style={{ color: "#dc2626" }}>Xóa</button>
+                      <button onClick={() => act(() => { checkpoint(); const flipped = flipConn(contextConn); setBoard((prev) => { const nb = { ...prev, connectors: prev.connectors.map((c) => c.id === contextConn.id ? flipped : c) }; pushHistory(nb); return nb; }); playWb("click"); })} title="Đảo chiều mũi tên"><RotateCcw size={14} />Đảo chiều</button>
+                      <button onClick={() => act(() => { checkpoint(); setBoard((prev) => { const nb = { ...prev, connectors: prev.connectors.filter((c) => c.id !== contextConn.id) }; pushHistory(nb); return nb; }); setSelectedConn(null); })} style={{ color: "#dc2626" }}><Trash2 size={14} />Xóa</button>
                     </div>
-                    <div className="whiteboard-context-hint">💡 Bấm chọn đường nối → cầm chấm trắng ở 2 đầu kéo sang khối khác</div>
+                    <div className="whiteboard-context-hint">Kéo điểm giữa để chỉnh dáng; kéo hai đầu để nối sang khối khác.</div>
                   </>
                 ) : contextObject ? (
                   <>
@@ -3333,7 +3503,7 @@ export default function WhiteboardView() {
                       display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 9,
                       border: mindTheme === t.id ? "2px solid var(--primary,#2563eb)" : "1px solid var(--border-color,#e2e8f0)",
                       background: mindTheme === t.id ? "var(--primary-light,#eff6ff)" : "var(--surface,#fff)",
-                      cursor: "pointer", fontSize: 12, fontWeight: mindTheme === t.id ? 700 : 400,
+                      cursor: "pointer", fontSize: "0.75rem", fontWeight: mindTheme === t.id ? 700 : 400,
                     }}
                   >
                     <span style={{ display: "inline-flex", gap: 2 }}>
@@ -3369,10 +3539,16 @@ export default function WhiteboardView() {
 
       {showAI && (
         <div className="modal-overlay whiteboard-ai-overlay" onClick={closeAIModal}>
-          <div className="modal-content whiteboard-ai-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, overflow: "hidden" }}>
+          <div className="modal-content whiteboard-ai-panel" role="dialog" aria-modal="true" aria-labelledby="whiteboard-ai-title" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header whiteboard-ai-header">
-              <h2 style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "grid", placeItems: "center", color: "#fff", fontSize: 14 }}>✦</span> {aiStage === "preview" ? "Xem trước sơ đồ" : "AI tạo sơ đồ thông minh"}</h2>
-              <button className="btn btn-ghost btn-xs" onClick={closeAIModal}><X size={16} /></button>
+              <div className="whiteboard-ai-heading">
+                <span className="whiteboard-ai-mark"><Sparkles size={17} /></span>
+                <div>
+                  <h2 id="whiteboard-ai-title">{aiStage === "preview" ? "Xem trước sơ đồ" : "AI tạo sơ đồ"}</h2>
+                  {aiStage !== "preview" && <p>Dán nội dung hoặc chọn ảnh để bắt đầu</p>}
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-xs whiteboard-ai-close" onClick={closeAIModal} aria-label="Đóng cửa sổ"><X size={16} /></button>
             </div>
 
             {aiStage === "preview" && aiPlan ? (
@@ -3387,7 +3563,7 @@ export default function WhiteboardView() {
                 </div>
                 <div className="wb-ai-preview-topic">
                   <span className="wb-ai-preview-topic-label">Chủ đề</span>
-                  <input className="form-control" value={aiPlan.topic} onChange={(e) => editAiPlan((p) => ({ ...p, topic: e.target.value }))} style={{ fontSize: 14, fontWeight: 700 }} />
+                  <input className="form-control" value={aiPlan.topic} onChange={(e) => editAiPlan((p) => ({ ...p, topic: e.target.value }))} style={{ fontSize: "0.875rem", fontWeight: 700 }} />
                 </div>
                 <div className="wb-ai-preview-branches">
                   {aiPlan.branches.map((b, i) => (
@@ -3420,74 +3596,85 @@ export default function WhiteboardView() {
               </div>
             ) : (
               <>
-                <div className="whiteboard-ai-tabs">
-                  <button className={`whiteboard-ai-tab ${aiTab === "text" ? "active" : ""}`} onClick={() => setAiTab("text")}>📝 Văn bản</button>
-                  <button className={`whiteboard-ai-tab ${aiTab === "image" ? "active" : ""}`} onClick={() => setAiTab("image")}>🖼 Ảnh</button>
-                  <button className={`whiteboard-ai-tab ${aiTab === "suggest" ? "active" : ""}`} onClick={() => setAiTab("suggest")}>💡 Gợi ý</button>
+                <div className="whiteboard-ai-tabs" role="tablist" aria-label="Cách nhập nội dung">
+                  <button type="button" role="tab" aria-selected={aiTab === "text"} className={`whiteboard-ai-tab ${aiTab === "text" ? "active" : ""}`} onClick={() => setAiTab("text")}><Type size={15} /> Văn bản</button>
+                  <button type="button" role="tab" aria-selected={aiTab === "image"} className={`whiteboard-ai-tab ${aiTab === "image" ? "active" : ""}`} onClick={() => setAiTab("image")}><ImageIcon size={15} /> Ảnh</button>
+                  <button type="button" role="tab" aria-selected={aiTab === "suggest"} className={`whiteboard-ai-tab ${aiTab === "suggest" ? "active" : ""}`} onClick={() => setAiTab("suggest")}><Lightbulb size={15} /> Gợi ý</button>
                 </div>
-                <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: 12, maxHeight: "62vh", overflow: "auto" }}>
+                <div className="wb-ai-form">
                   {aiTab === "text" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <label className="form-label" style={{ fontWeight: 600 }}>Văn bản nguồn (mỗi dòng = một ý)</label>
-                      <textarea className="form-control" rows={5} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder={"Dán nội dung từ SGK, ví dụ:\nQuang hợp là quá trình...\n- Điều kiện: ánh sáng, diệp lục\n- Sản phẩm: tinh bột, oxy"} style={{ resize: "vertical", fontSize: 13, lineHeight: 1.5 }} />
-                      <span style={{ fontSize: 11, color: aiText.length > 12000 ? "#b45309" : "var(--text-muted)" }}>
-                        {aiText.length}/12000 ký tự{aiText.length > 12000 ? " — vượt sẽ chỉ đọc phần đầu + cuối, giữa bị cắt" : ""}. AI chỉ dùng đúng nội dung bạn dán — không bịa thêm. Thuật ngữ gốc được giữ nguyên. Nhận diện thụt lề/gạch đầu dòng làm phân cấp.
-                      </span>
+                    <div className="wb-ai-source">
+                      <div className="wb-ai-section-heading">
+                        <label htmlFor="wb-ai-source-text">Văn bản nguồn</label>
+                        <span>Mỗi dòng là một ý</span>
+                      </div>
+                      <textarea id="wb-ai-source-text" className="form-control wb-ai-source-text" rows={5} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder={"Dán nội dung từ SGK, ví dụ:\nQuang hợp là quá trình...\n- Điều kiện: ánh sáng, diệp lục\n- Sản phẩm: tinh bột, oxy"} />
+                      <div className="wb-ai-source-caption">
+                        <span className={aiText.length > 12000 ? "is-over-limit" : ""}>{aiText.length}/12000 ký tự{aiText.length > 12000 ? " — nội dung dài sẽ được rút gọn" : ""}</span>
+                        <span>AI bám sát nguồn và giữ nguyên thuật ngữ; thụt lề hoặc gạch đầu dòng sẽ được dùng làm cấp ý.</span>
+                      </div>
                     </div>
                   )}
                   {aiTab === "image" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <label className="form-label" style={{ fontWeight: 600 }}>Ảnh minh họa</label>
-                      <div className="whiteboard-ai-drop" onClick={() => document.getElementById("wb-ai-image-input")?.click()} style={{ border: "1.5px dashed var(--border-color)", borderRadius: 10, padding: 12, display: "flex", gap: 10, alignItems: "center", cursor: "pointer", background: "rgba(99,102,241,0.04)" }}>
-                        {aiImagePreview ? <img src={aiImagePreview} alt="preview" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid var(--border-color)" }} /> : <div style={{ width: 64, height: 64, borderRadius: 8, background: "#f1f5f9", display: "grid", placeItems: "center", fontSize: 18 }}>🖼</div>}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{aiImageFile ? aiImageFile.name : "Chọn ảnh để AI đọc"}</div>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>JPG/PNG/WebP, tối đa 8MB. AI đọc trực tiếp nội dung trong ảnh (cần API Key).</div>
+                    <div className="wb-ai-source">
+                      <div className="wb-ai-section-heading"><label>Ảnh nguồn</label><span>JPG, PNG hoặc WebP · tối đa 8 MB</span></div>
+                      <div className="whiteboard-ai-drop" role="button" tabIndex={0} aria-label="Chọn ảnh nguồn" onClick={() => document.getElementById("wb-ai-image-input")?.click()} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); document.getElementById("wb-ai-image-input")?.click(); } }}>
+                        {aiImagePreview ? <img src={aiImagePreview} alt="Xem trước ảnh nguồn" className="wb-ai-image-preview" /> : <span className="wb-ai-image-placeholder"><ImageIcon size={22} /></span>}
+                        <div className="wb-ai-drop-copy">
+                          <strong>{aiImageFile ? aiImageFile.name : "Chọn ảnh để AI đọc"}</strong>
+                          <span>AI nhận diện nội dung trong ảnh (cần API Key).</span>
                         </div>
-                        <span className="btn btn-secondary btn-xs">Chọn</span>
+                        <span className="btn btn-secondary btn-xs">Chọn ảnh</span>
                       </div>
                       <input id="wb-ai-image-input" type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setAiImageFile(f); e.target.value = ""; }} />
-                      {aiImageFile && <button className="btn btn-ghost btn-xs" style={{ alignSelf: "flex-start" }} onClick={() => { setAiImageFile(null); setAiImagePreview(""); }}>✕ Gỡ ảnh</button>}
-                      <textarea className="form-control" rows={2} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="Ghi chú thêm cho ảnh (tùy chọn)" style={{ fontSize: 12 }} />
+                      {aiImageFile && <button type="button" className="btn btn-ghost btn-xs wb-ai-remove-image" onClick={() => { setAiImageFile(null); setAiImagePreview(""); }}>Gỡ ảnh</button>}
+                      <label className="wb-ai-notes-label" htmlFor="wb-ai-image-notes">Ghi chú thêm <span>(không bắt buộc)</span></label>
+                      <textarea id="wb-ai-image-notes" className="form-control wb-ai-image-notes" rows={3} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="Thêm bối cảnh hoặc nội dung cần chú ý trong ảnh…" />
                     </div>
                   )}
                   {aiTab === "suggest" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <label className="form-label" style={{ fontWeight: 600 }}>Gợi ý nhanh — chạm để điền</label>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    <div className="wb-ai-source wb-ai-suggestions">
+                      <div className="wb-ai-section-heading"><label>Chọn một gợi ý</label><span>Gợi ý sẽ điền vào chủ đề</span></div>
+                      <div className="wb-ai-suggestion-list">
                         {["Tóm tắt bài học", "So sánh 2 khái niệm", "Sơ đồ tư duy Quang hợp", "Phân loại thực vật", "Timeline lịch sử", "Sơ đồ lớp 4 — Vòng đời cây"].map((g) => (
-                          <button key={g} className="btn btn-secondary btn-xs" style={{ borderRadius: 20, fontSize: 11 }} onClick={() => setAiTopic(g)}>{g}</button>
+                          <button type="button" key={g} className={`wb-ai-suggestion ${aiTopic === g ? "is-selected" : ""}`} onClick={() => setAiTopic(g)}>{g}</button>
                         ))}
                       </div>
-                      <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>Chọn một gợi ý để điền vào Chủ đề, sau đó thêm ý nhỏ bên dưới.</p>
+                      <p className="wb-ai-help">Sau khi chọn, bạn có thể chỉnh chủ đề và bổ sung các ý nhỏ bên dưới.</p>
                     </div>
                   )}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px", background: "rgba(241,245,249,0.6)", borderRadius: 10, border: "1px solid rgba(226,232,240,0.8)" }}>
-                    <label className="form-label" style={{ fontWeight: 600, margin: 0 }}>Ý nhỏ cho AI <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 11 }}>(tùy chọn, mỗi ô một ý — bắt buộc có trong sơ đồ)</span></label>
+                  <section className="wb-ai-ideas">
+                    <div className="wb-ai-section-heading wb-ai-ideas-heading">
+                      <label>Ý cần có trong sơ đồ</label>
+                      <span>Tùy chọn · AI chỉ dùng các ý có trong nguồn</span>
+                    </div>
                     {aiSmallIdeas.map((v, i) => (
-                      <div key={i} style={{ display: "flex", gap: 6 }}>
-                        <input className="form-control" value={v} onChange={(e) => { const a = [...aiSmallIdeas]; a[i] = e.target.value; setAiSmallIdeas(a); }} placeholder={`Ý ${i + 1} — ví dụ: Diệp lục`} style={{ fontSize: 13 }} />
-                        <button className="btn btn-ghost btn-xs" onClick={() => setAiSmallIdeas((a) => a.filter((_, j) => j !== i))} disabled={aiSmallIdeas.length <= 1}><X size={14} /></button>
+                      <div key={i} className="wb-ai-idea-row">
+                        <input className="form-control" aria-label={`Ý bắt buộc ${i + 1}`} value={v} onChange={(e) => { const a = [...aiSmallIdeas]; a[i] = e.target.value; setAiSmallIdeas(a); }} placeholder={`Ý ${i + 1} — ví dụ: Diệp lục`} />
+                        <button type="button" className="wb-ai-remove-idea" aria-label={`Xóa ý ${i + 1}`} onClick={() => setAiSmallIdeas((a) => a.filter((_, j) => j !== i))} disabled={aiSmallIdeas.length <= 1}><X size={15} /></button>
                       </div>
                     ))}
-                    <button className="btn btn-secondary btn-xs" style={{ alignSelf: "flex-start" }} onClick={() => setAiSmallIdeas((a) => (a.length >= 12 ? a : [...a, ""]))} disabled={aiSmallIdeas.length >= 12} title={aiSmallIdeas.length >= 12 ? "Tối đa 12 ý" : "Thêm ý"}>+ Thêm ý{aiSmallIdeas.length >= 12 ? " (tối đa 12)" : ""}</button>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <label className="form-label" style={{ fontWeight: 600 }}>Chủ đề trung tâm <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 11 }}>(tùy chọn — để trống AI tự rút từ nguồn)</span></label>
-                    <input className="form-control" value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="VD: Quang hợp ở thực vật" style={{ fontSize: 14, fontWeight: 600 }} />
+                    <button type="button" className="wb-ai-add-idea" onClick={() => setAiSmallIdeas((a) => (a.length >= 12 ? a : [...a, ""]))} disabled={aiSmallIdeas.length >= 12} title={aiSmallIdeas.length >= 12 ? "Tối đa 12 ý" : "Thêm ý"}><Plus size={14} /> Thêm ý{aiSmallIdeas.length >= 12 ? " (tối đa 12)" : ""}</button>
+                  </section>
+                  <div className="wb-ai-topic">
+                    <div className="wb-ai-section-heading">
+                      <label htmlFor="wb-ai-topic">Chủ đề trung tâm</label>
+                      <span>Không bắt buộc</span>
+                    </div>
+                    <input id="wb-ai-topic" className="form-control" value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="VD: Quang hợp ở thực vật" />
                     {!aiText.trim() && !aiImageFile && !aiSmallIdeas.some((s) => s.trim()) && (
-                      <span style={{ fontSize: 11, color: "#b45309", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.35)", borderRadius: 8, padding: "6px 8px" }}>
-                        Chỉ có chủ đề, không có nguồn — AI tự mở rộng, dễ thiếu chính xác. Nên dán văn bản/ảnh hoặc thêm ý nhỏ bên trên.
-                      </span>
+                      <div className="wb-ai-source-warning"><Lightbulb size={15} /><span>Chỉ có chủ đề thì AI phải tự mở rộng, kết quả có thể kém chính xác. Nên thêm văn bản, ảnh hoặc ý nhỏ.</span></div>
                     )}
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Sau khi tạo bạn sẽ <b>xem trước, sửa nhãn rồi mới đưa lên bảng</b>. AI kiểm tra chống bịa với nguồn; không có API Key vẫn tạo được từ văn bản.</span>
+                    <p className="wb-ai-help">Bạn sẽ xem trước và chỉnh sơ đồ trước khi đưa lên bảng. Có thể tạo từ văn bản ngay cả khi chưa cấu hình API Key.</p>
                   </div>
                   {aiError && <div className="wb-ai-error">{aiError}</div>}
-                  <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, paddingTop: 4 }}>
-                    {aiBusy && aiProgress && <span style={{ fontSize: 12, color: "var(--text-muted)", marginRight: "auto" }}>{aiProgress}</span>}
-                    <button className="btn btn-ghost" onClick={closeAIModal}>Đóng</button>
-                    {aiBusy && <button className="btn btn-ghost" onClick={handleAICancel}>Hủy</button>}
-                    <button className="btn btn-primary" onClick={handleAIGenerate} disabled={aiBusy} style={{ minWidth: 130 }}>{aiBusy ? "Đang tạo… (có thể Hủy)" : "✦ Tạo sơ đồ"}</button>
+                </div>
+                <div className="wb-ai-form-actions">
+                  <span className="wb-ai-action-hint" aria-live="polite">{aiBusy && aiProgress ? aiProgress : "Có thể xem lại và chỉnh sửa trước khi đưa lên bảng."}</span>
+                  <div className="wb-ai-action-buttons">
+                    <button type="button" className="btn btn-ghost" onClick={closeAIModal}>Đóng</button>
+                    {aiBusy && <button type="button" className="btn btn-ghost" onClick={handleAICancel}>Hủy tạo</button>}
+                    <button type="button" className="btn btn-primary wb-ai-generate" onClick={handleAIGenerate} disabled={aiBusy}><Sparkles size={15} /> {aiBusy ? "Đang tạo…" : "Tạo sơ đồ"}</button>
                   </div>
                 </div>
               </>
@@ -3502,9 +3689,9 @@ export default function WhiteboardView() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="modal-header"><h2>Bảng trắng trong 30 giây</h2><button className="btn btn-ghost btn-xs" onClick={closeTour} aria-label="Đóng"><X size={16} /></button></div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
-              <div style={{ fontSize: 40, lineHeight: 1 }}>{TOUR_STEPS[tourStep].icon}</div>
-              <div style={{ fontWeight: 800, fontSize: 15 }}>{TOUR_STEPS[tourStep].title}</div>
-              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>{TOUR_STEPS[tourStep].desc}</p>
+              <div style={{ fontSize: "2.5rem", lineHeight: 1 }}>{TOUR_STEPS[tourStep].icon}</div>
+              <div style={{ fontWeight: 800, fontSize: "0.9375rem" }}>{TOUR_STEPS[tourStep].title}</div>
+              <p style={{ margin: 0, fontSize: "0.8125rem", lineHeight: 1.55 }}>{TOUR_STEPS[tourStep].desc}</p>
               <div style={{ display: "flex", gap: 6 }}>
                 {TOUR_STEPS.map((_, i) => (
                   <span key={i} onClick={() => setTourStep(i)} style={{ width: 22, height: 6, borderRadius: 3, background: i === tourStep ? "var(--primary,#2563eb)" : "var(--border-color,#e2e8f0)", cursor: "pointer" }} />

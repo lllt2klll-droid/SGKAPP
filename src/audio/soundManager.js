@@ -4,7 +4,7 @@
 
 import { getAssetUrl, effectiveVolume } from "./soundAssets.js";
 import { normalizeEvent, isEventEnabledForProfile, VALID_PROFILES } from "./soundEvents.js";
-import { loadSettings, isReduceMotionEffective } from "../settingsStore.js";
+import { loadSettings, isReduceMotionEffective } from "../services/settingsStore.js";
 
 const CACHE = new Map(); // event -> HTMLAudioElement (template)
 let enabledOverride = null; // for preview bypass if needed

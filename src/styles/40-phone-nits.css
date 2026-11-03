@@ -17,6 +17,20 @@
   .global-header-content {
     padding-left: max(0.75rem, env(safe-area-inset-left));
     padding-right: max(0.75rem, env(safe-area-inset-right));
+    gap: 0.4rem;
+  }
+  .global-header-right { gap: 0.35rem; }
+  .breadcrumb-current {
+    max-width: 7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .header-add-btn {
+    width: 40px;
+    min-width: 40px;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
   /* Drawer sidebar: footer không chạm home-indicator */
   .sidebar {
@@ -35,6 +49,71 @@
      không phải .reader-ai-panel (tên cũ đã chết) */
   .reader-main .ai-panel {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Dashboard phone: keep the first viewport focused on the primary workflow. */
+  .db-hero {
+    padding: 20px 16px 16px !important;
+    border-radius: 18px !important;
+  }
+  .db-hero-art,
+  .db-hero-float,
+  .db-hero-resize {
+    display: none !important;
+  }
+  .db-hello {
+    max-width: 100% !important;
+    font-size: 1.45rem !important;
+  }
+  .db-hero-sub {
+    gap: 5px !important;
+    margin-top: 7px !important;
+  }
+  .db-hero-sub b {
+    padding: 4px 8px !important;
+    font-size: 0.6875rem !important;
+  }
+  .db-backup-pill {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .db-quick {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-top: 16px !important;
+  }
+  .db-quick .db-qa {
+    min-height: 52px !important;
+    padding: 8px !important;
+    gap: 8px !important;
+    font-size: 0.75rem !important;
+  }
+  .db-quick .db-qa:nth-child(n + 5):not(:last-child) {
+    display: none !important;
+  }
+  .db-quick .db-qa small {
+    max-width: 90px !important;
+    font-size: 0.625rem !important;
+  }
+  .db-qa-ic {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 9px !important;
+  }
+
+  /* Settings mobile: keep category navigation horizontally discoverable
+     without letting long labels widen the dialog. */
+  .st-modal {
+    width: calc(100vw - 1rem) !important;
+    max-height: calc(100dvh - 1rem) !important;
+  }
+  .st-nav {
+    flex: 0 0 auto;
+  }
+  .st-nav-tx small {
+    display: none;
   }
 }
 
@@ -111,7 +190,7 @@
   select.form-input,
   select.form-control,
   select.sort-select {
-    font-size: 16px !important;
+    font-size: 1rem !important;
   }
 }
 
@@ -151,7 +230,7 @@
 
   .word-book-content {
     min-width: 0;
-    font-size: 14px;
+    font-size: 0.875rem;
     line-height: 1.65;
   }
 
@@ -285,5 +364,456 @@
   }
   .reader-main .reader-toc-panel {
     z-index: calc(var(--z-drawer) + 1);
+  }
+}
+
+/* ============================================================
+   S. COMPACT PHONE DENSITY
+   - Reduce visual scale consistently after the touch-target pass.
+   - Form text stays at 16px to prevent iOS auto-zoom.
+   - Navigation and close controls keep a slightly larger hit area.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  .app-shell {
+    font-size: 0.94rem;
+  }
+
+  .main-content {
+    padding-left: max(0.625rem, env(safe-area-inset-left));
+    padding-right: max(0.625rem, env(safe-area-inset-right));
+  }
+
+  .global-header-content {
+    min-height: 48px;
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+  }
+
+  .header-action-btn,
+  .ai-status-indicator,
+  .header-add-btn,
+  .mobile-menu-btn {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .btn-accent,
+  .btn-tool,
+  .btn-ghost {
+    min-height: 36px !important;
+    padding: 0.42rem 0.72rem !important;
+    border-radius: 9px !important;
+    font-size: 0.78rem !important;
+    gap: 0.32rem !important;
+  }
+
+  .btn-sm {
+    min-height: 32px !important;
+    padding: 0.3rem 0.58rem !important;
+    font-size: 0.73rem !important;
+  }
+
+  .btn-xs {
+    min-height: 28px !important;
+    padding: 0.22rem 0.5rem !important;
+    font-size: 0.68rem !important;
+  }
+
+  .btn-icon,
+  .libx-icobtn,
+  .stx-icobtn,
+  .cmp-btn-icon {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+  }
+
+  .page-title {
+    font-size: 1.25rem !important;
+  }
+
+  .section-title,
+  .card-title,
+  .db-sec-title {
+    font-size: 0.88rem !important;
+  }
+
+  .body-text,
+  .body-muted {
+    font-size: 0.78rem !important;
+  }
+
+  .caption,
+  .label,
+  .section-hint {
+    font-size: 0.66rem !important;
+  }
+
+  .nav-item {
+    min-height: 36px !important;
+    padding-top: 0.38rem !important;
+    padding-bottom: 0.38rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  .mobile-bottom-nav {
+    height: 62px !important;
+    min-height: 62px !important;
+  }
+
+  .mobile-bottom-nav button {
+    font-size: 0.64rem !important;
+    gap: 0.16rem !important;
+  }
+
+  .search-input-wrapper {
+    height: 40px !important;
+    border-radius: 10px !important;
+  }
+
+  .filter-group .filter-btn,
+  .filter-group .lib-grade-btn,
+  .vocab-filter-chip,
+  .seg-tab,
+  .stx-check,
+  .stx-open {
+    min-height: 34px !important;
+    font-size: 0.72rem !important;
+    padding: 0.3rem 0.58rem !important;
+  }
+
+  .library-toolbar,
+  .toolbar,
+  .panel-header,
+  .card-header {
+    padding: 0.55rem 0.65rem !important;
+  }
+
+  .db-sec {
+    padding: 0.7rem 0.75rem !important;
+    border-radius: 13px !important;
+  }
+
+  .db-kpi {
+    min-height: 66px !important;
+    padding: 0.55rem !important;
+  }
+
+  .db-kpi-val {
+    font-size: 1.05rem !important;
+  }
+
+  .db-kpi-label,
+  .db-kpi-sub {
+    font-size: 0.66rem !important;
+  }
+
+  .reader-root .modal-close,
+  .reader-root .util-bubble-close,
+  .toc-item-page,
+  .rmb-page,
+  .rtb-page-pill,
+  .rtb-zoom-pct,
+  .rtb-nav-btn,
+  .rtb-zoom-btn,
+  .rtb-icon-btn,
+  .chat-ai-icon-btn,
+  .reader-tool-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+
+  /* Preserve readable form controls on iOS while reducing surrounding UI. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea,
+  .form-input,
+  .form-control,
+  .form-select,
+  .form-textarea {
+    font-size: 1rem !important;
+  }
+}
+
+/* ============================================================
+   T. READER WORKSPACE
+   Keep the book canvas dominant and make auxiliary panels feel
+   like focused tools instead of competing full-page surfaces.
+   ============================================================ */
+.reader-root {
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.reader-main {
+  background: var(--bg-main);
+}
+
+.reader-toc-panel,
+.ai-panel {
+  box-shadow: none;
+}
+
+.reader-toc-header,
+.ai-tabs {
+  padding: 0.65rem 0.7rem;
+}
+
+.reader-toc-title {
+  font-size: 0.78rem;
+}
+
+.reader-toc-search {
+  padding: 0.55rem 0.6rem 0.4rem;
+}
+
+.reader-toc-search input {
+  min-height: 2.15rem;
+  font-size: 0.78rem;
+}
+
+.toc-item {
+  min-height: 2.25rem;
+  padding: 0.32rem 0.38rem;
+  font-size: 0.78rem;
+}
+
+.ai-tab {
+  padding: 0.3rem 0.35rem;
+  font-size: 0.68rem;
+}
+
+@media (max-width: 767.98px) {
+  .reader-root {
+    border: 0;
+    border-radius: 0;
+    height: calc(100dvh - 48px);
+    max-height: calc(100dvh - 48px);
+  }
+
+  .reader-main {
+    min-height: 0;
+  }
+
+  .reader-toc-panel,
+  .reader-main .ai-panel {
+    max-width: 100vw;
+  }
+
+  .reader-toc-header {
+    grid-template-columns: minmax(0, 1fr) repeat(3, 2.25rem);
+    gap: 0.45rem 0.35rem;
+    padding: 0.7rem 0.65rem;
+  }
+
+  .reader-toc-header > button.btn {
+    width: 2.25rem;
+    height: 2.25rem;
+    min-height: 2.25rem !important;
+  }
+
+  .reader-toc-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+  }
+
+  .reader-toc-title::before {
+    width: 1.55rem;
+    height: 1.55rem;
+    font-size: 0.74rem;
+  }
+
+  .reader-toc-search input {
+    min-height: 2rem;
+  }
+
+  .toc-item {
+    min-height: 2rem;
+    font-size: 0.72rem;
+  }
+
+  .ai-tabs {
+    gap: 0.2rem;
+    padding: 0.4rem;
+  }
+
+  .ai-tab {
+    min-height: 30px !important;
+    padding: 0.25rem 0.3rem;
+    font-size: 0.64rem;
+  }
+
+  .reader-mobile-bar {
+    min-height: 44px;
+    padding: 0.3rem 0.45rem;
+  }
+
+  .reader-mobile-bar .rmb-label {
+    font-size: 0.58rem !important;
+  }
+}
+
+/* ============================================================
+   U. DATA VIEW CONSISTENCY
+   Shared rhythm for research, statistics, inventory, matrix and
+   backup screens without changing their individual layouts.
+   ============================================================ */
+.view-card,
+.content-card,
+.stat-card,
+.dash-empty,
+.dt-card,
+.datatools-view .dt-header {
+  border-radius: 13px;
+  box-shadow: var(--shadow-xs);
+}
+
+.toolbar-row,
+.dt-header-actions,
+.dt-actions {
+  gap: 0.45rem;
+}
+
+.toolbar-row {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+.data-table,
+.dt-table-wrap {
+  border-radius: 10px;
+  border-color: var(--border-color);
+}
+
+.dash-empty {
+  padding: 1.5rem 1rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border-color);
+  text-align: center;
+}
+
+@media (max-width: 767.98px) {
+  .toolbar-row,
+  .datatools-view .dt-header,
+  .dt-card-body {
+    padding: 0.6rem !important;
+  }
+
+  .dt-header-left {
+    min-width: 0;
+  }
+
+  .dt-iconBox {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+  }
+
+  .dt-title {
+    font-size: 0.9rem;
+  }
+
+  .dt-subtitle,
+  .dt-hint {
+    font-size: 0.7rem;
+  }
+
+  .dt-card-header {
+    padding: 0.6rem 0.7rem;
+    font-size: 0.8rem;
+  }
+
+  .dt-card-header-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .dt-stats-grid {
+    gap: 0.45rem;
+  }
+
+  .dt-stat {
+    padding: 0.6rem;
+  }
+
+  .dt-stat-num {
+    font-size: 1.1rem;
+  }
+
+  .dt-stat-label,
+  .dt-stat-hint {
+    font-size: 0.62rem;
+  }
+}
+
+/* ============================================================
+   V. SECONDARY MODULES
+   Align Whiteboard and Help chrome with the compact phone system.
+   Canvas coordinates and board content remain untouched.
+   ============================================================ */
+@media (max-width: 767.98px) {
+  .whiteboard-root {
+    min-height: calc(100dvh - 48px);
+  }
+
+  .whiteboard-header,
+  .whiteboard-topbar,
+  .wb-uni-bar {
+    min-height: 42px;
+    padding: 0.35rem 0.45rem !important;
+    gap: 0.3rem !important;
+  }
+
+  .whiteboard-header button,
+  .whiteboard-topbar button,
+  .wb-uni-bar button,
+  .whiteboard-dock .wb-tool,
+  .wb-collapse-btn,
+  .wb-zoom-btn {
+    min-width: 34px !important;
+    min-height: 34px !important;
+    width: 34px;
+    height: 34px;
+    padding: 0.25rem !important;
+  }
+
+  .help-v2 .help-header,
+  .help-v2 .help-hero,
+  .help-v2 .help-modules,
+  .help-v2 .help-footer-card {
+    border-radius: 13px;
+    padding: 0.75rem !important;
+  }
+
+  .help-v2 h1,
+  .help-v2 h2,
+  .help-v2 h3 {
+    font-size: 0.92rem !important;
+  }
+
+  .help-v2 p,
+  .help-v2 .help-step,
+  .help-v2 .help-mod {
+    font-size: 0.72rem !important;
+  }
+
+  .help-v2 .help-quick-card,
+  .help-v2 .help-shortcuts,
+  .help-v2 .help-walk-step,
+  .help-v2 .help-walk-card,
+  .help-v2 .help-ai-card,
+  .help-v2 .help-empty {
+    padding: 0.6rem !important;
+    border-radius: 10px;
   }
 }

@@ -2,7 +2,7 @@
 // Thuần JS (chạy cả browser + node test), không import React.
 // Luồng: backend /api/lesson-url/fetch trả HTML thô → parseLessonHtml bóc
 // phần giáo án "y hệt" (text) → UI lưu bản thô + AI chuẩn hóa vào KHBD.
-import { DANH_GIA_ALLOWED } from "./planAi";
+import { DANH_GIA_ALLOWED } from "./planAi.js";
 
 export const LESSON_SOURCE_TEXT_MAX = 60000;
 

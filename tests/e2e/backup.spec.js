@@ -1,7 +1,7 @@
 // ── E2E • Sao lưu / Khôi phục bằng file ────────────────────────────────────
 // Port 5323 riêng + BOOKS_DIR trỏ thư mục tạm trong os.tmpdir() → không đụng
 // thư mục sách thật; localStorage nằm trong context trình duyệt tạm.
-// Flow: ghim 1 sách → xuất file JSON → xóa toàn bộ (kèm tải file khẩn) →
+// Flow: ghim 1 sách → xuất file JSON → xóa toàn bộ →
 //       khôi phục từ chính file vừa xuất → dữ liệu quay lại.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -85,6 +85,10 @@ async function gotoDataTools() {
 
 function backupCard() {
   return page.locator(".dt-card").filter({ hasText: "Xuất file sao lưu" });
+}
+
+function restoreCard() {
+  return page.locator(".dt-restore-card");
 }
 
 /** Chờ có điều kiện — thay cho waitForTimeout cố định (tránh flaky). */
@@ -193,27 +197,18 @@ test("F2 • Xuất file sao lưu → tải về JSON hợp lệ, có sgk_favs",
   assert.match(await page.locator(".dt-msg.ok").textContent(), /Đã tải xuống file sao lưu/);
 });
 
-test("F3 • Xóa toàn bộ dữ liệu: tự tải file khẩn trước, sgk_favs sạch", async () => {
+test("F3 • Xóa toàn bộ dữ liệu: yêu cầu sao lưu, xác nhận hai lần, sgk_favs sạch", async () => {
   await gotoDataTools();
 
-  const wipeBtn = backupCard().locator("button", { hasText: "Xóa toàn bộ dữ liệu" });
-  // Luồng an toàn mới: bấm lần 1 để arm (hiện cảnh báo), bấm lần 2 trong 8s để thực thi
+  const wipeBtn = page.locator(".dt-wipe-card button", { hasText: "Xóa toàn bộ dữ liệu" });
+  // F2 đã tạo backup thủ công; thao tác xóa yêu cầu bấm xác nhận hai lần.
   await wipeBtn.click();
   await page.waitForSelector(".dt-msg.err", { timeout: 10000 });
-  const armedBtn = backupCard().locator("button", { hasText: "XÓA HẾT" });
+  const armedBtn = page.locator(".dt-wipe-card button", { hasText: "Bấm lần nữa để xác nhận" });
   assert.equal(await armedBtn.count(), 1, "bấm lần 1 phải chuyển nút sang trạng thái armed");
 
   const navP = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20000 });
-  const dlP = page.waitForEvent("download", { timeout: 20000 });
   await armedBtn.click();
-
-  const rec = await dlP;
-  assert.match(
-    rec.suggestedFilename(),
-    /auto-recovery-before-wipe/,
-    "trước khi xóa phải tải sẵn 1 bản khẩn cấp",
-  );
-
   await navP;
   await waitForAppReady();
   await waitFor(async () => (await favs()).length === 0, { message: "sgk_favs sau wipe" });
@@ -233,17 +228,17 @@ test("F4 • Khôi phục từ file vừa xuất: preview → tick → xác nh�
   assert.ok(backupPath && fs.existsSync(backupPath), "cần file đã xuất ở F2");
 
   await gotoDataTools();
-  await backupCard().locator('input[type="file"]').setInputFiles(backupPath);
+  await restoreCard().locator('input[type="file"]').setInputFiles(backupPath);
 
   await page.waitForSelector("#preview-title", { timeout: 15000 });
-  const previewText = await page.locator(".dt-preview-panel").textContent();
+  const previewText = await page.locator(".dt-import-review").textContent();
   assert.match(previewText, /LocalStorage/, "preview phải nêu số key localStorage");
 
   // Không tick thì nút xác nhận bị disabled
-  const confirmBtn = page.locator(".dt-preview-panel button", { hasText: "Xác nhận khôi phục" });
+  const confirmBtn = page.locator(".dt-import-review button", { hasText: "Xác nhận khôi phục" });
   assert.equal(await confirmBtn.isDisabled(), true, "nút xác nhận phải bị khóa khi chưa tick");
 
-  await page.locator(".dt-preview-panel input[type='checkbox']").check();
+  await page.locator(".dt-import-review input[type='checkbox']").check();
   assert.equal(await confirmBtn.isEnabled(), true, "tick rồi thì nút xác nhận phải mở");
 
   const navP = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 25000 });

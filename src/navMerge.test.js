@@ -69,8 +69,8 @@ test("P1: subsection của 5 view khớp nhóm nav mới (P2: bỏ concepts)", (
 
 // ── 5. VocabView có tab Tra cứu nhúng GlossaryPanel ────────────────────
 test("P1: VocabView có tab Tra cứu + prop initialTab", () => {
-  const src = readSrc("VocabView.jsx");
-  assert.ok(src.includes('from "./GlossaryPanel"'), "VocabView chưa import GlossaryPanel");
+  const src = readSrc(path.join("views", "VocabView.jsx"));
+  assert.ok(src.includes('from "../reader/GlossaryPanel.jsx"'), "VocabView chưa import GlossaryPanel");
   assert.ok(src.includes('"lookup"'), "VocabView thiếu tab lookup");
   assert.ok(src.includes("initialTab"), "VocabView thiếu prop initialTab");
   assert.ok(src.includes("<GlossaryPanel"), "VocabView chưa render GlossaryPanel");
@@ -82,6 +82,6 @@ test("P1: App redirect glossary→vocab và bỏ view Từ điển riêng", () =
   assert.ok(src.includes('targetView === "glossary"'), "App thiếu redirect glossary");
   assert.ok(src.includes("vocabInitialTab"), "App thiếu state vocabInitialTab");
   assert.ok(!src.includes("glossary: { geminiKey"), "App còn viewProps glossary riêng");
-  assert.ok(!src.includes('import("./GlossaryPanel")'), "App còn lazy import GlossaryPanel");
+  assert.ok(!src.includes('import("./reader/GlossaryPanel.jsx")'), "App còn lazy import GlossaryPanel");
   assert.ok(src.includes('"notebook-group": true'), "App thiếu default mở notebook-group");
 });

@@ -66,7 +66,7 @@ test("P0: whitelist cross-tab gồm event cũ + 3 event mới", () => {
 
 // ── 3. teachingDB: activity/question/worksheet bắn event riêng + domain ─
 test("P0: teachingDB activities bắn ACTIVITY_UPDATED kèm domain", async () => {
-  const t = await import("./teachingDB.js");
+  const t = await import("./data/teachingDB.js");
   const { got, off } = collect(AppEvents.ACTIVITY_UPDATED, AppEvents.DATA_UPDATED);
   try {
     const base = got[AppEvents.DATA_UPDATED].length;
@@ -87,7 +87,7 @@ test("P0: teachingDB activities bắn ACTIVITY_UPDATED kèm domain", async () =>
 });
 
 test("P0: teachingDB questions/worksheets bắn event riêng kèm domain", async () => {
-  const t = await import("./teachingDB.js");
+  const t = await import("./data/teachingDB.js");
   const { got, off } = collect(AppEvents.QUESTION_UPDATED, AppEvents.WORKSHEET_UPDATED);
   try {
     const q = t.addQuestion({ type: "fill", question: "P0 ?", answer: "a" });
@@ -119,7 +119,7 @@ test("P0: planModel save/delete bắn LESSON_PLAN_UPDATED kèm domain", async ()
 
 // ── 5. userdata: vocab bắn VOCAB_UPDATED (không double generic) ─────────
 test("P0: userdata vocab bắn VOCAB_UPDATED kèm domain", async () => {
-  const u = await import("./userdata.js");
+  const u = await import("./data/userdata.js");
   const { got, off } = collect(AppEvents.VOCAB_UPDATED, AppEvents.DATA_UPDATED);
   try {
     const before = got[AppEvents.DATA_UPDATED].length;
@@ -138,7 +138,7 @@ test("P0: userdata vocab bắn VOCAB_UPDATED kèm domain", async () => {
 
 // ── 6. researchDB: đường fallback (Node không có IDB) bắn RESEARCH_UPDATED ─
 test("P0: researchDB updateConcept bắn RESEARCH_UPDATED kèm domain", async () => {
-  const r = await import("./researchDB.js");
+  const r = await import("./data/researchDB.js");
   const { got, off } = collect(AppEvents.RESEARCH_UPDATED);
   try {
     await r.updateConcept("p0-nope-id", { term: "x" });
@@ -149,7 +149,7 @@ test("P0: researchDB updateConcept bắn RESEARCH_UPDATED kèm domain", async ()
 
 // ── 7. InternshipView đi qua bus (check text, tránh import JSX) ─────────
 test("P0: InternshipView saveEntries bắn INTERNSHIP_UPDATED", () => {
-  const src = readSrc("InternshipView.jsx");
+  const src = readSrc(path.join("views", "InternshipView.jsx"));
   assert.ok(src.includes("INTERNSHIP_UPDATED"), "InternshipView chưa emit INTERNSHIP_UPDATED");
   assert.ok(src.includes("DataDomains.INTERNSHIP"), "thiếu domain internship");
 });

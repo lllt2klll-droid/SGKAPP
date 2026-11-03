@@ -240,3 +240,24 @@
   .aia-panel.pro.expanded { width: calc(100vw - 16px); }
   .aia-pro-sub { display: none; }
 }
+
+@media (max-width: 767.98px) {
+  .aia-wrap { display: none; }
+  .aia-wrap.is-open {
+    display: flex;
+    inset: 0;
+    right: auto;
+    bottom: auto;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    background: rgba(15, 23, 42, .48);
+  }
+  .aia-wrap.is-open .aia-panel.pro {
+    width: min(452px, calc(100vw - 16px));
+    height: min(82dvh, calc(100dvh - 32px));
+    max-height: calc(100dvh - 32px);
+    min-height: 0;
+  }
+  .aia-wrap.is-open .aia-fab { display: none; }
+}

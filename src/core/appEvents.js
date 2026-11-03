@@ -35,6 +35,7 @@ export const AppEvents = {
   NAVIGATE: "sgk:navigate",
   OPEN_SOURCE: "sgk:open-source",
   OPEN_GLOBAL_SEARCH: "sgk:open-global-search",
+  OPEN_ASSISTANT: "sgk:open-assistant",
   // Book domain
   BOOK_OPENED: "sgk:book-opened",
   BOOK_UPDATED: "sgk:book-updated",

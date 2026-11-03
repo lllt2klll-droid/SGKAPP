@@ -15,16 +15,16 @@ const {
   moveToTrash, takeFromTrash, removeFromTrash, emptyTrash, purgeExpiredTrash,
   listTrash, listTrashByType, trashCount, isExpired, daysLeft,
   TRASH_TTL_DAYS, TRASH_TTL_MS, TRASH_TYPE, TRASH_TYPE_LABEL,
-} = await import('./trashStore.js');
+} = await import('./data/trashStore.js');
 const { appEvents, AppEvents } = await import('./core/appEvents.js');
 const { deletePlan, savePlan, getPlan } = await import('./khbd/planModel.js');
-const { deleteQuestion, restoreQuestion, getQuestions, clearQuestions } = await import('./teachingDB.js');
-const { purgeExpiredTrashNow } = await import('./trashPurge.js');
+const { deleteQuestion, restoreQuestion, getQuestions, clearQuestions } = await import('./data/teachingDB.js');
+const { purgeExpiredTrashNow } = await import('./data/trashPurge.js');
 const {
   autoBackupIntervalMs, isAutoBackupDue, getAutoBackupMeta,
   listAutoBackupSnapshots, runAutoBackup,
-} = await import('./autoBackup.js');
-const { isBackupKey, exportBackup, wipeAppData, parseBackupPreview } = await import('./storage.js');
+} = await import('./services/autoBackup.js');
+const { isBackupKey, exportBackup, wipeAppData, parseBackupPreview } = await import('./data/storage.js');
 
 // Không có file sao lưu → không cần IndexedDB
 const AUTO_META_KEY = 'sgk_autobackup_meta';
@@ -324,7 +324,7 @@ describe('A3 • Snapshot sao lưu tự động đọc được bằng luồng k
 
   it('buildBackupPayload → parseBackupPreview hợp lệ (đúng format file xuất tay)', async () => {
     localStorage.setItem('sgk_questions', JSON.stringify([{ id: 'q1', type: 'mc', question: '?', options: ['a', 'b', 'c', 'd'], correctIndex: 0 }]));
-    const { buildBackupPayload } = await import('./storage.js');
+    const { buildBackupPayload } = await import('./data/storage.js');
     const payload = await buildBackupPayload({ label: 'auto:test', skipStores: ['wb_images', 'note_images', 'scan_assets'] });
     assert.equal(payload.app, 'hanhtrang-tieu-hoc');
     assert.equal(payload.label, 'auto:test');

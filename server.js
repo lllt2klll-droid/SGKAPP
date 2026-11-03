@@ -177,6 +177,7 @@ function makeRateLimiter({ windowMs, max, message }) {
 }
 const geminiRateLimit = makeRateLimiter({ windowMs: 60000, max: 40, message: "Gửi quá nhiều yêu cầu cùng lúc. Hãy chờ một lát rồi thử lại nhé!" });
 const rateLimit = geminiRateLimit;
+const imageGenerationRateLimit = makeRateLimiter({ windowMs: 60000, max: 6, message: "Đã tạo quá nhiều ảnh trong thời gian ngắn. Hãy chờ một phút rồi thử lại nhé!" });
 const uploadRateLimit = makeRateLimiter({ windowMs: 60000, max: 20, message: "Upload quá nhiều. Hãy chờ 1 phút rồi thử lại!" });
 const remoteFetchRateLimit = makeRateLimiter({ windowMs: 60000, max: 30, message: "Tải từ URL quá nhiều. Hãy chờ 1 phút rồi thử lại!" });
 const writeRateLimit = makeRateLimiter({ windowMs: 60000, max: 60, message: "Thao tác quá nhiều. Hãy chờ một lát rồi thử lại!" });
@@ -1515,6 +1516,111 @@ app.get("/api/health", (req, res) => {
 // - This is acceptable for personal/teacher use on private devices
 // - For shared/public deployments, consider using server-side environment variable only
 // - Current design allows teachers to use their own API keys without server configuration
+app.post("/api/gemini/image", imageGenerationRateLimit, async (req, res) => {
+  const apiKey = (req.headers["x-gemini-key"] || process.env.GEMINI_API_KEY || "").trim();
+  if (!apiKey) {
+    return res.status(400).json({ error: "Thiếu Gemini API Key. Hãy cấu hình biến môi trường hoặc điền khóa API trong Cài đặt." });
+  }
+
+  const { input, response_format: responseFormat, generation_config: generationConfig } = req.body || {};
+  const model = "gemini-3.1-flash-image";
+  if (!Array.isArray(input) || input.length < 2 || input.length > 6 || input[0]?.type !== "text" || typeof input[0]?.text !== "string") {
+    return res.status(400).json({ error: "Yêu cầu cần có prompt, ảnh crop và tối đa 4 ảnh tham khảo." });
+  }
+  if (input[0].text.length > 12000) {
+    return res.status(400).json({ error: "Prompt quá dài. Hãy rút gọn mô tả ảnh rồi thử lại." });
+  }
+
+  let encodedImageChars = 0;
+  for (const image of input.slice(1)) {
+    if (
+      image?.type !== "image" ||
+      !["image/png", "image/jpeg", "image/webp"].includes(image.mime_type) ||
+      typeof image.data !== "string" ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)
+    ) {
+      return res.status(400).json({ error: "Ảnh gửi Gemini không hợp lệ. Hãy tải ảnh PNG, JPG hoặc WebP." });
+    }
+    encodedImageChars += image.data.length;
+  }
+  if (encodedImageChars > 8000000) {
+    return res.status(413).json({ error: "Tổng dung lượng ảnh quá lớn. Hãy dùng ảnh nhỏ hơn rồi thử lại." });
+  }
+
+  const supportedRatios = new Set(["1:1", "4:3", "16:9", "3:4", "9:16", "3:2", "2:3", "4:5", "5:4", "21:9"]);
+  const aspectRatio = responseFormat?.aspect_ratio;
+  const imageSize = responseFormat?.image_size;
+  if (responseFormat?.type !== "image") {
+    return res.status(400).json({ error: "Định dạng đầu ra không hợp lệ. Hãy chọn tạo ảnh." });
+  }
+  if (!["image/jpeg", "image/png"].includes(responseFormat?.mime_type)) {
+    return res.status(400).json({ error: "Định dạng ảnh đầu ra không được hỗ trợ. Hãy tải lại trang rồi thử lại." });
+  }
+  if (!supportedRatios.has(aspectRatio)) {
+    return res.status(400).json({ error: `Tỉ lệ ảnh "${String(aspectRatio || "")}" không được Gemini hỗ trợ. Hãy chọn tỉ lệ có sẵn.` });
+  }
+  if (!["1K", "2K"].includes(imageSize)) {
+    return res.status(400).json({ error: `Độ phân giải "${String(imageSize || "")}" không được Gemini hỗ trợ. Hãy chọn 1K hoặc 2K.` });
+  }
+
+  const configuredTokens = Number(generationConfig?.max_output_tokens);
+  const maxOutputTokens = Number.isFinite(configuredTokens)
+    ? Math.min(Math.max(Math.floor(configuredTokens), 1024), 32768)
+    : 32768;
+  const configuredTemperature = Number(generationConfig?.temperature);
+  const temperature = Number.isFinite(configuredTemperature)
+    ? Math.min(Math.max(configuredTemperature, 0), 1)
+    : 0.7;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 180000);
+
+  try {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        model,
+        input,
+        response_format: { type: "image", mime_type: "image/jpeg", aspect_ratio: aspectRatio, image_size: imageSize },
+        generation_config: { max_output_tokens: maxOutputTokens, temperature },
+        store: false,
+      }),
+      signal: controller.signal,
+    });
+
+    const raw = await response.text();
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      data = { raw };
+    }
+    if (!response.ok) {
+      const detail = data?.error?.message || data?.error || data?.raw || "Lỗi không xác định từ Gemini API";
+      let friendly = detail;
+      if (response.status === 429) {
+        friendly = "Gemini đang quá tải hoặc đã chạm hạn mức miễn phí. Hãy kiểm tra quota trong AI Studio rồi thử lại sau.";
+      } else if (response.status === 401 || response.status === 403) {
+        friendly = "API Key Gemini không hợp lệ hoặc model tạo ảnh chưa được cấp quyền.";
+      }
+      console.warn(`Gemini image proxy ${response.status}:`, detail);
+      return res.status(response.status).json({ error: friendly, detail, model });
+    }
+    return res.json(data);
+  } catch (error) {
+    if (error.name === "AbortError") {
+      return res.status(504).json({ error: "Gemini tạo ảnh quá lâu và đã hết thời gian chờ. Hãy thử lại." });
+    }
+    console.error("Error calling Gemini image API proxy:", error);
+    return res.status(500).json({ error: "Không thể kết nối dịch vụ tạo ảnh Gemini." });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
 app.post("/api/gemini", rateLimit, async (req, res) => {
   const apiKey = (req.headers["x-gemini-key"] || process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {

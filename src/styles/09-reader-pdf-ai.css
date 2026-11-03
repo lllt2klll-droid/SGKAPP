@@ -313,7 +313,7 @@
   border-radius: 8px;
   background: var(--surface);
   color: var(--text-mid);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1;
   cursor: pointer;
   padding: 0;
@@ -613,6 +613,50 @@
   background: var(--bg-main);
   box-sizing: border-box;
 }
+.whiteboard-page-picker-banner {
+  position: absolute;
+  z-index: 20;
+  top: 12px;
+  left: 50%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  border: 1px solid var(--primary, #2563eb);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+  color: var(--text-dark, #1e293b);
+  font-size: 0.82rem;
+  font-weight: 700;
+  transform: translateX(-50%);
+}
+.whiteboard-page-picker-banner button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--surface-soft, #f1f5f9);
+  color: var(--text-dark, #1e293b);
+  font: inherit;
+  cursor: pointer;
+}
+.whiteboard-page-picker-banner button:hover {
+  background: var(--border-color, #e2e8f0);
+}
+.pdf-canvas-box.whiteboard-page-selectable {
+  cursor: pointer;
+  outline: 3px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pdf-canvas-box.whiteboard-page-selectable:hover,
+.pdf-canvas-box.whiteboard-page-selectable:focus-visible {
+  outline-color: var(--primary, #2563eb);
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.16);
+}
 .pdf-canvas-wrapper {
   background: var(--surface);
   border: 1px solid var(--border-color);
@@ -811,6 +855,38 @@
   position: relative;
   display: inline-flex;
 }
+.rtb-custom-tools {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: min(34vw, 340px);
+}
+.rtb-custom-tools-list {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.rtb-custom-tools-list::-webkit-scrollbar {
+  display: none;
+}
+.rtb-custom-tool {
+  flex: 0 0 30px;
+}
+.rtb-custom-tool > svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.9;
+}
+.rtb-tool-manager-trigger {
+  flex: 0 0 30px;
+}
 .rtb-pop {
   position: absolute;
   top: calc(100% + 8px);
@@ -842,6 +918,26 @@
   left: auto;
   right: 0;
   transform: none;
+}
+.rtb-custom-tools > .rtb-custom-tts-pop {
+  top: calc(100% + 8px);
+  right: 32px;
+}
+@media (max-width: 767.98px) {
+  .rtb-custom-tools {
+    max-width: min(42vw, 220px);
+  }
+  .rtb-custom-tool > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .rtb-custom-tools > .rtb-custom-tts-pop {
+    position: fixed;
+    top: 52px;
+    right: 8px;
+    left: auto;
+    transform: none;
+  }
 }
 .rtb-pop-head {
   font-size: 0.76rem;

@@ -4,7 +4,7 @@
 //   lưu vào localStorage PENDING_KEY rồi mở module Giáo án.
 // - LessonPlanView đọc pending, hiện Wizard (tên bài + từ trang tới trang +
 //   thời lượng + cấu trúc khu B linh hoạt từng bài) và fill khung đầy đủ.
-import { mkPlan, mkActivity, makeKhbdId } from "./planModel";
+import { mkPlan, mkActivity, makeKhbdId } from "./planModel.js";
 import { safeGetJSON, safeSetJSON, safeRemove } from "../safeStorage.js";
 
 export const PENDING_KEY = "khbd_pending_from_reader";

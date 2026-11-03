@@ -7,16 +7,16 @@ import React, {
   lazy,
   useRef,
 } from "react";
-import { getApiBase, writeHeaders } from "./apiConfig";
+import { getApiBase, writeHeaders } from "./services/apiConfig.js";
 import { getBreadcrumb as getBreadcrumbCore, buildNavSections as buildNavSectionsCore, getFooterNav, normalizeExpandedKeys as normalizeExpandedKeysCore } from "./core/navigationRegistry.js";
 import { appEvents as appEventsCore, AppEvents as AppEventsCore } from "./core/appEvents.js";
 import { BookProvider } from "./core/bookContext.js";
 import { VIEW_REGISTRY, getViewEntry } from "./core/viewRegistry.js";
 import { toFriendlyError } from "./core/errors.js";
-import BookCover from "./BookCover";
-import TextBookModal from "./TextBookModal";
-import { storageNoticeLevel, storageNoticeText } from "./storageNotice.js";
-import { APP_COPYRIGHT } from "./appPersona.js";
+import BookCover from "./reader/BookCover.jsx";
+import TextBookModal from "./reader/TextBookModal.jsx";
+import { storageNoticeLevel, storageNoticeText } from "./data/storageNotice.js";
+import { APP_COPYRIGHT } from "./ai/appPersona.js";
 import { preventWindowDrop, hasFilesInDataTransfer } from "./components/fileDropzoneUtils.js";
 
 // -- Chunk load retry: khắc phục 404 stale chunk sau khi build mới (PWA) --
@@ -46,14 +46,14 @@ function lazyWithRetry(factory, retries = 1) {
     throw new Error("Chunk load failed");
   });
 }
-import { getShortcut, matchesShortcut } from "./keyboardShortcuts.js";
-import { bookProgress, progressFromPages, READ_STATUS } from "./readingProgress.js";
+import { getShortcut, matchesShortcut } from "./services/keyboardShortcuts.js";
+import { bookProgress, progressFromPages, READ_STATUS } from "./reader/readingProgress.js";
 import {
   PRIMARY_SUBJECTS,
   getSubjectCatalog,
   syncCatalogWithBooks,
   sortSubjects,
-} from "./subjectCatalog";
+} from "./data/subjectCatalog.js";
 import {
   Settings,
   Search,
@@ -90,52 +90,52 @@ import {
   Maximize,
   Minimize,
 } from "lucide-react";
-const BookReader = lazyWithRetry(() => import("./BookReader"));
+const BookReader = lazyWithRetry(() => import("./reader/BookReader.jsx"));
 // P1 • view Từ điển đã gộp vào VocabView (tab Tra cứu); panel khi đọc vẫn dùng
 // GlossaryPanel trực tiếp trong BookReader, không qua App nữa.
 const LobbyBubble = lazyWithRetry(() =>
-  import("./UtilityBubble").then((module) => ({ default: module.LobbyBubble })),
+  import("./views/UtilityBubble.jsx").then((module) => ({ default: module.LobbyBubble })),
 );
-const SearchView = lazyWithRetry(() => import("./SearchView"));
-const CompareView = lazyWithRetry(() => import("./CompareView"));
-const MatrixView = lazyWithRetry(() => import("./MatrixView"));
-const DashboardView = lazyWithRetry(() => import("./DashboardView"));
-const IdeasView = lazyWithRetry(() => import("./IdeasView"));
-const InternshipView = lazyWithRetry(() => import("./InternshipView"));
-import GlobalSearch from "./GlobalSearch";
-const LangStatsView = lazyWithRetry(() => import("./LangStatsView"));
-const InventoryView = lazyWithRetry(() => import("./InventoryView"));
-const CollectionsView = lazyWithRetry(() => import("./CollectionsView"));
-const ReferencesView = lazyWithRetry(() => import("./ReferencesView"));
-const ActivitiesView = lazyWithRetry(() => import("./ActivitiesView"));
-const QuestionBankView = lazyWithRetry(() => import("./QuestionBankView"));
-const WorksheetsView = lazyWithRetry(() => import("./WorksheetsView"));
-const DataToolsView = lazyWithRetry(() => import("./DataToolsView"));
-const WebToolboxView = lazyWithRetry(() => import("./WebToolboxView"));
+const SearchView = lazyWithRetry(() => import("./views/SearchView.jsx"));
+const CompareView = lazyWithRetry(() => import("./views/CompareView.jsx"));
+const MatrixView = lazyWithRetry(() => import("./views/MatrixView.jsx"));
+const DashboardView = lazyWithRetry(() => import("./views/DashboardView.jsx"));
+const IdeasView = lazyWithRetry(() => import("./views/IdeasView.jsx"));
+const InternshipView = lazyWithRetry(() => import("./views/InternshipView.jsx"));
+import GlobalSearch from "./views/GlobalSearch.jsx";
+const LangStatsView = lazyWithRetry(() => import("./views/LangStatsView.jsx"));
+const InventoryView = lazyWithRetry(() => import("./views/InventoryView.jsx"));
+const CollectionsView = lazyWithRetry(() => import("./views/CollectionsView.jsx"));
+const ReferencesView = lazyWithRetry(() => import("./views/ReferencesView.jsx"));
+const ActivitiesView = lazyWithRetry(() => import("./views/ActivitiesView.jsx"));
+const QuestionBankView = lazyWithRetry(() => import("./views/QuestionBankView.jsx"));
+const WorksheetsView = lazyWithRetry(() => import("./views/WorksheetsView.jsx"));
+const DataToolsView = lazyWithRetry(() => import("./views/DataToolsView.jsx"));
+const WebToolboxView = lazyWithRetry(() => import("./views/WebToolboxView.jsx"));
 const WhiteboardView = lazyWithRetry(() => import("./whiteboard/WhiteboardView.jsx"));
-import { getQuestions } from "./teachingDB";
-import { getPlans as getKhbdV2Plans } from "./khbd/planModel";
-import { getClips, countMarks } from "./researchDB";
-import { saveJSON, exportBackup } from "./storage";
-import { moveToTrash, takeFromTrash, listTrash, listTrashByType, TRASH_TYPE, TRASH_TTL_DAYS } from "./trashStore";
-import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage";
-import SampleButton from "./SampleButton";
-import DataTable from "./DataTable";
-import VocabView from "./VocabView.jsx";
-import BookmarksNotesView from "./BookmarksNotesView.jsx";
-import AssistantBubble from "./AssistantBubble";
+import { getQuestions } from "./data/teachingDB.js";
+import { getPlans as getKhbdV2Plans } from "./khbd/planModel.js";
+import { getClips, countMarks } from "./data/researchDB.js";
+import { saveJSON, exportBackup } from "./data/storage.js";
+import { moveToTrash, takeFromTrash, listTrash, listTrashByType, TRASH_TYPE, TRASH_TTL_DAYS } from "./data/trashStore.js";
+import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage.js";
+import SampleButton from "./views/SampleButton.jsx";
+import DataTable from "./views/DataTable.jsx";
+import VocabView from "./views/VocabView.jsx";
+import BookmarksNotesView from "./views/BookmarksNotesView.jsx";
+import AssistantBubble from "./ai/AssistantBubble.jsx";
 import MobileBottomNav from "./components/MobileBottomNav.jsx";
-import { fillSampleQuiz } from "./sampleData";
-import MissionWidget from "./MissionWidget";
-import SettingsCenter from "./SettingsCenter";
-import { loadSettings, saveSettings, applySettings, getStartPage, recordLastView, shouldConfirmDelete, shouldShowNotifications, vibrateFeedback, refreshNotificationTimer, updateSettings } from "./settingsStore";
+import { fillSampleQuiz } from "./data/sampleData.js";
+import MissionWidget from "./views/MissionWidget.jsx";
+import SettingsCenter from "./views/SettingsCenter.jsx";
+import { loadSettings, saveSettings, applySettings, getStartPage, recordLastView, shouldConfirmDelete, shouldShowNotifications, vibrateFeedback, refreshNotificationTimer, updateSettings } from "./services/settingsStore.js";
 import {
   ensureTodayMissions,
   evaluateStreakOnDate,
   todayStr,
   migrateMissions,
-} from "./missionStore";
-import { emitBookOpened } from "./missionEvents";
+} from "./data/missionStore.js";
+import { emitBookOpened } from "./data/missionEvents.js";
 import {
   getAllBookmarks,
   removeBookmark,
@@ -150,11 +150,11 @@ import {
   clearQuizHistory,
   formatDateTime,
   clearLastPages,
-} from "./userdata";
-import { getGeminiApiKey } from "./storage";
-import { formatSuggestedBookTitle } from "./bookUtils";
-import { pdfjsLib } from "./pdfjs-config";
-import { buildIndex, needsRebuild, getIndexMeta } from "./searchIndex";
+} from "./data/userdata.js";
+import { getGeminiApiKey } from "./data/storage.js";
+import { formatSuggestedBookTitle } from "./reader/bookUtils.js";
+import { pdfjsLib } from "./reader/pdfjs-config.js";
+import { buildIndex, needsRebuild, getIndexMeta } from "./data/searchIndex.js";
 import { useFocusTrap } from "./ui/useFocusTrap.js";
 
 const API_BASE = getApiBase();
@@ -267,8 +267,8 @@ class AppErrorBoundary extends React.Component {
           <p className="body-text" style={{ maxWidth: 520, margin: "8px auto", color: "var(--text-muted)" }}>
             {displayMsg}
           </p>
-          {isChunk && <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -4 }}>Chi tiết: {rawMsg.slice(0, 180)}</p>}
-          {!isChunk && friendly.recoverable === false && <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Mã lỗi: {String(friendly.type || "").slice(0,60)}</p>}
+          {isChunk && <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: -4 }}>Chi tiết: {rawMsg.slice(0, 180)}</p>}
+          {!isChunk && friendly.recoverable === false && <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Mã lỗi: {String(friendly.type || "").slice(0,60)}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
             {this.props.onSafeHome && <button onClick={this.handleSafeHome} className="btn btn-primary">Về thư viện an toàn</button>}
             <button onClick={() => window.location.reload()} className="btn btn-secondary">Tải lại</button>
@@ -310,6 +310,7 @@ export default function App() {
   const [backendStatus, setBackendStatus] = useState("checking");
   const [currentBook, setCurrentBook] = useState(null);
   const [openInitialPage, setOpenInitialPage] = useState(null);
+  const [openRequestId, setOpenRequestId] = useState(0);
   // Tang mỗi khi sách đang mở được sửa/lưu (TextBookModal) để BookReader tải lại nội dung mới
   const [bookContentNonce, setBookContentNonce] = useState(0);
 
@@ -599,7 +600,7 @@ export default function App() {
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        const autoBackup = await import("./autoBackup.js");
+        const autoBackup = await import("./services/autoBackup.js");
         let settings = loadSettings();
         // Migr 1 lần: bản cũ đặt autoBackup=false → bật lần đầu, sau đó tôn trọng lựa chọn của cô/thầy
         try {
@@ -787,7 +788,7 @@ export default function App() {
     const run = () => {
       if (conceptsMigratedRef.current) return;
       conceptsMigratedRef.current = true;
-      import("./conceptsMigration.js")
+      import("./data/conceptsMigration.js")
         .then((m) => m.migrateConceptsToVocabOnce(books))
         .catch((e) => console.warn("[App] concepts migration failed:", e));
     };
@@ -889,6 +890,7 @@ export default function App() {
   // Tôn trọng Cài đặt: Riêng tư → Ghi nhớ lịch sử (tắt = không lưu) + Hành vi → Rung
   const handleOpenBook = useCallback((book, initialPage = null) => {
     const at = Date.now();
+    setOpenRequestId((id) => id + 1);
     setOpenInitialPage(initialPage);
     setCurrentBook(book);
     try {
@@ -1176,7 +1178,7 @@ export default function App() {
   // Storage migration: LS hybrid -> IDB canonical (idempotent, verify before cleanup)
   useEffect(() => {
     (async () => {
-      try { const { runHybridMigrations } = await import("./storage.js"); await runHybridMigrations(); } catch {}
+      try { const { runHybridMigrations } = await import("./data/storage.js"); await runHybridMigrations(); } catch {}
     })();
   }, []);
   // Fetch books
@@ -1248,7 +1250,7 @@ export default function App() {
               if(!pages.length) pages.push({ page:1, text: plain.slice(0,chunk) || "", kind:"text" });
               const now = Date.now();
               const meta = { filename: book.filename, total: pages.length, textPages: pages.length, ocrPages:0, imagePages:0, builtAt: now, word:true };
-              const { saveJSON } = await import("./storage.js");
+              const { saveJSON } = await import("./data/storage.js");
               const { safeRemove } = await import("./safeStorage.js");
               try { saveJSON(`sgk_idxmeta_${book.filename}`, meta); } catch (e) { console.warn("Word idxmeta save failed", book.filename, e?.message); }
               // IDB-first (chứa được index lớn), localStorage chỉ best-effort:
@@ -1256,9 +1258,9 @@ export default function App() {
               const indexData = { pages, builtAt: now };
               let idbOk = false;
               try {
-                const indexedDBService = (await import("./indexedDB.js")).default;
+                const indexedDBService = (await import("./data/indexedDB.js")).default;
                 if (indexedDBService.constructor.isAvailable()) {
-                  await indexedDBService.set((await import("./indexedDB.js")).STORES.SEARCH_INDEX, book.filename, indexData);
+                  await indexedDBService.set((await import("./data/indexedDB.js")).STORES.SEARCH_INDEX, book.filename, indexData);
                   idbOk = true;
                   try { safeRemove(`sgk_idx_${book.filename}`); } catch {}
                 }
@@ -1273,14 +1275,14 @@ export default function App() {
             continue;
           }
           try {
-            const { saveJSON } = await import("./storage.js");
+            const { saveJSON } = await import("./data/storage.js");
             const now = Date.now();
             saveJSON(`sgk_idxmeta_${book.filename}`, { filename: book.filename, total: 1, textPages: 0, ocrPages: 0, imagePages: 1, builtAt: now, nonPdf: true });
             saveJSON(`sgk_idx_${book.filename}`, { pages: [], builtAt: now });
             try {
-              const indexedDBService = (await import("./indexedDB.js")).default;
+              const indexedDBService = (await import("./data/indexedDB.js")).default;
               if (indexedDBService.constructor.isAvailable()) {
-                await indexedDBService.set((await import("./indexedDB.js")).STORES.SEARCH_INDEX, book.filename, { pages: [], builtAt: now });
+                await indexedDBService.set((await import("./data/indexedDB.js")).STORES.SEARCH_INDEX, book.filename, { pages: [], builtAt: now });
               }
             } catch {}
           } catch {}
@@ -1516,7 +1518,7 @@ export default function App() {
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        const { purgeExpiredTrashNow } = await import("./trashPurge.js");
+        const { purgeExpiredTrashNow } = await import("./data/trashPurge.js");
         const r = await purgeExpiredTrashNow();
         if (cancelled || !r.expired) return;
         setDataVersion((v) => v + 1);
@@ -1819,7 +1821,7 @@ export default function App() {
     try {
       if (oldFilename && oldFilename !== book.filename) {
         try {
-          const { migrateBookData } = await import("./storage.js");
+          const { migrateBookData } = await import("./data/storage.js");
           const res = await migrateBookData(oldFilename, book.filename);
           if (!res.ok) console.warn("migrateBookData failed:", res.error);
         } catch (e) { console.error("migrateBookData import/call failed:", e); }
@@ -1882,11 +1884,18 @@ export default function App() {
   }), [history.length, totalBookmarks, vocabCount, whiteboardCount, totalMarks, totalClips, webToolsCount, settingsState?.features?.disabled]);
   const FOOTER_NAV = useMemo(() => {
     const base = getFooterNav(); // [{id:"settings",...},{id:"datatools",...},{id:"help",...}]
-    return base.map(item => {
+    const items = base.map(item => {
       const iconEl = item.icon ? React.createElement(item.icon, { size: 16 }) : null;
       if (item.id === "settings") return { id: item.id, icon: iconEl, label: item.label, action: () => openSettings("general") };
       return { id: item.id, icon: iconEl, label: item.label };
     });
+    items.push({
+      id: "assistant",
+      icon: <Sparkles size={16} />,
+      label: "Trợ lý AI",
+      action: () => appEventsCore.emit(AppEventsCore.OPEN_ASSISTANT),
+    });
+    return items;
   }, []);
 
   // Breadcrumb • UNIFIED via core/navigationRegistry (single source)
@@ -1900,12 +1909,12 @@ export default function App() {
   return (
     <AppErrorBoundary onSafeHome={() => { try { setView("library"); setCurrentBook(null); } catch {} }}>
       {!isOnline && (
-        <div role="status" style={{ background: "#92400e", color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 700, padding: "6px 12px" }}>
+        <div role="status" style={{ background: "#92400e", color: "#fff", textAlign: "center", fontSize: "0.8125rem", fontWeight: 700, padding: "6px 12px" }}>
           Đang offline — thư viện local vẫn dùng được, AI và tải từ URL sẽ chờ có mạng.
         </div>
       )}
       {unknownView && (
-        <div role="status" style={{ background: "#1e3a8a", color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 600, padding: "6px 12px" }}>
+        <div role="status" style={{ background: "#1e3a8a", color: "#fff", textAlign: "center", fontSize: "0.8125rem", fontWeight: 600, padding: "6px 12px" }}>
           Không tìm thấy trang “{unknownView}” — đã về Thư viện.{" "}
           <button onClick={() => setUnknownView("")} style={{ textDecoration: "underline", background: "none", border: 0, color: "#fff", cursor: "pointer", fontWeight: 700 }}>Đóng</button>
         </div>
@@ -2258,7 +2267,7 @@ export default function App() {
               <div
                 className="sidebar-copyright"
                 title={APP_COPYRIGHT}
-                style={{ padding: "6px 12px 2px", fontSize: 11, opacity: 0.65, textAlign: "center", lineHeight: 1.4 }}
+                style={{ padding: "6px 12px 2px", fontSize: "0.6875rem", opacity: 0.65, textAlign: "center", lineHeight: 1.4 }}
               >
                 {APP_COPYRIGHT}
               </div>
@@ -2312,10 +2321,12 @@ export default function App() {
             <Suspense fallback={<ViewFallback label="Đang mở sách..." />}>
               <BookProvider book={currentBook} page={openInitialPage}>
                 <BookReader
+                  key={currentBook.filename}
                   book={currentBook}
                   onBack={handleBack}
                   geminiKey={geminiKey}
                   initialPage={openInitialPage}
+                  openRequestId={openRequestId}
                   onOpenLessonPlan={(id) => {
                     setLpOpenId(id);
                     closeBook("lessonplans");
@@ -2944,24 +2955,24 @@ function LibraryView({
   // stats values derived from real data
   const statItems = [
     {
-      icon: "📚",
+      icon: <BookOpen size={18} />,
       value: booksAll ? booksAll.length : books.length,
-      label: "Sách",
-      sub: "Kết nối tri thức",
+      label: "Sách trong thư viện",
+      sub: "các môn học",
     },
     {
-      icon: "🔖",
+      icon: <BookmarkCheck size={18} />,
       value: totalBookmarks ?? 0,
-      label: "Đánh dấu",
-      sub: "trang đã lưu",
+      label: "Trang đã đánh dấu",
+      sub: "để xem lại",
     },
     {
-      icon: "📖",
+      icon: <BookOpenCheck size={18} />,
       value: history ? history.length : 0,
-      label: "Đang học",
-      sub: "cuốn gần đây",
+      label: "Sách đang đọc",
+      sub: "đọc gần đây",
     },
-    { icon: "📝", value: vocabCount ?? 0, label: "Từ vựng", sub: "đã lưu" },
+    { icon: <Pencil size={18} />, value: vocabCount ?? 0, label: "Từ vựng đã lưu", sub: "đang ôn tập" },
   ];
 
   // Drag counter chống nhấp nháy khi kéo qua các thẻ con
@@ -2985,39 +2996,39 @@ function LibraryView({
         .libx-root { display:flex; flex-direction:column; gap:13px; }
         .libx-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:9px; }
         .libx-stat { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:13px; border:1px solid var(--border-color); background:var(--surface); }
-        .libx-stat-ic { width:37px; height:37px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; background:var(--color-action-soft, var(--primary-light)); }
+        .libx-stat-ic { width:37px; height:37px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size: 1.0625rem; flex-shrink:0; background:var(--color-action-soft, var(--primary-light)); }
         .libx-stat-val { font-size:1.15rem; font-weight:800; color:var(--text-dark); line-height:1.1; }
-        .libx-stat-label { font-size:10.5px; color:var(--text-muted); font-weight:600; }
+        .libx-stat-label { font-size: 0.6563rem; color:var(--text-muted); font-weight:600; }
         .libx-sec-head { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
         .libx-sec-title { margin:0; font-size:0.93rem; font-weight:800; color:var(--text-dark); display:flex; align-items:center; gap:7px; }
         .libx-sec-title svg { color:var(--color-action, var(--primary)); }
-        .libx-sec-hint { font-size:11px; color:var(--text-muted); }
+        .libx-sec-hint { font-size: 0.6875rem; color:var(--text-muted); }
         .libx-strip { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:9px; }
         .libx-cont { display:flex; gap:10px; align-items:center; padding:9px 10px; border-radius:12px; border:1px solid var(--border-color); background:var(--surface); cursor:pointer; }
         .libx-cont:hover { border-color:var(--color-action, var(--primary)); box-shadow:0 6px 16px rgba(15,23,42,0.08); }
         .libx-cont-cover { width:52px; flex-shrink:0; border-radius:7px; overflow:hidden; border:1px solid var(--border-color); }
         .libx-cont-t { font-size:0.83rem; font-weight:700; color:var(--text-dark); display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
-        .libx-cont-m { font-size:10.5px; color:var(--text-muted); }
+        .libx-cont-m { font-size: 0.6563rem; color:var(--text-muted); }
         .libx-bar { height:6px; border-radius:99px; background:var(--surface-soft); border:1px solid var(--border-color); overflow:hidden; margin-top:5px; }
         .libx-bar > i { display:block; height:100%; border-radius:99px; background:var(--color-action, var(--primary)); }
-        .libx-cta { margin-left:auto; flex-shrink:0; font-size:11px; font-weight:800; color:#fff; background:var(--color-action, var(--primary)); padding:6px 11px; border-radius:999px; }
+        .libx-cta { margin-left:auto; flex-shrink:0; font-size: 0.6875rem; font-weight:800; color:#fff; background:var(--color-action, var(--primary)); padding:6px 11px; border-radius:999px; }
         .libx-hero { display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-radius:13px; padding:12px 15px; color:#fff;
           background:linear-gradient(120deg, var(--color-action-strong, #1e3a8a), var(--color-action, #2563eb) 60%, var(--color-action-active, #1e40af)); }
         .libx-hero h2 { margin:0; font-size:0.92rem; display:flex; align-items:center; gap:7px; }
-        .libx-hero p { margin:3px 0 0; font-size:11.5px; opacity:0.92; }
+        .libx-hero p { margin:3px 0 0; font-size: 0.7188rem; opacity:0.92; }
         .libx-toolbar { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:11px 13px; display:flex; flex-direction:column; gap:9px; }
         .libx-trow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .libx-search { flex:1 1 210px; min-width:170px; position:relative; }
-        .libx-search input { width:100%; padding:8px 30px 8px 32px; border-radius:10px; border:1px solid var(--border-color); font-size:13px; background:var(--surface); color:var(--text-dark); }
+        .libx-search input { width:100%; padding:8px 30px 8px 32px; border-radius:10px; border:1px solid var(--border-color); font-size: 0.8125rem; background:var(--surface); color:var(--text-dark); }
         .libx-search > svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-muted); }
-        .libx-toolbar select { padding:8px 10px; border-radius:10px; border:1px solid var(--border-color); font-size:12.5px; background:var(--surface); color:var(--text-dark); }
+        .libx-toolbar select { padding:8px 10px; border-radius:10px; border:1px solid var(--border-color); font-size: 0.7813rem; background:var(--surface); color:var(--text-dark); }
         .libx-seg { display:inline-flex; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
         .libx-seg button { border:none; background:var(--surface); padding:8px 11px; cursor:pointer; color:var(--text-muted); display:inline-flex; }
         .libx-seg button.active { background:var(--color-action, var(--primary)); color:#fff; }
-        .libx-fbtn { font-size:12px; font-weight:700; padding:6px 11px; border-radius:999px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-dark); cursor:pointer; }
+        .libx-fbtn { font-size: 0.75rem; font-weight:700; padding:6px 11px; border-radius:999px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-dark); cursor:pointer; }
         .libx-fbtn.active { background:var(--color-action, var(--primary)); border-color:var(--color-action, var(--primary)); color:#fff; }
-        .libx-count { font-size:12px; color:var(--text-muted); }
-        .libx-count strong { color:var(--text-dark); font-size:13px; }
+        .libx-count { font-size: 0.75rem; color:var(--text-muted); }
+        .libx-count strong { color:var(--text-dark); font-size: 0.8125rem; }
         .libx-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(215px, 1fr)); gap:12px; }
         .libx-book { background:var(--surface); border:1px solid var(--border-color); border-radius:14px; overflow:hidden; cursor:pointer; transition:transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease; display:flex; flex-direction:column; }
         .libx-book:hover { transform:translateY(-3px); box-shadow:0 12px 26px rgba(15,23,42,0.12); border-color:var(--color-action, var(--primary)); }
@@ -3025,12 +3036,12 @@ function LibraryView({
         .libx-cover .book-cover { width:100% !important; height:100% !important; min-height:100%; padding:0 !important; border:none !important; font-size:2rem; }
         .libx-fav { position:absolute; top:8px; right:8px; width:30px; height:30px; border-radius:999px; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.35); color:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter:blur(4px); }
         .libx-fav.on { background:#f59e0b; border-color:#f59e0b; }
-        .libx-grade { position:absolute; left:8px; bottom:8px; font-size:10px; font-weight:800; color:#fff; background:rgba(15,23,42,0.55); padding:3px 8px; border-radius:999px; backdrop-filter:blur(4px); }
+        .libx-grade { position:absolute; left:8px; bottom:8px; font-size: 0.625rem; font-weight:800; color:#fff; background:rgba(15,23,42,0.55); padding:3px 8px; border-radius:999px; backdrop-filter:blur(4px); }
         .libx-body { padding:10px 12px 11px; display:flex; flex-direction:column; gap:6px; flex:1; }
         .libx-title { margin:0; font-size:0.85rem; font-weight:800; color:var(--text-dark); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:2.35em; }
-        .libx-meta { font-size:11px; color:var(--text-muted); display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+        .libx-meta { font-size: 0.6875rem; color:var(--text-muted); display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
         .libx-foot { display:flex; gap:6px; align-items:center; margin-top:auto; padding-top:7px; border-top:1px dashed var(--border-color); }
-        .libx-open { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:12.5px; font-weight:800; padding:8px 10px; border-radius:10px; border:none; background:var(--color-action, var(--primary)); color:#fff; cursor:pointer; }
+        .libx-open { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.7813rem; font-weight:800; padding:8px 10px; border-radius:10px; border:none; background:var(--color-action, var(--primary)); color:#fff; cursor:pointer; }
         .libx-open:hover { filter:brightness(1.08); }
         .libx-icobtn { width:32px; height:32px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-muted); cursor:pointer; }
         .libx-icobtn:hover { border-color:var(--color-action, var(--primary)); color:var(--color-action-strong, var(--primary)); }
@@ -3052,7 +3063,7 @@ function LibraryView({
         }
         .libx-rowmenu-item {
           display:flex; align-items:center; gap:9px; width:100%; text-align:left;
-          border:none; background:transparent; cursor:pointer; font-size:12.5px; font-weight:600;
+          border:none; background:transparent; cursor:pointer; font-size: 0.7813rem; font-weight:600;
           color:var(--text-dark); padding:8px 10px; border-radius:8px;
         }
         .libx-rowmenu-item:hover { background:var(--surface-soft); }
@@ -3071,14 +3082,24 @@ function LibraryView({
       )}
       {/* Backend error is already shown in header; only show empty-specific notices here */}
 
+      <header className="libx-intro">
+        <span className="libx-intro-mark" aria-hidden="true"><BookOpenCheck size={22} /></span>
+        <div className="libx-intro-copy">
+          <span className="libx-intro-eyebrow">KHÔNG GIAN HỌC TẬP</span>
+          <h1>Hành trình đọc của bạn</h1>
+          <p>Sách giáo khoa, bài đọc gần đây và từ vựng đã lưu — tất cả ở một nơi.</p>
+        </div>
+      </header>
+
       {/* Quick stats */}
       <section className="libx-stats" aria-label="Thống kê nhanh">
         {statItems.map((it) => (
           <div key={it.label} className="libx-stat">
             <span className="libx-stat-ic" aria-hidden="true">{it.icon}</span>
-            <span>
-              <span className="libx-stat-val">{it.value}</span><br />
-              <span className="libx-stat-label">{it.label} • {it.sub}</span>
+            <span className="libx-stat-copy">
+              <span className="libx-stat-val">{it.value}</span>
+              <span className="libx-stat-label">{it.label}</span>
+              <span className="libx-stat-sub">{it.sub}</span>
             </span>
           </div>
         ))}
@@ -3086,7 +3107,7 @@ function LibraryView({
 
       {/* Tiếp tục học strip • có thể thu hồi, không xóa logic (giữ historyBooks) */}
       {historyBooks.length > 0 && (
-        <section aria-label="Tiếp tục học">
+        <section className="libx-continue-section" aria-label="Tiếp tục học">
           <div className="libx-sec-head">
             <h2 className="libx-sec-title"><Clock size={15} /> Tiếp tục học</h2>
             <span className="libx-sec-hint">{historyBooks.length} cuốn gần đây</span>
@@ -3150,19 +3171,19 @@ function LibraryView({
 
       {/* Welcome hero */}
       <div className="libx-hero">
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <h2><Sparkles size={14} /> Học cùng AI • đọc, ghi chú, làm bài</h2>
-          <p>Chọn một cuốn sách bên dưới để mở chế độ đọc 2 trang, trò chuyện với AI, làm bài tập và ghi chú trực tiếp trên trang sách.</p>
+        <span className="libx-hero-icon" aria-hidden="true"><Sparkles size={19} /></span>
+        <div className="libx-hero-copy">
+          <span className="libx-hero-eyebrow">HỌC TẬP TƯƠNG TÁC</span>
+          <h2>Đọc sách theo cách của bạn</h2>
+          <p>Mở sách để đọc hai trang, trò chuyện cùng AI, làm bài tập và ghi chú trực tiếp.</p>
         </div>
-        {!geminiKey && (
-          <button className="btn btn-sm" style={{ background: "rgba(255,255,255,0.2)", color: "#fff", border: "1px solid rgba(255,255,255,0.4)", flexShrink: 0 }} onClick={onOpenSettings}>
-            Cấu hình Gemini API
-          </button>
-        )}
+        {geminiKey
+          ? <button className="libx-hero-action" onClick={() => document.getElementById("libx-book-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Chọn sách <ChevronRight size={15} /></button>
+          : <button className="libx-hero-action" onClick={onOpenSettings}>Cấu hình AI <ChevronRight size={15} /></button>}
       </div>
 
       {/* Toolbar */}
-      <div className="libx-toolbar">
+      <div className="libx-toolbar" id="libx-book-catalog">
         <div className="libx-trow">
           <div className={`libx-search ${isSearching ? "is-searching" : ""}`}>
               <Search className="search-icon" size={16} aria-hidden="true" />
@@ -3296,7 +3317,7 @@ function LibraryView({
                       placeholder="Gõ để lọc nhanh (vd: toan)..."
                       aria-label="Lọc môn học"
                       autoFocus
-                      style={{ width: "100%", padding: "7px 28px 7px 30px", borderRadius: 9, border: "1px solid #e2e8f0", fontSize: 12.5, background: "#fff", color: "#334155", outline: "none" }}
+                      style={{ width: "100%", padding: "7px 28px 7px 30px", borderRadius: 9, border: "1px solid #e2e8f0", fontSize: "0.7813rem", background: "#fff", color: "#334155", outline: "none" }}
                     />
                     {subjectQuery && (
                       <button
@@ -3335,7 +3356,7 @@ function LibraryView({
                     ))}
                   </div>
                   {filteredSubjectCatalog.length === 0 && !normVi("Tất cả").includes(normVi(subjectQuery.trim())) && (
-                    <div style={{ padding: "10px 4px 2px", fontSize: 12, color: "var(--text-muted)" }}>
+                    <div style={{ padding: "10px 4px 2px", fontSize: "0.75rem", color: "var(--text-muted)" }}>
                       Không tìm thấy môn phù hợp “{subjectQuery.trim()}”. <button className="btn btn-ghost btn-xs" onClick={() => setSubjectQuery("")}>Xóa lọc</button>
                     </div>
                   )}
@@ -4044,25 +4065,25 @@ function ContinueView({
         .ctv-hero-cover { width:104px; flex-shrink:0; border-radius:10px; overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,0.28); border:1px solid rgba(255,255,255,0.4); z-index:1; }
         .ctv-hero-cover .book-cover { width:100% !important; padding:0 !important; border:none !important; }
         .ctv-hero-main { flex:1 1 240px; min-width:200px; z-index:1; }
-        .ctv-hero-eyebrow { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; letter-spacing:0.03em; text-transform:uppercase; opacity:0.94; }
+        .ctv-hero-eyebrow { display:inline-flex; align-items:center; gap:5px; font-size: 0.6875rem; font-weight:800; letter-spacing:0.03em; text-transform:uppercase; opacity:0.94; }
         .ctv-hero-title { margin:5px 0 2px; font-size:1.15rem; font-weight:800; color:#fff; line-height:1.3; }
-        .ctv-hero-meta { margin:0; font-size:12px; opacity:0.9; }
+        .ctv-hero-meta { margin:0; font-size: 0.75rem; opacity:0.9; }
         .ctv-hero-bar { height:7px; border-radius:99px; background:rgba(255,255,255,0.28); overflow:hidden; margin:10px 0 5px; max-width:440px; }
         .ctv-hero-bar > i { display:block; height:100%; border-radius:99px; background:#fff; }
-        .ctv-hero-progress { font-size:11.5px; font-weight:700; opacity:0.95; }
+        .ctv-hero-progress { font-size: 0.7188rem; font-weight:700; opacity:0.95; }
         .ctv-hero-actions { display:flex; flex-direction:column; gap:7px; align-items:stretch; z-index:1; }
-        .ctv-resume { display:inline-flex; align-items:center; justify-content:center; gap:7px; font-size:13px; font-weight:800; padding:11px 16px; border-radius:11px; border:none; cursor:pointer; background:#fff; color:var(--color-action-strong, #1e3a8a); box-shadow:0 4px 12px rgba(0,0,0,0.18); transition:transform 0.12s ease; }
+        .ctv-resume { display:inline-flex; align-items:center; justify-content:center; gap:7px; font-size: 0.8125rem; font-weight:800; padding:11px 16px; border-radius:11px; border:none; cursor:pointer; background:#fff; color:var(--color-action-strong, #1e3a8a); box-shadow:0 4px 12px rgba(0,0,0,0.18); transition:transform 0.12s ease; }
         .ctv-resume:hover { transform:translateY(-1px); }
-        .ctv-hero-remove { display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size:11.5px; font-weight:700; padding:7px 10px; border-radius:9px; border:1px solid rgba(255,255,255,0.5); background:rgba(255,255,255,0.12); color:#fff; cursor:pointer; }
+        .ctv-hero-remove { display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size: 0.7188rem; font-weight:700; padding:7px 10px; border-radius:9px; border:1px solid rgba(255,255,255,0.5); background:rgba(255,255,255,0.12); color:#fff; cursor:pointer; }
         .ctv-hero-remove:hover { background:rgba(255,255,255,0.22); }
         .ctv-search { position:relative; display:inline-flex; align-items:center; }
-        .ctv-search input { padding:7px 26px 7px 30px; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); font-size:12.5px; background:var(--surface, #fff); color:var(--text-dark, #334155); outline:none; min-width:180px; }
+        .ctv-search input { padding:7px 26px 7px 30px; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); font-size: 0.7813rem; background:var(--surface, #fff); color:var(--text-dark, #334155); outline:none; min-width:180px; }
         .ctv-search input:focus { border-color:var(--color-action, #2563eb); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-action, #2563eb) 16%, transparent); }
         .ctv-search-ic { position:absolute; left:9px; color:var(--text-muted, #94a3b8); pointer-events:none; }
         .ctv-search-x { position:absolute; right:5px; border:none; background:transparent; cursor:pointer; color:var(--text-muted, #94a3b8); display:inline-flex; padding:2px; }
-        .ctv-sel { padding:7px 9px; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); font-size:12.5px; background:var(--surface, #fff); color:var(--text-dark, #334155); max-width:170px; }
+        .ctv-sel { padding:7px 9px; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); font-size: 0.7813rem; background:var(--surface, #fff); color:var(--text-dark, #334155); max-width:170px; }
         .ctv-chips { display:inline-flex; gap:5px; flex-wrap:wrap; }
-        .ctv-chip { font-size:11.5px; font-weight:700; padding:5px 10px; border-radius:999px; border:1px solid var(--border-color, #e2e8f0); background:var(--surface, #fff); color:var(--text-muted, #475569); cursor:pointer; }
+        .ctv-chip { font-size: 0.7188rem; font-weight:700; padding:5px 10px; border-radius:999px; border:1px solid var(--border-color, #e2e8f0); background:var(--surface, #fff); color:var(--text-muted, #475569); cursor:pointer; }
         .ctv-chip:hover { border-color:var(--color-action, #2563eb); color:var(--color-action-strong, #2563eb); }
         .ctv-chip.on { background:var(--color-action, #2563eb); border-color:var(--color-action, #2563eb); color:#fff; }
         .ctv-seg { display:inline-flex; border:1px solid var(--border-color, #e2e8f0); border-radius:9px; overflow:hidden; }
@@ -4075,16 +4096,16 @@ function ContinueView({
         .ctv-card-cover .book-cover { width:100% !important; height:100% !important; min-height:100%; padding:0 !important; border:none !important; }
         .ctv-card-body { padding:10px 12px 11px; display:flex; flex-direction:column; gap:6px; flex:1; }
         .ctv-card-title { margin:0; font-size:0.85rem; font-weight:800; color:var(--text-dark, #0f172a); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:2.35em; }
-        .ctv-card-meta { font-size:11px; color:var(--text-muted, #64748b); }
+        .ctv-card-meta { font-size: 0.6875rem; color:var(--text-muted, #64748b); }
         .ctv-bar { height:6px; border-radius:99px; background:var(--surface-soft, #f1f5f9); border:1px solid var(--border-color, #e2e8f0); overflow:hidden; }
         .ctv-bar > i { display:block; height:100%; border-radius:99px; background:var(--color-action, #2563eb); }
-        .ctv-card-progress { display:flex; justify-content:space-between; gap:6px; font-size:10.5px; color:var(--text-muted, #64748b); }
+        .ctv-card-progress { display:flex; justify-content:space-between; gap:6px; font-size: 0.6563rem; color:var(--text-muted, #64748b); }
         .ctv-card-foot { display:flex; gap:6px; align-items:center; margin-top:auto; padding-top:7px; border-top:1px dashed var(--border-color, #e2e8f0); }
-        .ctv-card-resume { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:12.5px; font-weight:800; padding:8px 10px; border-radius:10px; border:none; background:var(--color-action, #2563eb); color:#fff; cursor:pointer; }
+        .ctv-card-resume { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.7813rem; font-weight:800; padding:8px 10px; border-radius:10px; border:none; background:var(--color-action, #2563eb); color:#fff; cursor:pointer; }
         .ctv-card-resume:hover { filter:brightness(1.08); }
         .ctv-icobtn { width:32px; height:32px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); background:var(--surface, #fff); color:var(--text-muted, #64748b); cursor:pointer; }
         .ctv-icobtn:hover { border-color:#fca5a5; color:#dc2626; background:#fef2f2; }
-        .ctv-single-hint { font-size:12.5px; color:var(--text-muted, #64748b); text-align:center; padding:14px; }
+        .ctv-single-hint { font-size: 0.7813rem; color:var(--text-muted, #64748b); text-align:center; padding:14px; }
         @media (max-width: 640px) {
           .ctv-hero { padding:13px; gap:12px; }
           .ctv-hero-cover { width:84px; }
@@ -4496,30 +4517,30 @@ function StatsView({
         .stx-actions { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; align-items:center; }
         .stx-kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(128px, 1fr)); gap:9px; }
         .stx-kpi { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; border:1px solid var(--border-color); background:var(--surface); }
-        .stx-kpi-ic { width:37px; height:37px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; background:var(--color-action-soft, var(--primary-light)); }
+        .stx-kpi-ic { width:37px; height:37px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size: 1.0625rem; flex-shrink:0; background:var(--color-action-soft, var(--primary-light)); }
         .stx-kpi-val { font-size:1.12rem; font-weight:800; color:var(--text-dark); line-height:1.1; }
-        .stx-kpi-label { font-size:10.5px; color:var(--text-muted); font-weight:600; }
+        .stx-kpi-label { font-size: 0.6563rem; color:var(--text-muted); font-weight:600; }
         .stx-toolbar { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:11px 13px; display:flex; flex-direction:column; gap:9px; }
         .stx-trow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
         .stx-search { flex:1 1 200px; min-width:170px; position:relative; }
-        .stx-search input { width:100%; padding:8px 30px 8px 32px; border-radius:10px; border:1px solid #e2e8f0; font-size:13px; background:#fff; }
+        .stx-search input { width:100%; padding:8px 30px 8px 32px; border-radius:10px; border:1px solid #e2e8f0; font-size: 0.8125rem; background:#fff; }
         .stx-search > svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8; }
         .stx-search-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; display:inline-flex; }
-        .stx-toolbar select { padding:8px 10px; border-radius:10px; border:1px solid #e2e8f0; font-size:12.5px; background:#fff; color:#334155; }
-        .stx-check { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:#475569; cursor:pointer; border:1px solid #e2e8f0; border-radius:999px; padding:6px 12px; background:#fff; }
+        .stx-toolbar select { padding:8px 10px; border-radius:10px; border:1px solid #e2e8f0; font-size: 0.7813rem; background:#fff; color:#334155; }
+        .stx-check { display:inline-flex; align-items:center; gap:6px; font-size: 0.7813rem; font-weight:700; color:#475569; cursor:pointer; border:1px solid #e2e8f0; border-radius:999px; padding:6px 12px; background:#fff; }
         .stx-check.on { background:var(--color-action-soft, #eff6ff); border-color:var(--color-action, #2d73ff); color:var(--color-action-strong, #1d4ed8); }
-        .stx-count { font-size:12px; color:var(--text-muted); }
+        .stx-count { font-size: 0.75rem; color:var(--text-muted); }
         .stx-count strong { color:var(--text-dark); }
         .stx-charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; }
         .stx-card { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:13px 14px; }
         .stx-card h4 { margin:0 0 10px; font-size:0.9rem; color:var(--text-dark); display:flex; align-items:center; gap:7px; }
-        .stx-bar-row { display:grid; grid-template-columns:110px 1fr 34px; gap:9px; align-items:center; font-size:12px; margin-bottom:7px; }
+        .stx-bar-row { display:grid; grid-template-columns:110px 1fr 34px; gap:9px; align-items:center; font-size: 0.75rem; margin-bottom:7px; }
         .stx-track { height:9px; border-radius:99px; background:var(--surface-soft); border:1px solid var(--border-color); overflow:hidden; }
         .stx-fill { height:100%; border-radius:99px; min-width:3px; }
         .stx-bar-val { font-weight:800; color:var(--text-dark); text-align:right; }
         .stx-segbar { display:flex; height:12px; border-radius:99px; overflow:hidden; border:1px solid var(--border-color); margin:10px 0 4px; }
         .stx-segbar i { display:block; height:100%; }
-        .stx-legend { display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--text-muted); }
+        .stx-legend { display:flex; gap:12px; flex-wrap:wrap; font-size: 0.7188rem; color:var(--text-muted); }
         .stx-legend b { color:var(--text-dark); }
         .stx-dot { display:inline-block; width:9px; height:9px; border-radius:99px; margin-right:5px; }
         .stx-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px; }
@@ -4530,16 +4551,16 @@ function StatsView({
         .stx-book-cover .book-cover { overflow:hidden; }
         .stx-book-cover .book-cover div { font-size:0; }
         .stx-book-t { margin:0; font-size:0.85rem; font-weight:800; color:var(--text-dark); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-        .stx-book-m { font-size:11px; color:var(--text-muted); }
+        .stx-book-m { font-size: 0.6875rem; color:var(--text-muted); }
         .stx-pbar { height:8px; border-radius:99px; background:var(--surface-soft); border:1px solid var(--border-color); overflow:hidden; margin-top:8px; }
         .stx-pbar > i { display:block; height:100%; border-radius:99px; background:var(--color-action, var(--primary)); }
         .stx-book-stats { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-        .stx-chip { font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:999px; background:#f8fafc; border:1px solid #e2e8f0; color:#475569; display:inline-flex; align-items:center; gap:4px; }
+        .stx-chip { font-size: 0.6563rem; font-weight:800; padding:2px 8px; border-radius:999px; background:#f8fafc; border:1px solid #e2e8f0; color:#475569; display:inline-flex; align-items:center; gap:4px; }
         .stx-chip.good { background:#f0fdf4; border-color:#bbf7d0; color:#15803d; }
         .stx-chip.warn { background:#fffbeb; border-color:#fde68a; color:#b45309; }
         .stx-chip.act { background:var(--color-action-soft, #eff6ff); border-color:var(--color-action-soft, #dbeafe); color:var(--color-action-strong, #1d4ed8); }
         .stx-book-foot { display:flex; gap:6px; margin-top:9px; align-items:center; }
-        .stx-open { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:800; padding:7px 10px; border-radius:9px; border:none; background:var(--color-action, var(--primary)); color:#fff; cursor:pointer; }
+        .stx-open { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.75rem; font-weight:800; padding:7px 10px; border-radius:9px; border:none; background:var(--color-action, var(--primary)); color:#fff; cursor:pointer; }
         .stx-icobtn { width:31px; height:31px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; }
         .stx-icobtn:hover { border-color:#fca5a5; color:#dc2626; background:#fef2f2; }
         .stx-empty { text-align:center; padding:34px 16px; border:1px dashed var(--border-color); border-radius:14px; color:var(--text-muted); background:var(--surface); }
@@ -4649,7 +4670,7 @@ function StatsView({
               <i style={{ width: `${(statusCounts.completed / allRows.length) * 100}%`, background: "#16a34a" }} />
             </div>
           )}
-          <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+          <div style={{ fontSize: "0.7188rem", color: "var(--text-muted)" }}>
             {totalPagesRead} trang đã đọc • {totalOpened} Lượt mở sách
           </div>
         </div>
@@ -4659,7 +4680,7 @@ function StatsView({
       {sortedRows.length === 0 ? (
         <div className="stx-empty">
           <p style={{ margin: "0 0 4px", fontWeight: 700 }}>Không tìm thấy sách phù hợp</p>
-          <p style={{ margin: 0, fontSize: 12 }}>Hãy thay đổi bộ lọc hoặc tìm kiếm.</p>
+          <p style={{ margin: 0, fontSize: "0.75rem" }}>Hãy thay đổi bộ lọc hoặc tìm kiếm.</p>
         </div>
       ) : (
         <div className="stx-grid">

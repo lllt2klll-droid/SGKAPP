@@ -1,7 +1,7 @@
 // ── Reading progress canonical tests — khóa đồng bộ toàn app ──────────
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bookProgress, progressCounts, totalPagesRead, READ_STATUS } from './readingProgress.js';
+import { bookProgress, progressCounts, totalPagesRead, READ_STATUS } from './reader/readingProgress.js';
 
 describe('bookProgress', () => {
   it('sách chưa đọc → pct 0, unread', () => {

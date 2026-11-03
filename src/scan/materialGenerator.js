@@ -1,11 +1,11 @@
 // ── Material Generator — adapter từ scan AI → repository hiện có ─────────
 // Reuse existing saveWorksheet, addQuestion, addClip, createIdea — không tạo store mới.
 // Tất cả bản ghi đều có source provenance {type:'sgk_scan', bookId, page, crop, scanId} + thumbnail.
-import { addQuestion, saveWorksheet } from "../teachingDB.js";
-import { addClip, getCollections, addCollection } from "../researchDB.js";
-import { createIdea } from "../personalDB.js";
-import { makeId } from "../storage.js";
-import { normalizeMucdo } from "../questionSchema.js";
+import { addQuestion, saveWorksheet } from "../data/teachingDB.js";
+import { addClip, getCollections, addCollection } from "../data/researchDB.js";
+import { createIdea } from "../data/personalDB.js";
+import { makeId } from "../data/storage.js";
+import { normalizeMucdo } from "../data/questionSchema.js";
 
 function sourceMeta(scan, extra) {
   return {
@@ -177,7 +177,7 @@ export async function saveScanToNote({ scan, analysis, generated }) {
 
 export async function saveScanToActivity({ scan, analysis, generated }) {
   const parsed = generated?.parsed || {};
-  const { addActivity } = await import("../teachingDB.js");
+  const { addActivity } = await import("../data/teachingDB.js");
   const isGame = (generated?.materialType === "game") || (parsed.type && /game|ghép|quiz/i.test(String(parsed.type)));
   const name = parsed.name || parsed.title || `Hoạt động từ ${scan.book.title} tr.${scan.page}`;
   const content = parsed.content || parsed.instructions || parsed.summary || analysis?.content || "";

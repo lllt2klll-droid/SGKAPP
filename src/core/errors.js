@@ -33,7 +33,7 @@ export class MigrationError extends AppError {
 }
 
 // Lấy địa chỉ backend thật (không hardcode localhost — production chạy same-origin)
-import { getApiBase } from "../apiConfig.js";
+import { getApiBase } from "../services/apiConfig.js";
 
 export function toFriendlyError(err) {
   if (!err) return { type:"Unknown", message:"Đã có lỗi xảy ra.", recoverable:true };

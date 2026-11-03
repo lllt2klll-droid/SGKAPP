@@ -66,15 +66,21 @@ import "./styles/52-reader-toc-redesign.css";
 import "./styles/53-lesson-plan-vault.css";
 import "./styles/54-lesson-plan-library.css";
 import "./styles/55-lesson-plan-vault-match.css";
+import "./styles/57-notes-liquid-glass.css";
+import "./styles/58-accent-liquid-buttons.css";
+import "./styles/59-search-index-redesign.css";
+import "./styles/60-data-tools-workflow.css";
+import "./styles/61-reader-tools-unified.css";
+import "./styles/62-reader-page-flip.css";
 import App from "./App.jsx";
-import { APP_COPYRIGHT, APP_DEVELOPER } from "./appPersona.js";
+import { APP_COPYRIGHT, APP_DEVELOPER } from "./ai/appPersona.js";
 // ── Bản quyền app (không liên quan file xuất ra) ──
 try {
   window.__APP_OWNER__ = APP_DEVELOPER;
   window.__APP_COPYRIGHT__ = APP_COPYRIGHT;
   console.log(`%c${APP_COPYRIGHT}`, "font-weight:bold;color:#2563EB;");
 } catch {}
-import { loadSettings, applySettings } from "./settingsStore.js";
+import { loadSettings, applySettings } from "./services/settingsStore.js";
 import { initGlobalClickSound } from "./audio/soundManager.js";
 // Apply custom color + theme before first paint so settings color hits app instantly
 try {

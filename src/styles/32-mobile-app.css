@@ -153,6 +153,67 @@
     box-shadow: 0 3px 10px rgba(37, 99, 235, 0.28);
   }
 
+  /* --- Library catalog: compact two-column book grid --- */
+  .library-command-center.libx-root .libx-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+  .library-command-center.libx-root .libx-book {
+    min-width: 0;
+    border-radius: 14px;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.08);
+  }
+  .library-command-center.libx-root .libx-cover {
+    aspect-ratio: 4 / 5;
+  }
+  .library-command-center.libx-root .libx-fav {
+    top: 7px;
+    right: 7px;
+    width: 30px;
+    height: 30px;
+  }
+  .library-command-center.libx-root .libx-grade {
+    left: 7px;
+    bottom: 7px;
+    max-width: calc(100% - 14px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .library-command-center.libx-root .libx-body {
+    min-width: 0;
+    padding: 9px;
+    gap: 5px;
+  }
+  .library-command-center.libx-root .libx-title {
+    min-height: 2.7em;
+    font-size: 0.76rem;
+    line-height: 1.35;
+  }
+  .library-command-center.libx-root .libx-meta {
+    gap: 4px;
+    font-size: 0.64rem;
+  }
+  .library-command-center.libx-root .libx-foot {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    padding-top: 6px;
+  }
+  .library-command-center.libx-root .libx-open {
+    grid-column: 1 / -1;
+    min-width: 0;
+    min-height: 38px;
+    padding: 7px 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+  .library-command-center.libx-root .libx-icobtn {
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+  }
+
   /* --- Book cards kiểu store app: cover lớn, 1 CTA chính --- */
   .books-grid-new {
     gap: 0.65rem;

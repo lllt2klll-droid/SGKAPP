@@ -111,42 +111,45 @@ export function edgePoint(node, tx, ty, anchor = "auto") {
   return { x: c.x, y: c.y + (dy > 0 ? hh : -hh) };
 }
 
-export function connectorGeom(a, b, type, sourceAnchor = "auto", targetAnchor = "auto", bendOpt) {
+export function connectorGeom(a, b, type, sourceAnchor = "auto", targetAnchor = "auto", bendOpt, routeOffsetOpt, bendAlongOpt) {
   if (!a || !b) return null;
   const ca = centerOf(a);
   const cb = centerOf(b);
   const p1 = edgePoint(a, cb.x, cb.y, sourceAnchor);
   const p2 = edgePoint(b, ca.x, ca.y, targetAnchor);
   if (type === "elbow") {
+    const routeOffset = Number.isFinite(Number(routeOffsetOpt)) ? Number(routeOffsetOpt) : 0;
     // Đi ngang trước khi 2 biên cách ngang ≥ cách dọc, ngược lại đi dọc trước — đỡ đè lên node
     if (Math.abs(p2.x - p1.x) >= Math.abs(p2.y - p1.y)) {
-      const midX = (p1.x + p2.x) / 2;
+      const midX = (p1.x + p2.x) / 2 + routeOffset;
       const pts = [p1, { x: midX, y: p1.y }, { x: midX, y: p2.y }, p2];
-      return { d: `M ${p1.x} ${p1.y} L ${midX} ${p1.y} L ${midX} ${p2.y} L ${p2.x} ${p2.y}`, pts, end: p2, endAngle: p2.x >= midX ? 0 : 180 };
+      return { d: `M ${p1.x} ${p1.y} L ${midX} ${p1.y} L ${midX} ${p2.y} L ${p2.x} ${p2.y}`, pts, control: { x: midX, y: (p1.y + p2.y) / 2 }, controlAxis: "x", end: p2, endAngle: p2.x >= midX ? 0 : 180 };
     }
-    const midY = (p1.y + p2.y) / 2;
+    const midY = (p1.y + p2.y) / 2 + routeOffset;
     const pts = [p1, { x: p1.x, y: midY }, { x: p2.x, y: midY }, p2];
-    return { d: `M ${p1.x} ${p1.y} L ${p1.x} ${midY} L ${p2.x} ${midY} L ${p2.x} ${p2.y}`, pts, end: p2, endAngle: p2.y >= midY ? 90 : -90 };
+    return { d: `M ${p1.x} ${p1.y} L ${p1.x} ${midY} L ${p2.x} ${midY} L ${p2.x} ${p2.y}`, pts, control: { x: (p1.x + p2.x) / 2, y: midY }, controlAxis: "y", end: p2, endAngle: p2.y >= midY ? 90 : -90 };
   }
   if (type === "curve") {
     // Cong bezier: điểm điều khiển lệch pháp tuyến. bend=% chỉnh tay (mặc định 100 = auto),
-    // 0 = thẳng. Xác định (không ngẫu nhiên) để export/hit-test khớp canvas.
-    const bend = Number.isFinite(Number(bendOpt)) ? Number(bendOpt) : 100;
+    // 0 = thẳng; giá trị âm uốn sang phía đối diện. Xác định để export/hit-test khớp canvas.
+    const bend = Number.isFinite(Number(bendOpt)) ? Math.max(-150, Math.min(150, Number(bendOpt))) : 100;
     const dx = p2.x - p1.x, dy = p2.y - p1.y;
     const len = Math.hypot(dx, dy) || 1;
-    const k = Math.min(160, len * 0.25 * (bend / 100));
-    const cx = (p1.x + p2.x) / 2 + (-dy / len) * k;
-    const cy = (p1.y + p2.y) / 2 + (dx / len) * k;
+    const k = Math.max(-160, Math.min(160, len * 0.25 * (bend / 100)));
+    const along = Number.isFinite(Number(bendAlongOpt)) ? Math.max(-150, Math.min(150, Number(bendAlongOpt))) : 0;
+    const alongOffset = Math.max(-160, Math.min(160, len * 0.25 * (along / 100)));
+    const cx = (p1.x + p2.x) / 2 + (-dy / len) * k + (dx / len) * alongOffset;
+    const cy = (p1.y + p2.y) / 2 + (dx / len) * k + (dy / len) * alongOffset;
     const at = (t) => ({
       x: (1 - t) * (1 - t) * p1.x + 2 * (1 - t) * t * cx + t * t * p2.x,
       y: (1 - t) * (1 - t) * p1.y + 2 * (1 - t) * t * cy + t * t * p2.y,
     });
     const pts = [0, 0.25, 0.5, 0.75, 1].map(at);
     const endAngle = (Math.atan2(p2.y - cy, p2.x - cx) * 180) / Math.PI;
-    return { d: `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`, pts, end: p2, endAngle };
+    return { d: `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`, pts, control: { x: cx, y: cy }, controlAxis: "both", end: p2, endAngle };
   }
   const ang = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
-  return { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`, pts: [p1, p2], end: p2, endAngle: ang };
+  return { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`, pts: [p1, p2], control: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }, controlAxis: "both", end: p2, endAngle: ang };
 }
 
 function distToSeg(p, a, b) {
@@ -229,8 +232,8 @@ export function flipConn(c = {}) {
 }
 
 // Khoảng cách từ điểm tới connector (hỗ trợ elbow polyline) — dùng cho hit-test menu chuột phải
-export function distToConnector(wx, wy, a, b, type, sourceAnchor, targetAnchor, bend) {
-  const g = connectorGeom(a, b, type, sourceAnchor, targetAnchor, bend);
+export function distToConnector(wx, wy, a, b, type, sourceAnchor, targetAnchor, bend, routeOffset, bendAlong) {
+  const g = connectorGeom(a, b, type, sourceAnchor, targetAnchor, bend, routeOffset, bendAlong);
   if (!g || !g.pts) return Infinity;
   const p = { x: wx, y: wy };
   let best = Infinity;

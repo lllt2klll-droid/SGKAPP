@@ -37,9 +37,12 @@ export function sanitizeNoteHtml(html) {
   try {
     // DOMPurify parse trên document inert nên script/onerror KHÔNG thể chạy
     // trong lúc sanitize (cách cũ gán innerHTML lên div rồi mới dọn là đã trễ).
-    // Allowlist y hệt bản cũ: chỉ b/strong/i/em/u/s/strike/br, không attribute.
+    // Keep useful note formatting while stripping attributes and unsafe elements.
     let out = DOMPurify.sanitize(String(html), {
-      ALLOWED_TAGS: ["b", "strong", "i", "em", "u", "s", "strike", "br"],
+      ALLOWED_TAGS: [
+        "b", "strong", "i", "em", "u", "s", "strike", "br",
+        "p", "div", "ul", "ol", "li", "blockquote",
+      ],
       ALLOWED_ATTR: [],
     }).trim();
     if (/^(<br\s*\/?>)+$/i.test(out)) out = "";

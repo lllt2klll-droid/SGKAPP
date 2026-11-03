@@ -4,6 +4,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { ensureFits, resolveWbFont } from "./whiteboardStore.js";
 import { centerOf, connectorGeom, normalizeBulletStyle, stripBulletMark, bulletPrefix, bulletIndentPx, wrapRichLines, connHeads, connDash, reconnectConn, isPlaceholderText } from "./mindmapEngine.js";
+import { calcWheelZoom, isWheelZoomGesture } from "../reader/zoomController.js";
 
 // Vẽ 1 đầu marker (arrow/dot/diamond) với màu cho trước
 function HeadShape({ head, color }) {
@@ -262,16 +263,15 @@ export default function WhiteboardCanvas(props) {
     return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); };
   }, []);
 
-  // ── Wheel: Ctrl/Cmd/Alt + wheel = zoom, còn lại = pan (2 ngón kéo) ──
-  // Thêm Alt để laptop Windows không có Ctrl+trackpad vẫn zoom được.
+  // ── Wheel: discrete mouse wheel = zoom; smooth trackpad = pan ──
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
     const onWheel = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      const isZoomGesture = e.ctrlKey || e.metaKey || e.altKey;
-      if (!isZoomGesture) {
+      const zoomGesture = e.altKey || isWheelZoomGesture(e);
+      if (!zoomGesture) {
         // Pan bằng trackpad 2 ngón
         let dx = e.deltaX;
         let dy = e.deltaY;
@@ -283,8 +283,8 @@ export default function WhiteboardCanvas(props) {
       const r = svg.getBoundingClientRect();
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
-      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
-      const nz = Math.min(3, Math.max(0.2, zoom * factor));
+      const nz = Math.min(3, Math.max(0.2, calcWheelZoom(zoom, e.deltaY, e.deltaMode)));
+      if (nz === zoom) return;
       const wx = (mx - pan.x) / zoom;
       const wy = (my - pan.y) / zoom;
       onViewport(nz, { x: mx - wx * nz, y: my - wy * nz });
@@ -389,7 +389,7 @@ export default function WhiteboardCanvas(props) {
       const a = nextMap.get(c.fromId) ? { ...byId.get(c.fromId), ...nextMap.get(c.fromId) } : byId.get(c.fromId);
       const b = nextMap.get(c.toId) ? { ...byId.get(c.toId), ...nextMap.get(c.toId) } : byId.get(c.toId);
       if (!a || !b) return;
-      const g = connectorGeom(a, b, c.type, c.sourceAnchor, c.targetAnchor, c.bend);
+      const g = connectorGeom(a, b, c.type, c.sourceAnchor, c.targetAnchor, c.bend, c.routeOffset, c.bendAlong);
       if (!g) return;
       const el = connsRef.current.get(c.id);
       if (el) el.setAttribute("d", g.d);
@@ -532,6 +532,7 @@ export default function WhiteboardCanvas(props) {
   // ── Pointer down trên node ──
   const onNodePointerDown = (e, o) => {
     if (e.button === 2) return; // right click → context menu, không kéo
+    if (e.button === 0 && tool === "select") props.onObjectPointerDown?.();
     // bấm đúp chuột trái 2 lần vào ô để sửa — xử lý ngay trong pointerDown để tránh drag đè lên dblclick
     if (e.button === 0 && o.kind !== "stroke" && o.kind !== "image" && !o.locked) {
       const now = Date.now();
@@ -623,6 +624,7 @@ export default function WhiteboardCanvas(props) {
   // ── Pointer down trên nền SVG ──
   const onSvgPointerDown = (e) => {
     if (e.button === 2) return; // right click → context menu
+    if (e.button === 0 && tool === "select") props.onObjectPointerDown?.();
     const svg = svgRef.current;
     try { svg.setPointerCapture(e.pointerId); } catch {}
     primeRectCache();
@@ -708,8 +710,8 @@ export default function WhiteboardCanvas(props) {
       const ratio = nd / (startDist || 1);
       // Phân biệt pan vs zoom: 2 ngón kéo song song => pan, chụm/mở ngược chiều => zoom
       if (!pinchRef.current.mode) {
-        if (distDelta > 12 || Math.abs(ratio - 1) > 0.08) pinchRef.current.mode = "zoom";
-        else if (Math.hypot(curMx - startMx, curMy - startMy) > 4) pinchRef.current.mode = "pan";
+        if (distDelta > 4 || Math.abs(ratio - 1) > 0.035) pinchRef.current.mode = "zoom";
+        else if (Math.hypot(curMx - startMx, curMy - startMy) > 6) pinchRef.current.mode = "pan";
         else return;
       }
       if (pinchRef.current.mode === "pan") {
@@ -815,6 +817,39 @@ export default function WhiteboardCanvas(props) {
       const tgt = objects.find((o) => o.id !== otherId && o.kind !== "stroke" && w.x > o.x && w.x < o.x + o.width && w.y > o.y && w.y < o.y + o.height);
       const tid = tgt ? tgt.id : null;
       if (tid !== dropTargetRef.current) { dropTargetRef.current = tid; setDropTarget(tid); }
+      return;
+    }
+    if (d.mode === "shape") {
+      const dx = d.end.x - d.start.x;
+      const dy = d.end.y - d.start.y;
+      let patch;
+      if (d.origConn.type === "elbow") {
+        const offset = d.startRouteOffset + (d.controlAxis === "x" ? w.x - d.startW.x : w.y - d.startW.y);
+        patch = { routeOffset: Math.max(-2000, Math.min(2000, offset)) };
+      } else {
+        const len = Math.hypot(dx, dy) || 1;
+        const normalX = -dy / len;
+        const normalY = dx / len;
+        const tangentX = dx / len;
+        const tangentY = dy / len;
+        const midX = (d.start.x + d.end.x) / 2;
+        const midY = (d.start.y + d.end.y) / 2;
+        const controlOffset = (w.x - midX) * normalX + (w.y - midY) * normalY;
+        const alongOffset = (w.x - midX) * tangentX + (w.y - midY) * tangentY;
+        const maxOffset = Math.min(160, len * 0.25);
+        const bend = maxOffset ? Math.max(-150, Math.min(150, (controlOffset / maxOffset) * 100)) : 0;
+        const bendAlong = maxOffset ? Math.max(-150, Math.min(150, (alongOffset / maxOffset) * 100)) : 0;
+        patch = { type: "curve", bend, bendAlong };
+      }
+      if (!d.checkpointed && Math.hypot(w.x - d.startW.x, w.y - d.startW.y) > 0.5) {
+        onCheckpoint();
+        d.checkpointed = true;
+      }
+      if (d.checkpointed) {
+        const next = connectors.map((c) => c.id === d.id ? { ...c, ...patch } : c);
+        d.latestConnectors = next;
+        onConnectors(next, false);
+      }
       return;
     }
     if (d.mode === "pen") {
@@ -961,6 +996,8 @@ export default function WhiteboardCanvas(props) {
           onNotify?.("Đã tạo đường nối");
         } else onNotify?.("Hai khối này đã được nối");
       }
+    } else if (d.mode === "shape") {
+      if (d.checkpointed && d.latestConnectors) onConnectors(d.latestConnectors, true);
     } else if (d.mode === "reconn") {
       // Thả đầu nối sang khối khác — đổi from/to + neo cạnh gần nhất, giữ nguyên style
       const c = connectors.find((cc) => cc.id === d.id);
@@ -1151,7 +1188,7 @@ export default function WhiteboardCanvas(props) {
       const b = byId.get(c.toId);
       if (!a || !b) return;
       try {
-        const g = connectorGeom(a, b, c.type, c.sourceAnchor, c.targetAnchor, c.bend);
+        const g = connectorGeom(a, b, c.type, c.sourceAnchor, c.targetAnchor, c.bend, c.routeOffset, c.bendAlong);
         if (g) m.set(c.id, g);
       } catch {}
     });
@@ -1210,6 +1247,9 @@ export default function WhiteboardCanvas(props) {
               : null;
             return (
               <g key={c.id}>
+                {connSel && (
+                  <path d={g.d} fill="none" stroke="#2563eb" strokeOpacity="0.14" strokeWidth={Math.max(Number(c.width) + 8, 10)} strokeLinecap="round" pointerEvents="none" />
+                )}
                 <path ref={(el) => { if (el) connsRef.current.set(c.id, el); else connsRef.current.delete(c.id); }} d={g.d} fill="none" stroke={connSel ? "#2563eb" : c.color} strokeWidth={connSel ? c.width + 1.5 : c.width} {...(dash ? { strokeDasharray: dash } : {})} markerEnd={headMarkerId(enHead, c.color, connSel)} markerStart={headMarkerId(stHead, c.color, connSel)}
                   onDoubleClick={(e) => { e.stopPropagation(); props.onConnLabelEdit?.(c.id, e.clientX, e.clientY); }}
                 />
@@ -1229,7 +1269,7 @@ export default function WhiteboardCanvas(props) {
                 />
                 {/* tay cầm 2 đầu khi đường được chọn — cầm kéo sang khối khác */}
                 {connSel && tool === "select" && g.pts && g.pts.length >= 2 && (
-                  <g>
+                  <g data-wb-editor-controls="true">
                     {[{ end: "from", p: g.pts[0] }, { end: "to", p: g.pts[g.pts.length - 1] }].map(({ end, p }) => (
                       <circle
                         key={end} cx={p.x} cy={p.y} r={(touchMode ? 14 : 10) / zoom} fill="#fff" stroke="#2563eb" strokeWidth={2.5 / zoom}
@@ -1247,6 +1287,43 @@ export default function WhiteboardCanvas(props) {
                         <title>{end === "from" ? "Kéo đầu nối sang khối khác" : "Kéo đuôi nối sang khối khác"}</title>
                       </circle>
                     ))}
+                    {g.control && (
+                      <g>
+                        {c.type === "curve" && g.pts[2] && (
+                          <line
+                            x1={g.pts[2].x} y1={g.pts[2].y} x2={g.control.x} y2={g.control.y}
+                            stroke="#2563eb" strokeOpacity="0.5" strokeWidth={1.5 / zoom}
+                            strokeDasharray={`${3 / zoom} ${3 / zoom}`} pointerEvents="none"
+                          />
+                        )}
+                        <circle
+                          cx={g.control.x} cy={g.control.y} r={13 / zoom}
+                          fill="#2563eb" fillOpacity="0.12" pointerEvents="none"
+                        />
+                        <circle
+                          cx={g.control.x} cy={g.control.y} r={8 / zoom}
+                          fill="#fff" stroke="#2563eb" strokeWidth={2.5 / zoom}
+                          aria-label="Kéo để chỉnh dáng đường nối"
+                          style={{ cursor: c.type === "elbow" ? (g.controlAxis === "x" ? "ew-resize" : "ns-resize") : "move" }}
+                          onPointerDown={(e) => {
+                            e.stopPropagation();
+                            if (e.button === 2) return;
+                            try { svgRef.current?.setPointerCapture?.(e.pointerId); } catch {}
+                            pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                            dragRef.current = {
+                              mode: "shape", id: c.id, origConn: c,
+                              startW: toWorld(e.clientX, e.clientY),
+                              start: g.pts[0], end: g.pts[g.pts.length - 1],
+                              controlAxis: g.controlAxis,
+                              startRouteOffset: Number(c.routeOffset) || 0,
+                              checkpointed: false,
+                            };
+                          }}
+                        >
+                          <title>Kéo để chỉnh dáng đường nối</title>
+                        </circle>
+                      </g>
+                    )}
                   </g>
                 )}
               </g>
@@ -1383,7 +1460,7 @@ export default function WhiteboardCanvas(props) {
           onPointerDown={(e) => e.stopPropagation()}
         >
           <div className="wb-edit-tools">
-            <span style={{ fontSize: 10, opacity: 0.6 }}>**đậm** *nghiêng*</span>
+            <span style={{ fontSize: "0.625rem", opacity: 0.6 }}>**đậm** *nghiêng*</span>
             <button onMouseDown={(e) => e.preventDefault()} onClick={() => wrapEditSelection("**")} title="Bôi đen chữ rồi bấm để đậm"><b>B</b></button>
             <button onMouseDown={(e) => e.preventDefault()} onClick={() => wrapEditSelection("*")} title="Bôi đen chữ rồi bấm để nghiêng"><i>I</i></button>
           </div>

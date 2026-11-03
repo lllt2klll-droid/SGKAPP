@@ -14,8 +14,8 @@ const {
   rateIdea, logTrial, removeTrial, getIdeaStats, getAllIdeaTags,
   exportIdeasJSON, importIdeasJSON, restoreIdea,
   IDEA_TYPES, IDEA_PHASES, IDEA_STATUSES, IDEAS_STORAGE_KEY,
-} = await import('./personalDB.js');
-const { listTrashByType, TRASH_TYPE } = await import('./trashStore.js');
+} = await import('./data/personalDB.js');
+const { listTrashByType, TRASH_TYPE } = await import('./data/trashStore.js');
 
 describe('Ý tưởng dạy học — personalDB schema v2', () => {
   beforeEach(() => localStorage.clear());

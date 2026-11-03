@@ -46,7 +46,7 @@ test("Whiteboard Phase2: 20 nodes, 10 connectors, 5 text, 2 images, viewport pre
   assert.equal(loaded.viewport.x, 10);
 
   // Backup via storage.js (includes WB boards via LS fallback when IDB unavailable)
-  const storage = await import("../src/storage.js");
+  const storage = await import("../src/data/storage.js");
   // Simulate backup preview
   const allKeys = [];
   for (let i=0;i<localStorage.length;i++) allKeys.push(localStorage.key(i));
@@ -85,7 +85,7 @@ test("Data loss: 20 bookmarks 20 notes 10 lastPage 100 vocab 10 KHBD 3 whiteboar
   // Count before
   const beforeKeys = localStorage.length;
   // Backup
-  const storage = await import("../src/storage.js");
+  const storage = await import("../src/data/storage.js");
   const keys = []; for(let i=0;i<localStorage.length;i++) keys.push(localStorage.key(i));
   const data = Object.fromEntries(keys.map(k=>[k, localStorage.getItem(k)]));
   const backup = JSON.stringify({ app: "hanhtrang-tieu-hoc", version:2, schemaVersion:2, data, indexedData:{}, label:"test" });

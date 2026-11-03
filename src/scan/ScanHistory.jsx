@@ -23,7 +23,7 @@ export default function ScanHistory({ bookFilename, onSelectScan }) {
 
   if (!recent.length) {
     return (
-      <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-muted)", textAlign: "center", border: "1px dashed var(--border-color)", borderRadius: 8 }}>
+      <div style={{ padding: "8px 10px", fontSize: "0.6875rem", color: "var(--text-muted)", textAlign: "center", border: "1px dashed var(--border-color)", borderRadius: 8 }}>
         Chưa có scan nào. Bấm <strong>Quét vùng</strong> <span aria-hidden>✂️</span> rồi kéo trên trang SGK.
       </div>
     );
@@ -48,7 +48,7 @@ export default function ScanHistory({ bookFilename, onSelectScan }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 800, color: "var(--text-muted)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.6875rem", fontWeight: 800, color: "var(--text-muted)" }}>
         <Clock size={12} /> Scan gần đây
         <span style={{ fontWeight: 400, marginLeft: "auto" }}>{recent.length} mục</span>
       </div>
@@ -70,21 +70,21 @@ export default function ScanHistory({ bookFilename, onSelectScan }) {
               {s.dataUrl ? (
                 <img src={s.dataUrl} alt={`Scan tr.${s.page}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" />
               ) : (
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{s.hasFullImage ? "Ảnh đầy đủ trong IndexedDB" : "Không có ảnh"}</span>
+                <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }}>{s.hasFullImage ? "Ảnh đầy đủ trong IndexedDB" : "Không có ảnh"}</span>
               )}
             </div>
             <div style={{ padding: "6px 7px", display: "flex", flexDirection: "column", gap: 3 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dark)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "var(--text-dark)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 4 }}>
                 <BookOpen size={11} /> tr.{s.page} {s.analysis?.topic ? `• ${s.analysis.topic.slice(0, 18)}` : ""}
               </div>
-              <div style={{ fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4, justifyContent: "space-between" }}>
+              <div style={{ fontSize: "0.625rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4, justifyContent: "space-between" }}>
                 <span>{new Date(s.createdAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })} {new Date(s.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>
                 <span style={{ display: "inline-flex", gap: 4 }}>
                   <button className="btn btn-ghost btn-xs" onClick={(e) => handleView(s)} aria-label="Xem lại" title="Xem lại" style={{ padding: "2px 4px", minHeight: 22 }} disabled={busy}><Eye size={11} /></button>
                   <button className="btn btn-ghost btn-xs" onClick={(e) => handleDelete(s.id, e)} aria-label="Xóa" title="Xóa" style={{ padding: "2px 4px", minHeight: 22 }}><Trash2 size={11} /></button>
                 </span>
               </div>
-              {s.materialType && <span className="gl-chip" style={{ alignSelf: "flex-start", fontSize: 9 }}>{s.materialType}</span>}
+              {s.materialType && <span className="gl-chip" style={{ alignSelf: "flex-start", fontSize: "0.5625rem" }}>{s.materialType}</span>}
             </div>
           </div>
         ))}

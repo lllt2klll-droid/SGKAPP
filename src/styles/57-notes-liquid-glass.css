@@ -1,0 +1,229 @@
+/* Ghi chú: lớp kính mờ, tập trung nội dung và xem ảnh */
+.note-popup,
+.note-input-popup,
+.sn-modal {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-light) 42%, var(--border-color));
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(20px) saturate(135%);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+}
+
+.note-input-popup {
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.note-popup-head,
+.note-input-head,
+.sn-modal .modal-header {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary-light) 24%, transparent), transparent 70%);
+}
+
+.note-toolbar,
+.note-images-preview,
+.sn-toolbar,
+.sn-citebar {
+  border-color: color-mix(in srgb, var(--primary-light) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--surface-soft) 68%, transparent);
+  border-radius: 14px;
+}
+
+.note-image-item {
+  width: 96px;
+  height: 96px;
+  border-radius: 13px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.13);
+}
+
+.note-image-item img,
+.note-popup-image {
+  cursor: zoom-in;
+}
+
+.note-popup-image {
+  max-width: 150px;
+  max-height: 150px;
+  border-radius: 13px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.13);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.note-popup-image:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.2);
+}
+
+.note-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 30000;
+  display: grid;
+  place-items: center;
+  padding: clamp(0.75rem, 3vw, 2rem);
+  background: rgba(8, 15, 31, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: noteViewerIn 0.2s ease-out;
+}
+
+.note-image-viewer-panel {
+  width: min(1180px, 100%);
+  height: min(90vh, 860px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  background: rgba(19, 30, 55, 0.8);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+.note-image-viewer-head,
+.note-image-viewer-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.note-image-viewer-head {
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.note-image-viewer-head div {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.note-image-viewer-head span {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.78rem;
+}
+
+.note-image-viewer-close,
+.note-image-viewer-tools button,
+.note-image-viewer-tools a,
+.note-image-viewer-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
+}
+
+.note-image-viewer-close {
+  width: 36px;
+  height: 36px;
+}
+
+.note-image-viewer-tools button,
+.note-image-viewer-tools a {
+  min-height: 36px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.note-image-viewer-close:hover,
+.note-image-viewer-tools button:hover,
+.note-image-viewer-tools a:hover,
+.note-image-viewer-nav:hover {
+  background: rgba(96, 165, 250, 0.22);
+  border-color: rgba(147, 197, 253, 0.5);
+  transform: translateY(-1px);
+}
+
+.note-image-viewer-stage {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  cursor: grab;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.035) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.035) 75%);
+  background-position: 0 0, 14px 14px;
+  background-size: 28px 28px;
+}
+
+.note-image-viewer-stage.is-dragging {
+  cursor: grabbing;
+}
+
+.note-image-viewer-image {
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+  transform-origin: center;
+  transition: transform 0.16s ease;
+  filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.35));
+}
+
+.note-image-viewer-nav {
+  position: absolute;
+  top: 50%;
+  width: 42px;
+  height: 42px;
+  transform: translateY(-50%);
+}
+
+.note-image-viewer-nav:hover {
+  transform: translateY(-50%) scale(1.04);
+}
+
+.note-image-viewer-nav.prev { left: 1rem; }
+.note-image-viewer-nav.next { right: 1rem; }
+
+.note-image-viewer-tools {
+  flex-wrap: wrap;
+  justify-content: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.note-image-viewer-tools output {
+  min-width: 3.2rem;
+  color: rgba(226, 232, 240, 0.82);
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+@keyframes noteViewerIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 640px) {
+  .note-image-viewer-panel {
+    height: min(92vh, 760px);
+    border-radius: 18px;
+  }
+
+  .note-image-viewer-tools {
+    gap: 0.4rem;
+    padding: 0.65rem;
+  }
+
+  .note-image-viewer-tools button,
+  .note-image-viewer-tools a {
+    flex: 1 1 calc(33.333% - 0.4rem);
+    font-size: 0.7rem;
+  }
+
+  .note-image-viewer-nav.prev { left: 0.45rem; }
+  .note-image-viewer-nav.next { right: 0.45rem; }
+}

@@ -559,6 +559,77 @@
   color: var(--accent);
 }
 
+.reader-toolbar-manager-hint {
+  margin: 0 0 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+.reader-toolbar-manage-row {
+  cursor: default;
+  padding: 0.55rem 0.4rem;
+}
+.reader-toolbar-manage-row:hover {
+  background: transparent;
+}
+.reader-toolbar-manage-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+.reader-toolbar-position {
+  min-width: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  text-align: center;
+}
+.reader-toolbar-manage-button {
+  min-width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-mid);
+  cursor: pointer;
+}
+.reader-toolbar-manage-button:hover:not(:disabled) {
+  border-color: var(--color-action, var(--primary));
+  color: var(--color-action, var(--primary));
+}
+.reader-toolbar-manage-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.reader-toolbar-manage-button.remove {
+  color: var(--text-muted);
+}
+.reader-toolbar-manage-button.add {
+  color: var(--color-action, var(--primary));
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.reader-toolbar-manage-button.add span {
+  white-space: nowrap;
+}
+.reader-toolbar-manage-actions .reader-advanced-tool-favorite {
+  width: 28px;
+}
+.reader-advanced-tool-favorite.is-favorite {
+  color: var(--accent);
+}
+.reader-toolbar-manager-empty {
+  padding: 1rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 /* ============================================================
    Command Palette
    ============================================================ */

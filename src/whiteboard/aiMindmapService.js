@@ -4,9 +4,9 @@
 // với nguồn; nếu vẫn bịa sau 1 lần retry → throw (không đưa lên canvas).
 // Không có API key / AI gián đoạn → fallback local tách dòng (vẫn đúng nguồn).
 
-import aiService, { getFriendlyErrorMessage } from "../aiService.js";
-import { getGeminiApiKey } from "../storage.js";
-import { loadSettings } from "../settingsStore.js";
+import aiService, { getFriendlyErrorMessage } from "../ai/aiService.js";
+import { getGeminiApiKey } from "../data/storage.js";
+import { loadSettings } from "../services/settingsStore.js";
 import { PLAN_LIMITS } from "./mindmapEngine.js";
 
 const LIMITS = {

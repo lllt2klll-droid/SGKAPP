@@ -1,12 +1,13 @@
 // ─── Whiteboard storage — boards CRUD + autosave (localStorage, namespaced) ───
 // Không đụng tới keys của module khác. Mọi key bắt đầu bằng "sgk_wb_".
 
-import { readJSON, saveJSON } from "../storage.js";
+import { readJSON, saveJSON } from "../data/storage.js";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove, listKeys } from "../safeStorage.js";
 import { appEvents, AppEvents, DataDomains } from "../core/appEvents.js";
-import indexedDBService, { STORES } from "../indexedDB.js";
+import { __crossTabSenderId as WB_TAB_ID } from "../core/crossTab.js";
+import indexedDBService, { STORES } from "../data/indexedDB.js";
 import { purgeUnreferencedImageBlobs } from "./imageStore.js";
-function _emitWB(action, id){ try{ appEvents.emit(AppEvents.WHITEBOARD_UPDATED, { action, id, domain: DataDomains.WHITEBOARD }); appEvents.emit(AppEvents.DATA_UPDATED, { domain: DataDomains.WHITEBOARD, action, id }); }catch{} }
+function _emitWB(action, id){ try{ appEvents.emit(AppEvents.WHITEBOARD_UPDATED, { action, id, domain: DataDomains.WHITEBOARD, source: "whiteboard", origin: WB_TAB_ID }); appEvents.emit(AppEvents.DATA_UPDATED, { domain: DataDomains.WHITEBOARD, action, id, source: "whiteboard", origin: WB_TAB_ID }); }catch{} }
 
 export const WB_INDEX_KEY = "sgk_wb_index"; // [{id,name,createdAt,updatedAt}]
 export const WB_BOARD_KEY = (id) => `sgk_wb_board_${id}`;
@@ -524,6 +525,33 @@ export async function persistBoardAsync(board) {
   throw new Error("persistBoardAsync failed: IDB unavailable and migrated");
 }
 
+export async function applyCanvasSettingsToAllBoards(settings) {
+  const keys = ["grid", "snap", "smartAlign", "smartSpacing"];
+  if (!settings || keys.some((key) => typeof settings[key] !== "boolean")) {
+    throw new Error("Cài đặt canvas không hợp lệ");
+  }
+  const entries = await listBoardsAsync();
+  let updated = 0;
+  for (const entry of entries) {
+    const board = await loadBoardAsync(entry.id);
+    if (!board) throw new Error(`Không tải được bảng "${entry.name || entry.id}"`);
+    if (keys.every((key) => board[key] === settings[key])) continue;
+    try {
+      await persistBoardAsync({
+        ...board,
+        grid: settings.grid,
+        snap: settings.snap,
+        smartAlign: settings.smartAlign,
+        smartSpacing: settings.smartSpacing,
+      });
+    } catch (error) {
+      throw new Error(`Không thể đồng bộ bảng "${entry.name || entry.id}": ${error.message}`);
+    }
+    updated += 1;
+  }
+  return { total: entries.length, updated };
+}
+
 export function createBoard(name) {
   const b = blankBoard(name || `Bảng ${new Date().toLocaleString("vi-VN")}`);
   const isMigrated = safeGetString(WB_MIGRATION_KEY, null) === "1";
@@ -860,7 +888,9 @@ export function normalizeBoard(b) {
         startHead: VALID_CONN_HEAD.has(c.startHead) ? c.startHead : legacyHeads[0],
         endHead: VALID_CONN_HEAD.has(c.endHead) ? c.endHead : legacyHeads[1],
         dash: VALID_CONN_DASH.has(c.dash) ? c.dash : "",
-        ...(Number.isFinite(Number(c.bend)) ? { bend: Math.max(0, Math.min(150, Number(c.bend))) } : {}),
+        ...(Number.isFinite(Number(c.bend)) ? { bend: Math.max(-150, Math.min(150, Number(c.bend))) } : {}),
+        ...(Number.isFinite(Number(c.bendAlong)) ? { bendAlong: Math.max(-150, Math.min(150, Number(c.bendAlong))) } : {}),
+        ...(Number.isFinite(Number(c.routeOffset)) ? { routeOffset: Math.max(-2000, Math.min(2000, Number(c.routeOffset))) } : {}),
       };
     });
   // parentId trỏ tới id không tồn tại -> null, và chỉ node mới được làm parent

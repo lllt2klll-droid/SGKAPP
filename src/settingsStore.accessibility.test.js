@@ -3,7 +3,7 @@
 // readingRuler, preventFlashing, visualAlerts (xem applySettings để biết tác động).
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_SETTINGS, searchSettings, SETTINGS_SEARCH_INDEX, isReduceMotionEffective } from "./settingsStore.js";
+import { DEFAULT_SETTINGS, searchSettings, SETTINGS_SEARCH_INDEX, isReduceMotionEffective } from "./services/settingsStore.js";
 import { setReadingRuler, isReadingRulerEnabled } from "./accessibility/readingRuler.js";
 
 globalThis.__SGK_TEST__ = true;

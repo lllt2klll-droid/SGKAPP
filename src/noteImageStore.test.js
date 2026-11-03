@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 globalThis.__SGK_TEST__ = true;
 // Node không có indexedDB → noteImageStore phải fallback inline, không throw
 globalThis.indexedDB = undefined;
-const { default: indexedDBService } = await import("./indexedDB.js");
+const { default: indexedDBService } = await import("./data/indexedDB.js");
 assert.equal(indexedDBService.constructor.isAvailable(), false);
 
 if (typeof localStorage === "undefined") {
@@ -20,7 +20,7 @@ if (typeof localStorage === "undefined") {
   })();
 }
 
-const store = await import("./noteImageStore.js");
+const store = await import("./data/noteImageStore.js");
 const safe = await import("./safeStorage.js");
 
 describe("noteImageStore — fix bộ nhớ đầy ghi chú", () => {

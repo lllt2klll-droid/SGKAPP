@@ -1,7 +1,7 @@
 // P2 • test kiểm tra link (stub fetch, không chạm mạng thật)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkLinkStatus, countFailedLink } from "./webtoolsCheck.js";
+import { checkLinkStatus, countFailedLink } from "./data/webtoolsCheck.js";
 
 const okFetch = async () => ({});
 const failFetch = async () => { throw new Error("boom"); };

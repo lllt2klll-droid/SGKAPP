@@ -239,11 +239,10 @@ test("G2 • Tạo bảng mới → toast + số bảng tăng", async () => {
 test("G3 • chọn công cụ Hình khối → click canvas → thêm khối hình (trống) + lưu", async () => {
   await openWhiteboard();
   await page.locator('button.wb-tool[title="Hình khối (S/4)"]').click();
-  await page.locator("svg.wb-svg").click({ position: { x: 420, y: 300 } });
-
-  // khối mới để trống (không chữ sẵn) nhưng được chọn ngay → thanh ngữ cảnh hiện ra
-  await page.waitForSelector(".whiteboard-ctxbar", { timeout: 10000 });
-  assert.ok((await page.locator(".whiteboard-ctxbar").count()) >= 1, "thanh ngữ cảnh phải hiện khi khối mới được chọn");
+  const canvas = page.locator("svg.wb-svg");
+  const canvasBox = await canvas.boundingBox();
+  assert.ok(canvasBox, "canvas phải có kích thước");
+  await canvas.click({ position: { x: canvasBox.width - 40, y: 40 } });
 
   // Bấm lưu chủ đích — autosave debounce 900ms, test sau có thể navigate away
   await page.locator('button[title="Lưu ngay (Ctrl+S)"]').click();

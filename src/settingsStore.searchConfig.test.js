@@ -2,7 +2,7 @@
 // Lỗi #7: Ctrl+K từng tự match luôn (luôn fuzzy, bỏ qua caseSensitive/wholeWord).
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { applySearchConfig } from "./settingsStore.js";
+import { applySearchConfig } from "./services/settingsStore.js";
 
 globalThis.__SGK_TEST__ = true;
 

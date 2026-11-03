@@ -1,116 +1,139 @@
 # SGK Teacher Workspace
 
-Không gian làm việc của giáo viên tiểu học (lớp 1–5): thư viện SGK số, soạn giáo án/KHBD,
-hoạt động & phiếu học tập, ngân hàng câu hỏi, bảng trắng, quét ảnh AI, tìm kiếm toàn văn.
-**Chạy local/offline** — dữ liệu nằm ở localStorage + IndexedDB trên máy người dùng, không có cloud.
+> Ứng dụng không gian làm việc dành cho giáo viên tiểu học: đọc và quản lý học liệu, soạn dạy, nghiên cứu, theo dõi công việc và tạo tài nguyên lớp học.
+
+SGK Teacher Workspace là ứng dụng React chạy trên trình duyệt, có backend Node.js/Express để quản lý thư viện file và một số dịch vụ tích hợp. Dữ liệu cá nhân của ứng dụng được lưu trong trình duyệt; file sách được lưu trên máy chạy backend. Ứng dụng không tự đồng bộ dữ liệu lên cloud. Các tính năng Gemini, nhập nội dung từ URL và một số tài nguyên web cần kết nối Internet.
+
+## Tính năng
+
+- **Thư viện và đọc sách:** quản lý, lọc và đọc học liệu; lưu tiến độ, đánh dấu trang, ghi chú, từ vựng và tiếp tục đọc. Hỗ trợ PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, Markdown, HTML, EPUB và ảnh.
+- **Soạn dạy:** giáo án/KHBD, hoạt động, phiếu học tập và ngân hàng câu hỏi; hỗ trợ chỉnh sửa, tạo nội dung và xuất tài liệu.
+- **Nghiên cứu:** tìm kiếm trong thư viện, so sánh, ma trận, kiểm kê, thống kê ngôn ngữ, tài liệu tham khảo và bộ công cụ dữ liệu.
+- **Công cụ lớp học:** bảng trắng, quét vùng trang/ảnh, OCR, đọc nội dung thành tiếng, trợ lý AI và tạo sơ đồ tư duy.
+- **Quản lý công việc:** nhiệm vụ, ý tưởng, nhật ký thực tập và thống kê hoạt động.
+- **Dữ liệu và trợ giúp:** sao lưu/khôi phục dữ liệu trình duyệt, quản lý thùng rác, cài đặt, trợ giúp và kho công cụ web.
+- **PWA:** bản build có manifest và service worker; một số tài nguyên đã tải có thể dùng lại khi offline. Backend, file chưa cache và tính năng AI/Internet vẫn cần kết nối tương ứng.
 
 ## Công nghệ
 
-| Lớp | Thành phần |
+| Phần | Công nghệ |
 |---|---|
-| Frontend | React 19 + Vite 8 + PWA (Workbox precache), PDF.js (`pdfjs-dist`), Lucide icons |
-| Backend | Express + multer + cors (`server.js`, `127.0.0.1:5000`) — chỉ phục vụ file/OCR/content |
-| Kiểm thử | `oxlint` (lint), `node --test` (unit), `playwright-core` (e2e) |
-| Phụ trợ | `xlsx`, `docx`, `jszip`, `mammoth` (import/export tài liệu) |
+| Giao diện | React 19, Vite 8, Lucide React |
+| Đọc PDF và PWA | PDF.js, vite-plugin-pwa/Workbox |
+| Backend | Node.js, Express, multer, CORS |
+| Lưu trữ trình duyệt | localStorage và IndexedDB |
+| Tài liệu | `docx`, `mammoth`, `jszip`, `xlsx` |
+| Chất lượng | oxlint, `node:test`, Playwright Core |
 
-## Lệnh
+## Yêu cầu
+
+- Node.js tương thích với Vite 8 (khuyến nghị Node.js 20.19+ hoặc 22.12+).
+- npm đi kèm Node.js.
+- Trình duyệt hiện đại. Các bài e2e có thể cần trình duyệt tương thích Playwright.
+
+## Bắt đầu
+
+Từ thư mục dự án:
 
 ```bash
-npm run dev          # Vite dev server (127.0.0.1:5173, proxy /api → :5000)
-npm run dev:backend  # API server
-npm run dev:all      # cả hai (concurrently)
-npm start            # API server production (node server.js)
-npm run build        # build production + service worker
-npm run preview      # xem dist/
-npm run lint         # oxlint
-npm test             # unit/integration (node --test)
-npm run test:e2e     # e2e (cần dist/ đã build, port 5321)
-npm run start:bg     # start server nền (PowerShell)
+npm ci
+npm run dev:all
 ```
 
-## Cấu trúc
+Mở địa chỉ frontend do Vite in ra, mặc định `http://127.0.0.1:5173`. Backend chạy ở cổng `5000`; Vite chuyển tiếp `/api` và `/lesson-images` tới backend. Nếu cổng mặc định đang được dùng, Vite có thể tự chọn cổng khác.
 
+Để có sách trong thư viện, đặt file vào thư mục `books` cạnh thư mục `sgk-app` hoặc tải file qua giao diện. Backend tự tạo thư mục này nếu chưa có. Có thể đặt đường dẫn khác bằng biến `BOOKS_DIR`.
+
+Chạy frontend và backend riêng trong hai terminal:
+
+```bash
+npm run dev:backend
+npm run dev:frontend
 ```
+
+Tải file sách được giới hạn tối đa 80 MB mỗi file. Tên file được dùng để suy ra một phần metadata như lớp, môn và tập; có thể chỉnh lại thông tin trong ứng dụng.
+
+## Lệnh thường dùng
+
+| Lệnh | Tác dụng |
+|---|---|
+| `npm run dev:all` | Chạy backend và Vite cùng lúc |
+| `npm run dev:frontend` | Chạy riêng frontend Vite |
+| `npm run dev:backend` | Chạy riêng backend Express |
+| `npm run build` | Build frontend vào `dist/` |
+| `npm run preview` | Xem thử bản build bằng Vite Preview |
+| `npm start` | Chạy `server.js` |
+| `npm run start:bg` | Khởi chạy backend nền trên Windows |
+| `npm run lint` | Chạy oxlint |
+| `npm test` | Chạy unit/integration tests bằng `node:test` |
+| `npm run test:e2e` | Chạy các bài e2e trong `tests/e2e/` |
+
+`npm run preview` phục vụ bản frontend đã build; khi cần API, cần chạy backend riêng. `npm start` chạy backend Express. Trong quy trình deploy GitHub Pages hiện tại, workflow chỉ build và deploy frontend tĩnh; API cần được cung cấp riêng nếu muốn bật các tính năng phụ thuộc backend.
+
+## Cấu hình
+
+Các biến môi trường tùy chọn:
+
+| Biến | Dùng ở đâu | Tác dụng |
+|---|---|---|
+| `PORT` | Backend | Cổng Express, mặc định `5000` |
+| `BOOKS_DIR` | Backend | Thư mục lưu file thư viện; mặc định backend dò `../books` trước |
+| `ALLOWED_HOSTS` | Backend | Bổ sung hostname được phép truy cập backend, phân cách bằng dấu phẩy |
+| `WRITE_TOKEN` | Backend | Bật xác thực cho thao tác ghi/xóa khi backend được mở rộng ra ngoài máy cá nhân |
+| `VITE_API_BASE_URL` | Build frontend | Địa chỉ API khi frontend và backend không cùng origin |
+| `BASE_PATH` | Build frontend | Đường dẫn gốc khi deploy dưới một subpath; workflow Pages dùng `/SGKAPP/` |
+
+Không commit token hoặc khóa API vào repository. `WRITE_TOKEN` cần được cấu hình phù hợp cả ở server lẫn phía client theo `src/services/apiConfig.js`. Trợ lý AI cần Gemini API key; cấu hình trong phần Cài đặt của ứng dụng. Yêu cầu AI được gửi qua backend tới Gemini, vì vậy nội dung được chọn làm ngữ cảnh AI sẽ rời khỏi máy để xử lý bởi dịch vụ bên ngoài.
+
+## Dữ liệu và sao lưu
+
+- Cài đặt và dữ liệu nhẹ được lưu trong localStorage; dữ liệu lớn, chỉ mục và ảnh/blob được lưu trong IndexedDB của trình duyệt.
+- File sách nằm trên ổ đĩa của máy chạy backend, mặc định ở `../books` so với thư mục dự án.
+- Tính năng sao lưu trong ứng dụng dành cho dữ liệu trình duyệt. Hãy sao lưu riêng thư mục sách (`books/`) và giữ file backup ở nơi an toàn.
+- Xóa dữ liệu trình duyệt, xóa hồ sơ trình duyệt hoặc đổi trình duyệt có thể làm mất dữ liệu local chưa được xuất backup.
+- Không có tài khoản hay đồng bộ cloud tích hợp sẵn. Nếu tự triển khai backend cho nhiều thiết bị hoặc qua mạng, hãy giới hạn truy cập và cấu hình xác thực ghi/xóa trước khi sử dụng.
+
+## Cấu trúc dự án
+
+```text
 sgk-app/
-├── server.js              # Express API: /api/books (PDF, content), /api/health, OCR proxy
-├── vite.config.js         # Vite 8 + PWA + manualChunks (vendor/xlsx/docx/jszip/mammoth/...)
-├── index.html
-├── public/                # icons, audio/ui/*.wav, khbd templates
+├── server.js             # Express API và phục vụ thư viện file
+├── server/               # Bảo vệ request và kiểm thử backend
+├── vite.config.js        # Vite, PWA, proxy và cấu hình build
+├── public/               # Icon, âm thanh và tài nguyên tĩnh
 ├── src/
-│   ├── App.jsx            # APP SHELL: state toàn cục, nav, render view (~4.300 dòng; đo lại: Get-Content src/App.jsx | Measure-Object -Line)
-│   ├── core/              # 8 module "single source of truth" (xem docs/ARCHITECTURE.md)
-│   ├── components/        # UI dùng chung (FileDropzone, MobileBottomNav, ReaderMobileBar)
-│   ├── khbd/              # soạn giáo án: planModel, planAi, LessonPlanView, template...
-│   ├── scan/              # quét ảnh: ScanModal, scanCapture, scanStore, scanAIService
-│   ├── whiteboard/        # whiteboardStore, WhiteboardCanvas, imageStore (IDB blobs)
-│   ├── audio/             # soundManager (WebAudio synth + file .wav)
-│   ├── *View.jsx          # các view (lazy-loaded qua VIEW_REGISTRY)
-│   ├── storage.js         # lifecycle dữ liệu: backup/restore/wipe/migrate/removeBookData
-│   ├── safeStorage.js     # API localStorage an toàn (JSON validator, quota, backupCorrupted)
-│   └── indexedDB.js       # SGKAppDB (v5, 10 stores)
-├── tests/                 # node:test + tests/e2e (playwright-core)
-└── docs/                  # tài liệu thống nhất (xem dưới)
+│   ├── App.jsx           # Vỏ ứng dụng, điều hướng và trạng thái chính
+│   ├── core/             # Registry điều hướng/view, event bus, storage keys
+│   ├── views/            # Các màn hình chức năng
+│   ├── khbd/             # Soạn giáo án/KHBD
+│   ├── reader/            # Thành phần đọc sách
+│   ├── scan/              # Quét ảnh và xử lý scan
+│   ├── whiteboard/        # Bảng trắng và dữ liệu liên quan
+│   ├── audio/             # Âm thanh giao diện
+│   ├── services/          # API và dịch vụ ứng dụng
+│   └── safeStorage.js     # Tiện ích lưu trữ trình duyệt an toàn
+├── tests/e2e/             # Kiểm thử end-to-end
+└── docs/                  # Tài liệu kỹ thuật
 ```
 
-> **Backup:** bản snapshot đầy đủ nằm ở thư mục cha: `../sgk-app-backup-<ngày>.zip`
-> (đã thay các bản `_backup/` và `sgk-app.zip` cũ ngày 2026-10-01). Giải nén đè để hoàn nguyên.
+## Kiến trúc tóm tắt
 
-## Kiến trúc nhanh
+- `src/core/navigationRegistry.js` và `src/core/viewRegistry.js` là nguồn cấu hình điều hướng và màn hình.
+- `src/core/appEvents.js` cung cấp event bus dùng chung giữa các module.
+- Dữ liệu trình duyệt được chia theo kích thước/loại: localStorage cho dữ liệu nhẹ, IndexedDB cho dữ liệu lớn, ảnh và chỉ mục.
+- Backend Express quản lý file sách, nội dung văn bản và các API tích hợp. Vite proxy API tới backend khi phát triển.
+- Các màn hình được đăng ký tập trung và phần lớn tải lười để giảm lượng mã tải ban đầu.
 
-```
-App.jsx ──► core/navigationRegistry (1 nguồn nav) ──► core/viewRegistry (26 view, lazy)
-        ──► core/appEvents (1 bus, 47 events; chỉ appEvents.js được dispatch window)
-        ──► core/storageKeys + safeStorage/storage (storage canonical)
-        ──► core/bookContext (sourceRef chuẩn) ──► appEvents.emit (gọi module khác)
-        ──► storage + indexedDB (lifecycle: backup/restore/wipe/delete cascade + integrity)
-```
+## Tài liệu khác
 
-- **Storage:** setting/nhẹ → localStorage; dữ liệu lớn & blob (clips, refs, scan, whiteboard, OCR, index) → IndexedDB.
-- **Event:** mọi module phát qua `appEvents.emit(...)`; `window.dispatchEvent` chỉ nằm trong `core/appEvents.js` (bridge cho legacy listener).
-- **Xóa sách:** `storage.removeBookData(file)` → LS per-book + IDB + `whiteboardStore.purgeBookRefs()` + purge blob ảnh mồ côi.
-
-## Trạng thái kiểm chứng (2026-10-16 — chạy lại sau đợt hoàn thiện, số liệu cũ xem docs/history/)
-
-| Kiểm tra | Kết quả |
+| Tài liệu | Nội dung |
 |---|---|
-| `npm run lint` | **0 warnings / 0 errors** (204 files, 89 rules) |
-| `npm test` | **536/536 pass**, 75 suites, 0 fail |
-| `npm run build` | OK — PWA precache **82 entries**, 0 cảnh báo |
-| `npm run test:e2e` | Chạy khi cần (`tests/e2e`, cần dist + port 5321) |
-| Kích thước code | `src/` 146 module không tính test, **~71.000 dòng** |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Kiến trúc, điều hướng, event, lưu trữ và vòng đời dữ liệu |
+| [docs/TECHNICAL_DEBT.md](docs/TECHNICAL_DEBT.md) | Nợ kỹ thuật và các hạng mục theo dõi |
+| [docs/LEGACY_DEPRECATION.md](docs/LEGACY_DEPRECATION.md) | Phân loại và kế hoạch loại bỏ thành phần legacy |
+| [docs/AUDIO.md](docs/AUDIO.md) | Thiết kế hệ thống âm thanh |
+| [docs/history/](docs/history/) | Báo cáo và baseline lịch sử; không phải trạng thái kiểm thử hiện tại |
 
-> Số liệu cũ (474/474, 37/37 e2e, 78 precache…) đã lỗi thời sau các đợt sửa — xem baseline gốc ở `docs/history/` chỉ để đối chiếu.
+## Giấy phép
 
-> 3 file `src/core/` từng 0 importer (`storageAdapter`, `appContext`, `integration`, 471 dòng)
-> đã đối chiếu rồi chuyển sang `docs/_attic/src-core/` ngày 2026-10-01 (repo không có git).
-
-## Thay đổi 2026-10-01 — không auto-index khi mở app
-
-Trước đây `App.jsx` **tự động** tải + đọc toàn bộ thư viện để lập chỉ mục tìm kiếm mỗi lần
-mở app trên trình duyệt chưa có chỉ mục → đo được **342 MB / 12 giây** (thư viện 97 PDF, 1,4 GB).
-
-Giờ chỉ mục tự động **tắt mặc định** (`settingsStore.js → library.autoIndexNewBooks = false`),
-và `App.jsx` tôn trọng setting này cho **mọi** sách (hết nhánh "sách mới luôn index").
-
-| Việc | Nơi |
-|---|---|
-| Bật lại (nếu muốn) | Cài đặt → Thư viện → **Tự index sách mới** |
-| Lập chỉ mục thủ công | tab **Tìm toàn văn** → nút **Dựng chỉ mục** (1 sách hoặc cả thư viện) |
-| Hoàn nguyên code | giải nén `../sgk-app-backup-*.zip` đè lên `sgk-app/` |
-
-Sau thay đổi (thư viện mở 12 giây, cùng máy): **21 MB** (chỉ tải bìa trang 1 của sách đang thấy)
-thay vì 342 MB.
-
-
-## Tài liệu
-
-| File | Nội dung |
-|---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Kiến trúc hiện tại: nav/view/event/storage/IDB/integration/lifecycle |
-| [`docs/TECHNICAL_DEBT.md`](docs/TECHNICAL_DEBT.md) | Nợ kỹ thuật: đã đóng / còn lại / có chủ đích + cách verify |
-| [`docs/LEGACY_DEPRECATION.md`](docs/LEGACY_DEPRECATION.md) | Bảng phân loại legacy A/B/C + việc cần làm ở major tiếp theo |
-| [`docs/AUDIO.md`](docs/AUDIO.md) | Hệ thống âm thanh: manager, event, settings, asset |
-| [`docs/history/`](docs/history/) | **Baseline lịch sử** (Phase 8 audit/final report, Source Inventory) — số liệu cũ, chỉ để đối chiếu |
-
-> 8 file báo cáo rời rạc ở root (APP_INTEGRATION_REPORT, ARCHITECTURE_AUDIT, PHASE8_*, SOURCE_INVENTORY,
-> AUDIO_*, LEGACY_DEPRECATION) đã được gộp/và chuyển về `docs/` ngày 2026-09-30.
+Repository hiện khai báo `UNLICENSED` trong `package.json`. Hãy xin phép chủ sở hữu trước khi phân phối hoặc sử dụng lại mã nguồn.

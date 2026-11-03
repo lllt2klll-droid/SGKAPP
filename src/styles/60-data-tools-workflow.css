@@ -1,0 +1,258 @@
+.datatools-view .dt-header {
+  align-items: center;
+  background:
+    linear-gradient(130deg, color-mix(in srgb, var(--color-action) 10%, transparent), transparent 58%),
+    var(--surface);
+}
+
+.datatools-view .dt-header-actions {
+  flex: 0 0 auto;
+}
+
+.datatools-view .dt-info {
+  align-items: center;
+  padding: 0.2rem 0.15rem;
+}
+
+.datatools-view .dt-card {
+  scroll-margin-top: 1rem;
+}
+
+.dt-card-header-note {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.dt-card-header-note.danger {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border-color));
+  border-radius: 999px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+
+.dt-backup-card .dt-card-body,
+.dt-restore-card .dt-card-body,
+.dt-wipe-card .dt-card-body,
+.dt-auto-backup-card .dt-card-body,
+.dt-trash-card .dt-card-body {
+  gap: 0.8rem;
+}
+
+.dt-backup-card .dt-actions {
+  margin-top: 0;
+}
+
+.dt-backup-card .btn-primary {
+  min-width: 190px;
+}
+
+.dt-import-review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--color-action) 28%, var(--border-color));
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--color-action) 7%, transparent), transparent 60%),
+    var(--surface);
+}
+
+.dt-import-review-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.dt-import-review-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--text-dark);
+  font-size: 0.92rem;
+}
+
+.dt-import-review-heading h3 svg {
+  color: var(--color-action);
+}
+
+.dt-import-review-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.dt-preview-body {
+  padding: 0;
+}
+
+.dt-preview-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-mid);
+  background: var(--surface-soft);
+  font-size: 0.78rem;
+}
+
+.dt-preview-meta b {
+  color: var(--text-dark);
+}
+
+.dt-preview-meta .dt-preview-label {
+  grid-column: 1 / -1;
+}
+
+.dt-preview-keys {
+  max-height: 180px;
+  overflow: auto;
+  padding: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.dt-preview-keys-title,
+.dt-preview-indexed > b {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--text-dark);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.dt-preview-keys .tag-pill,
+.dt-preview-indexed .tag-pill {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+}
+
+.dt-preview-indexed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.dt-preview-indexed > b {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}
+
+.dt-import-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: var(--text-dark);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dt-import-confirm input {
+  flex: 0 0 auto;
+  margin-top: 0.16rem;
+  accent-color: var(--color-action);
+}
+
+.dt-import-actions {
+  justify-content: flex-end;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.dt-import-actions .btn-primary {
+  min-width: 190px;
+}
+
+.dt-progress-panel {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.dt-progress-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-mid);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.dt-progress-panel .dt-hint {
+  margin: 0;
+}
+
+.dt-wipe-card {
+  border-color: color-mix(in srgb, var(--danger) 26%, var(--border-color));
+}
+
+.dt-wipe-card .dt-card-header {
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface-soft));
+}
+
+.dt-wipe-card .dt-card-header-icon {
+  color: var(--danger);
+}
+
+.dt-wipe-card .dt-actions {
+  align-items: center;
+}
+
+.dt-wipe-card .dt-actions .dt-hint {
+  flex: 1 1 240px;
+}
+
+.dt-wipe-card .btn-danger {
+  min-height: 38px;
+}
+
+.dt-msg {
+  align-items: flex-start;
+}
+
+.dt-msg > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dt-msg > .btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+  .dt-card-header-note:not(.danger) {
+    flex-basis: 100%;
+    margin-left: 36px;
+  }
+
+  .dt-preview-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .dt-import-review-heading {
+    align-items: flex-start;
+  }
+
+  .dt-import-actions .btn-primary,
+  .dt-backup-card .btn-primary {
+    width: 100%;
+  }
+}

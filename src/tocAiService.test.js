@@ -106,7 +106,7 @@ test("cleanTocAiItems: bảng mục lục Âm nhạc — dòng Chủ đề khôn
 });
 
 test("roundtrip: AI items → exportTocSimple → parseTocExcel đọc lại đúng (giữ đủ trường)", async () => {
-  const { exportTocSimple, parseTocExcel } = await import("./tocExcel.js");
+  const { exportTocSimple, parseTocExcel } = await import("./data/tocExcel.js");
   const items = [{ title: "Bài 1", page: 15 }, { title: "Bài 2", page: 20 }];
   const buf = await exportTocSimple([{ items }]);
   const books = await parseTocExcel(buf, {

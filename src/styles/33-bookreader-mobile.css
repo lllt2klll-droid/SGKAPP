@@ -139,7 +139,7 @@
   }
   .reader-toc-search input {
     min-height: 44px;
-    font-size: 16px;
+    font-size: 1rem;
     border-radius: 12px;
   }
   .toc-item {
@@ -207,7 +207,7 @@
   }
   .ai-tab-content .form-control,
   .chat-input {
-    font-size: 16px;
+    font-size: 1rem;
     min-height: 44px;
   }
   .chat-input-container {

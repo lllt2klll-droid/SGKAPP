@@ -1,9 +1,9 @@
 // ── Scan Store — IndexedDB + localStorage for scan assets ───────────────
 // Lưu ảnh cắt + metadata để hiển thị "Scan gần đây" và tái sử dụng.
 // Ảnh lớn -> IndexedDB (scan_assets), metadata nhỏ -> localStorage list (50 mục).
-import { makeId } from "../storage.js";
-import indexedDBService, { STORES } from "../indexedDB.js";
-import { resolveBookId } from "../bookIdentity.js";
+import { makeId } from "../data/storage.js";
+import indexedDBService, { STORES } from "../data/indexedDB.js";
+import { resolveBookId } from "../reader/bookIdentity.js";
 import { safeGetJSON, safeSetJSON, safeRemove } from "../safeStorage.js";
 
 const SCAN_KEY = "sgk_scans_v1";

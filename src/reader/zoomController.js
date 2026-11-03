@@ -33,6 +33,13 @@ export function calcWheelZoom(oldZoom, deltaY, deltaMode = 0) {
   return clampZoom(parseFloat(raw.toFixed(3)));
 }
 
+export function isWheelZoomGesture({ ctrlKey, metaKey, deltaX, deltaY, deltaMode }) {
+  if (ctrlKey || metaKey) return true;
+  if (deltaX !== 0) return false;
+  // Mouse wheels are commonly reported as line deltas, or as large discrete pixel steps.
+  return deltaMode !== 0 || (Number.isInteger(deltaY) && Math.abs(deltaY) >= 50);
+}
+
 export function zoomIn(current) {
   const c = Number(current) || 1;
   // geometric step: 12% per click, feels natural at any scale, keeps free zoom

@@ -1,7 +1,7 @@
 // ─── Whiteboard Image Store — Blob trong IndexedDB, board JSON chỉ lưu imageId ───
 // Unified into central SGKAppDB (STORES.WB_IMAGES) for backup/wipe coverage.
 // Keeps legacy SGKWhiteboardDB fallback + one-time migration.
-import indexedDBService, { STORES } from "../indexedDB.js";
+import indexedDBService, { STORES } from "../data/indexedDB.js";
 
 const LEGACY_DB_NAME = "SGKWhiteboardDB";
 const LEGACY_STORE = "wb_images";

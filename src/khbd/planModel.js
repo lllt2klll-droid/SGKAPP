@@ -3,9 +3,9 @@
 // Mục III: hoạt động chia 4 phân khu A/B/C/D, mỗi hoạt động có các bước GV/HS.
 import { STORAGE_KEYS } from "../core/storageKeys.js";
 import { appEvents, AppEvents, DataDomains } from "../core/appEvents.js";
-import { emitLessonPlanCreated, emitLessonPlanEdited } from "../missionEvents.js";
+import { emitLessonPlanCreated, emitLessonPlanEdited } from "../data/missionEvents.js";
 import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, listKeys } from "../safeStorage.js";
-import { moveToTrash, TRASH_TYPE } from "../trashStore.js";
+import { moveToTrash, TRASH_TYPE } from "../data/trashStore.js";
 // P0 • bắn event domain riêng (alias tự sinh DATA_UPDATED + qua cross-tab).
 // Trước đây save/duplicate/delete plan hoàn toàn im lặng với bus.
 function notifyPlanUpdated(op, id) {

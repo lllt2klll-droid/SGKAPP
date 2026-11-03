@@ -581,7 +581,7 @@ textarea:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   box-shadow: none;
   transition: background-color 0.15s ease;

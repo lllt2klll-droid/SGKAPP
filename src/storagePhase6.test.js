@@ -11,10 +11,10 @@ globalThis.URL={ createObjectURL:()=>'blob:test', revokeObjectURL:()=>{} };
 globalThis.Blob=class Blob{ constructor(parts,opts){this.parts=parts; this.type=opts?.type} };
 globalThis.indexedDB=undefined;
 
-const { BACKUP_KEYS, isBackupKey, isCacheKey, exportBackup, importBackup, wipeAppData, parseBackupPreview } = await import('./storage.js');
-const { STORES } = await import('./indexedDB.js');
-const { addQuestion, getQuestions } = await import('./teachingDB.js');
-const { SYNC_MODE } = await import('./syncService.js');
+const { BACKUP_KEYS, isBackupKey, isCacheKey, exportBackup, importBackup, wipeAppData, parseBackupPreview } = await import('./data/storage.js');
+const { STORES } = await import('./data/indexedDB.js');
+const { addQuestion, getQuestions } = await import('./data/teachingDB.js');
+const { SYNC_MODE } = await import('./services/syncService.js');
 
 describe('PHASE 6 — Backup/Restore/Wipe/Sync', ()=>{
   beforeEach(()=> localStorage.clear());
@@ -137,7 +137,7 @@ describe('PHASE 6 — Backup/Restore/Wipe/Sync', ()=>{
 
   it('sync is LOCAL_SIMULATION, not real cloud', async()=>{
     assert.equal(SYNC_MODE, 'LOCAL_SIMULATION');
-    const sync = (await import('./syncService.js')).default;
+    const sync = (await import('./services/syncService.js')).default;
     const result = await sync.performSync('questions');
     assert.equal(result.success, true);
     // Metadata should contain mode
@@ -149,7 +149,7 @@ describe('PHASE 6 — Backup/Restore/Wipe/Sync', ()=>{
   it('bookmarks sync uses correct source sgk_bookmarks, not notes_', async()=>{
     localStorage.setItem('sgk_bookmarks', JSON.stringify({'book.pdf':[1,2,3]}));
     localStorage.setItem('notes_book.pdf_1', 'note content');
-    const sync = (await import('./syncService.js')).default;
+    const sync = (await import('./services/syncService.js')).default;
     const bm = sync.collectData('bookmarks');
     // Should be from sgk_bookmarks, not notes_
     assert.deepEqual(bm, {'book.pdf':[1,2,3]});

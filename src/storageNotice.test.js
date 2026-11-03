@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { storageNoticeLevel, storageNoticeText, STORAGE_WARN_PCT, STORAGE_DANGER_PCT } = await import('./storageNotice.js');
+const { storageNoticeLevel, storageNoticeText, STORAGE_WARN_PCT, STORAGE_DANGER_PCT } = await import('./data/storageNotice.js');
 
 describe('A1 • Ngưỡng cảnh báo bộ nhớ trình duyệt', () => {
   it('ngưỡng cố định: warn 90%, danger 98%', () => {

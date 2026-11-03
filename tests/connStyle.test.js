@@ -105,6 +105,22 @@ test("curve bend: 0 là thẳng, % lớn cong hơn, thiếu là auto", async () 
   // hit-test theo đúng độ cong truyền vào
   const g = eng.connectorGeom(a, b, "curve", "auto", "auto", 150);
   assert.ok(eng.distToConnector(g.pts[2].x, g.pts[2].y, a, b, "curve", "auto", "auto", 150) < 1);
+  const reverse = eng.connectorGeom(a, b, "curve", "auto", "auto", -100);
+  const midpoint = { x: (reverse.pts[0].x + reverse.pts[4].x) / 2, y: (reverse.pts[0].y + reverse.pts[4].y) / 2 };
+  assert.ok(Math.hypot(reverse.control.x - midpoint.x, reverse.control.y - midpoint.y) > 5, "điểm điều khiển cong sang phía đối diện");
+  const shifted = eng.connectorGeom(a, b, "curve", "auto", "auto", 100, undefined, 60);
+  assert.notDeepEqual(shifted.control, g.control, "điểm điều khiển dịch được dọc theo đường nối");
+});
+
+test("elbow route point: kéo điểm điều khiển dịch nhánh giữa", async () => {
+  const eng = await import("../src/whiteboard/mindmapEngine.js");
+  const a = { x: 0, y: 0, width: 100, height: 60 };
+  const b = { x: 300, y: 100, width: 100, height: 60 };
+  const base = eng.connectorGeom(a, b, "elbow");
+  const shifted = eng.connectorGeom(a, b, "elbow", "auto", "auto", undefined, 40);
+  assert.equal(base.controlAxis, "x");
+  assert.equal(shifted.control.x - base.control.x, 40);
+  assert.ok(eng.distToConnector(shifted.control.x, shifted.control.y, a, b, "elbow", "auto", "auto", undefined, 40) < 1);
 });
 
 test("normalizeBoard: giữ type curve + head/dash mới", async () => {
@@ -119,7 +135,7 @@ test("normalizeBoard: giữ type curve + head/dash mới", async () => {
   assert.equal(b.connectors[0].type, "curve");
   assert.equal(b.connectors[0].startHead, "diamond");
   assert.equal(b.connectors[0].dash, "6 4");
-  // bend clamp 0..150, thiếu thì bỏ key (auto)
+  // bend cho phép uốn sang hai phía; thiếu thì bỏ key (auto)
   const b3 = store.normalizeBoard({
     objects: [
       { id: "a", kind: "node", x: 0, y: 0, width: 100, height: 60, text: "A" },
@@ -127,11 +143,16 @@ test("normalizeBoard: giữ type curve + head/dash mới", async () => {
     ],
     connectors: [
       { id: "c1", fromId: "a", toId: "b", type: "curve", bend: 999 },
-      { id: "c2", fromId: "a", toId: "b", type: "curve" },
+      { id: "c2", fromId: "a", toId: "b", type: "curve", bend: -999, bendAlong: -999 },
+      { id: "c3", fromId: "a", toId: "b", type: "elbow", routeOffset: 2400 },
+      { id: "c4", fromId: "a", toId: "b", type: "curve" },
     ],
   });
   assert.equal(b3.connectors[0].bend, 150);
-  assert.ok(!("bend" in b3.connectors[1]), "thiếu bend = auto, không lưu key");
+  assert.equal(b3.connectors[1].bend, -150);
+  assert.equal(b3.connectors[1].bendAlong, -150);
+  assert.equal(b3.connectors[2].routeOffset, 2000);
+  assert.ok(!("bend" in b3.connectors[3]), "thiếu bend = auto, không lưu key");
   // type lạ vẫn fallback arrow như cũ
   const b2 = store.normalizeBoard({
     objects: [

@@ -1,9 +1,102 @@
 // ── Scan AI Service — phân tích vùng SGK và tạo học liệu ────────────────
 // Uses aiService.js for all AI calls (consistent error handling, retry, timeout).
-import aiService, { getFriendlyErrorMessage } from "../aiService.js";
-import { loadSettings } from "../settingsStore.js";
+import aiService, { getFriendlyErrorMessage } from "../ai/aiService.js";
+import { loadSettings } from "../services/settingsStore.js";
 import { dataUrlToBase64 } from "./scanCapture.js";
-import { getGeminiApiKey } from "../storage.js";
+import { getGeminiApiKey } from "../data/storage.js";
+import { apiUrl } from "../services/apiConfig.js";
+
+const IMAGE_GENERATION_MODEL = "gemini-3.1-flash-image";
+
+function toImagePart(dataUrl) {
+  const match = String(dataUrl || "").match(/^data:(image\/(?:png|jpeg|webp));base64,([\s\S]+)$/i);
+  if (!match) throw new Error("Ảnh nguồn không hợp lệ. Hãy crop lại ảnh rồi thử lại.");
+  return { type: "image", mime_type: match[1].toLowerCase(), data: match[2] };
+}
+
+export async function generateTeachingImage({
+  sourceImage,
+  prompt,
+  aspectRatio,
+  imageSize = "1K",
+  referenceImages = [],
+  signal,
+}) {
+  if (!sourceImage) throw new Error("Thiếu ảnh crop dùng làm nguồn thiết kế.");
+  if (!String(prompt || "").trim()) throw new Error("Hãy nhập mô tả ảnh muốn tạo.");
+  if (referenceImages.length > 4) throw new Error("Chỉ có thể dùng tối đa 4 ảnh tham khảo.");
+  const imageParts = [toImagePart(sourceImage), ...referenceImages.map(toImagePart)];
+
+  const apiKey = getApiKeySafe();
+  if (!apiKey) throw new Error("Chưa có API Key Gemini. Vào Cài đặt → AI để nhập khóa.");
+
+  const input = [
+    { type: "text", text: `${prompt.trim()}\n\nẢnh tiếp theo là vùng crop từ sách và là nguồn kiến thức chính. Những ảnh sau đó chỉ là ảnh tham khảo; không thay thế hay làm sai lệch nội dung của ảnh crop.` },
+    ...imageParts,
+  ];
+
+  let response;
+  try {
+    response = await fetch(apiUrl("/api/gemini/image"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-gemini-key": apiKey,
+      },
+      body: JSON.stringify({
+        model: IMAGE_GENERATION_MODEL,
+        input,
+        response_format: {
+          type: "image",
+          mime_type: "image/jpeg",
+          aspect_ratio: aspectRatio,
+          image_size: imageSize,
+        },
+        generation_config: {
+          max_output_tokens: 32768,
+          temperature: 0.7,
+        },
+        store: false,
+      }),
+      signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    throw new Error("Không kết nối được Gemini. Hãy kiểm tra mạng và thử lại.");
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = typeof data?.error === "string" ? data.error : data?.error?.message;
+    throw new Error(message || `Gemini không tạo được ảnh (HTTP ${response.status}).`);
+  }
+
+  const outputBlocks = [
+    ...(Array.isArray(data?.outputs) ? data.outputs : []),
+    ...(Array.isArray(data?.output) ? data.output : []),
+    ...(Array.isArray(data?.steps)
+      ? data.steps
+        .filter((step) => step?.type === "model_output")
+        .flatMap((step) => Array.isArray(step.content) ? step.content : [])
+      : []),
+  ];
+  const imagePart = data?.output_image || outputBlocks.find((part) => part?.type === "image" || part?.data);
+  const imageData = imagePart?.data || imagePart?.inlineData?.data || imagePart?.inline_data?.data;
+  if (!imageData) {
+    const text = [data?.output_text, ...outputBlocks.map((part) => part?.text)].filter(Boolean).join("\n");
+    const finishReason = data?.finish_reason || data?.finishReason;
+    throw new Error(text || (String(finishReason).toUpperCase() === "MAX_TOKENS"
+      ? "Gemini đã chạm giới hạn đầu ra. Hãy rút gọn prompt rồi thử lại."
+      : "Gemini không trả về ảnh. Hãy thử prompt khác hoặc kiểm tra model/API Key."));
+  }
+
+  const mimeType = imagePart.mime_type || imagePart.mimeType || imagePart.inlineData?.mimeType || imagePart.inline_data?.mime_type || "image/png";
+  return {
+    dataUrl: `data:${mimeType};base64,${imageData}`,
+    mimeType,
+    text: [data?.output_text, ...outputBlocks.map((part) => part?.text)].filter(Boolean).join("\n"),
+  };
+}
 
 function getModel() {
   try { return loadSettings().ai?.model || "gemini-2.5-flash"; } catch { return "gemini-2.5-flash"; }

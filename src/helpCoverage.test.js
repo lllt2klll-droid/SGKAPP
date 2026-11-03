@@ -7,9 +7,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const read = (rel) => fs.readFileSync(path.join(__dirname, rel), "utf8");
+const read = (rel) => fs.readFileSync(path.join(__dirname, rel), "utf8").replace(/\r\n/g, "\n");
 
-const helpSrc = read("HelpView.jsx");
+const helpSrc = read(path.join("views", "HelpView.jsx"));
 const navSrc = read(path.join("core", "navigationRegistry.js"));
 
 // ── parsers (text-based, không import JSX/React) ─────────────────────

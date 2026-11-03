@@ -136,7 +136,7 @@
   .cell-clamp { max-width: 52vw; }
 
   /* --- Form / nút chuẩn cảm ứng, chống iOS auto-zoom --- */
-  input, select, textarea { font-size: 16px; }
+  input, select, textarea { font-size: 1rem; }
   .form-input, .form-control, .search-input, .form-select, .form-textarea { min-height: 44px; }
   select.form-input, select.form-control, .sort-select { font-size: 0.84rem; }
   .btn { min-height: 44px; }

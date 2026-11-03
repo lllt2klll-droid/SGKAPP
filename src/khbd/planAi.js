@@ -3,8 +3,8 @@
 // thời lượng + phương pháp + phân hóa) → snapshot trang (chữ + ảnh) →
 // buildLessonPrompt → Gemini (JSON thuần) → aiJsonToPlan → lưu kho khbd_v2
 // → mở trong module Giáo án ĐÃ ĐIỀN ĐẦY ĐỦ (không khung trống).
-import { mkActivity, importLegacyPlan } from "./planModel";
-import { normalizeBMinutes, splitMinutes } from "./planFromPages";
+import { mkActivity, importLegacyPlan } from "./planModel.js";
+import { normalizeBMinutes, splitMinutes } from "./planFromPages.js";
 
 export const LESSON_METHODS = ["Trực quan", "Hỏi đáp", "Thảo luận nhóm", "Trải nghiệm"];
 

@@ -11,7 +11,7 @@ globalThis.URL={ createObjectURL:()=>'blob:test', revokeObjectURL:()=>{} };
 globalThis.Blob=class Blob{ constructor(parts,opts){this.parts=parts; this.type=opts?.type} };
 globalThis.indexedDB=undefined;
 
-const { migrateBookData, removeBookData } = await import('./storage.js');
+const { migrateBookData, removeBookData } = await import('./data/storage.js');
 
 describe('BOOK RENAME MIGRATION — P0 critical', ()=>{
   beforeEach(()=> localStorage.clear());
@@ -110,7 +110,7 @@ describe('BOOK RENAME MIGRATION — P0 critical', ()=>{
   });
 
   it('isExactBookKey prevents false positives (Math.pdf vs Math.pdf-old)', async()=>{
-    const { isExactBookKey } = await import('./storage.js');
+    const { isExactBookKey } = await import('./data/storage.js');
     assert.equal(isExactBookKey('ocr_Math.pdf_1', 'ocr_', 'Math.pdf'), true);
     assert.equal(isExactBookKey('ocr_Math.pdf-old_1', 'ocr_', 'Math.pdf'), false);
     assert.equal(isExactBookKey('sgk_marks_Math.pdf', 'sgk_marks_', 'Math.pdf'), true);

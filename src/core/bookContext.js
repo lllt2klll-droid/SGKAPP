@@ -4,7 +4,7 @@
 // re-deriving it differently.
 
 import React, { createContext, useContext, useMemo } from "react";
-import { chapterForPage as _chapterForPage, citationFor as _citationFor } from "../researchDB.js";
+import { chapterForPage as _chapterForPage, citationFor as _citationFor } from "../data/researchDB.js";
 
 export const BookContext = createContext(null);
 

@@ -34,7 +34,7 @@ const {
   parseAiQuestions,
   parseAiMeanings,
   chunked,
-} = await import("./vocabService.js");
+} = await import("./services/vocabService.js");
 
 const {
   getVocab,
@@ -43,7 +43,7 @@ const {
   updateVocabMeaning,
   removeVocabEntry,
   restoreVocabEntries,
-} = await import("./userdata.js");
+} = await import("./data/userdata.js");
 
 const DAY = 86400000;
 

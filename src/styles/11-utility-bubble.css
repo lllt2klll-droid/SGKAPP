@@ -1104,6 +1104,7 @@
 /* Note Toolbar */
 .note-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.6rem;
@@ -1206,6 +1207,27 @@
 .note-content-editable u {
   text-decoration: underline;
   color: var(--color-action, var(--primary));
+}
+
+.note-content-editable ul,
+.note-content-editable ol,
+.note-popup-body ul,
+.note-popup-body ol {
+  margin: 0.35rem 0;
+  padding-left: 1.5rem;
+}
+
+.note-content-editable blockquote,
+.note-popup-body blockquote {
+  margin: 0.45rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-mid);
+}
+
+.note-content-editable p,
+.note-popup-body p {
+  margin: 0.25rem 0;
 }
 
 .note-content-editable s {

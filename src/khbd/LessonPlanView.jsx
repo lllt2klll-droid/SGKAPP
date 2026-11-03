@@ -13,23 +13,23 @@ import {
   mkPlan, mkActivity, mkStep, makeKhbdId, SECTIONS, SECTION_LABEL,
   getPlans, getPlan, savePlan, deletePlan, duplicatePlan,
   clearLegacyData, hasLegacyData, reassignSectionsByName,
-} from "./planModel";
+} from "./planModel.js";
 import {
   PHASE_TO_SEC, numMin, planMinutes, questionToStep, bankActivityToNew,
-} from "./khbdUtils";
+} from "./khbdUtils.js";
 import {
   loadPendingPayload, clearPendingPayload, buildPlanFromPages, MAX_RANGE_PAGES, splitMinutes,
-} from "./planFromPages";
-import { exportPlanDocx } from "./templateEngine";
-import { fillSampleLessonPlan } from "../sampleData";
-import aiService, { getFriendlyErrorMessage } from "../aiService";
-import { getGeminiApiKey } from "../storage";
-import { loadSettings } from "../settingsStore";
-import { getQuestions, getActivities } from "../teachingDB";
+} from "./planFromPages.js";
+import { exportPlanDocx } from "./templateEngine.js";
+import { fillSampleLessonPlan } from "../data/sampleData.js";
+import aiService, { getFriendlyErrorMessage } from "../ai/aiService.js";
+import { getGeminiApiKey } from "../data/storage.js";
+import { loadSettings } from "../services/settingsStore.js";
+import { getQuestions, getActivities } from "../data/teachingDB.js";
 import {
   compressImageFile, makeImgId, IMG_MAX_PER_SIDE, PLAN_MAX_BYTES, estimatePlanBytes,
-} from "./khbdImages";
-import LessonUrlImport, { SourcePreview } from "./LessonUrlImport";
+} from "./khbdImages.js";
+import LessonUrlImport, { SourcePreview } from "./LessonUrlImport.jsx";
 import "./khbd.css";
 
 function TextInput({ value, onChange, placeholder }) {
@@ -55,7 +55,7 @@ function ListEditor({ items, onChange, placeholder, addLabel }) {
           <span className="khbd-bullet">{typeof v === "string" && v.trim().startsWith("+") ? "" : "+"}</span>
           <input className="form-control" value={v} placeholder={placeholder}
             onChange={(e) => set(i, e.target.value)} />
-          <button className="btn btn-danger btn-xs khbd-del" onClick={() => del(i)} title="Xóa dòng">?</button>
+          <button className="btn btn-danger btn-xs khbd-del" onClick={() => del(i)} title="Xóa dòng" aria-label="Xóa dòng"><Trash2 size={13} aria-hidden="true" /></button>
         </div>
       ))}
       <button className="khbd-add-btn" onClick={add}><Plus size={12} /> {addLabel || "Thêm dòng"}</button>
@@ -143,7 +143,7 @@ function StepSide({ label, text, placeholder, imgs, onText, onFiles, onRemoveImg
             {images.map((im) => (
               <span key={im.id} className="khbd-thumb">
                 <img src={im.dataUrl} alt={im.name || "ảnh minh họa"} />
-                <button className="khbd-thumb-x" title="Xóa ảnh" onClick={() => onRemoveImg(im.id)}>?</button>
+                <button className="khbd-thumb-x" title="Xóa ảnh" aria-label="Xóa ảnh" onClick={() => onRemoveImg(im.id)}><Trash2 size={12} aria-hidden="true" /></button>
               </span>
             ))}
           </div>
@@ -210,7 +210,7 @@ function ActivityCard({ act, index, onPatch, onDelete, onMove, onDuplicate, onRe
             <div key={s.id} className="khbd-step">
               <div className="khbd-step-head">
                 <span>Bước {i + 1}</span>
-                <button className="btn btn-danger btn-xs khbd-del" onClick={() => delStep(s.id)}>?</button>
+                <button className="btn btn-danger btn-xs khbd-del" onClick={() => delStep(s.id)} title="Xóa bước" aria-label="Xóa bước"><Trash2 size={13} aria-hidden="true" /></button>
               </div>
               <div className="khbd-grid2">
                 <StepSide label="Hoạt động của GV" text={s.gv} placeholder="Giáo viên..."
@@ -328,8 +328,8 @@ function FromPagesWizard({
             <input className="form-control" type="number" min={1} max={5} value={r.steps} title="Số bước (1–5)" style={{ maxWidth: 54 }}
               onChange={(e) => setWzB((prev) => prev.map((x, j) => (j === i ? { ...x, steps: e.target.value } : x)))} />
             {(wzB || []).length > 1 && (
-              <button className="btn btn-danger btn-xs khbd-del" title="Bỏ hoạt động này"
-                onClick={() => setWzB((prev) => redistributeB(prev.filter((_, j) => j !== i), wzDuration))}>?</button>
+              <button className="btn btn-danger btn-xs khbd-del" title="Bỏ hoạt động này" aria-label="Bỏ hoạt động này"
+                onClick={() => setWzB((prev) => redistributeB(prev.filter((_, j) => j !== i), wzDuration))}><Trash2 size={13} aria-hidden="true" /></button>
             )}
           </div>
         ))}

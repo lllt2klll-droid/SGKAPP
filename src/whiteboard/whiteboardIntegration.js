@@ -3,7 +3,7 @@
 
 import { queuePendingPayload } from "./whiteboardStore.js";
 import { generateMindmap } from "./mindmapEngine.js";
-import { chapterForPage as _chapterForPage, citationFor as _citationFor } from "../researchDB.js";
+import { chapterForPage as _chapterForPage, citationFor as _citationFor } from "../data/researchDB.js";
 import { safeGetJSON } from "../safeStorage.js";
 import { appEvents, AppEvents } from "../core/appEvents.js";
 import { makeBookContext, makeSourceRef } from "../core/bookContext.js";
@@ -17,9 +17,9 @@ function stripPlaceholder(s) {
 }
 
 // ── Gửi nội dung bất kỳ vào Whiteboard (đang mở hoặc sẽ mở) ──
-// Hỗ trợ liên kết 2 chiều: sourceRef { filename, title, page, bookPage, chapter, citation } + imageDataUrl
+// Hỗ trợ liên kết 2 chiều: sourceRef { filename, title, page, bookPage, chapter, citation } + imageId/imageDataUrl
 // FIX BookReader heavy duplicate: trước emit 3 lần (direct + integration + queue) → lặp ảnh, nặng. Giờ chỉ emit 1 lần duy nhất qua queuePendingPayload.
-export function sendToWhiteboard({ title, text, kind = "node", source = "app", sourceRef = null, imageDataUrl = null, mindmapBranches = null, navigate = true }) {
+export function sendToWhiteboard({ title, text, kind = "node", source = "app", sourceRef = null, imageDataUrl = null, imageId = null, mindmapBranches = null, navigate = true }) {
   const rawTitle = String(title || "");
   const cleanTitle = stripPlaceholder(rawTitle);
   const cleanText = stripPlaceholder(text);
@@ -32,16 +32,17 @@ export function sendToWhiteboard({ title, text, kind = "node", source = "app", s
     source,
     sourceRef: sourceRef ? { ...sourceRef } : null,
     imageDataUrl: imageDataUrl || null,
+    imageId: imageId || null,
     mindmapBranches: Array.isArray(mindmapBranches) ? mindmapBranches.slice(0, 8) : null,
     at: Date.now(),
   };
   // Nếu cả title & text đều là placeholder và không có ảnh → bỏ qua
-  if (!payload.text && !payload.imageDataUrl && String(title || "").includes(PLACEHOLDER_PAT)) {
+  if (!payload.text && !payload.imageDataUrl && !payload.imageId && String(title || "").includes(PLACEHOLDER_PAT)) {
     payload.text = "";
   }
   // 1. Lưu pending + emit DUY NHẤT qua unified bus (queuePendingPayload đã emit AppEvents.SEND_TO_WHITEBOARD)
   // Trước đây emit trực tiếp + integration.open + queue → 3 lần → lặp ảnh cực nặng
-  queuePendingPayload(payload);
+  if (!queuePendingPayload(payload)) return null;
   // 1b. Tracing qua integration hub nhưng KHÔNG emit lại SEND_TO_WHITEBOARD (chỉ log navigate=false để tránh loop)
   // Bỏ để tránh duplicate; nếu cần trace sau này có thể emit event khác
   // 2. Chuyển view sang whiteboard (nếu App đang lắng nghe) — cho phép navigate:false để import nền hàng loạt
@@ -173,7 +174,7 @@ export function bookPageToBoard({ bookTitle, page, text, clip }) {
 // P0: sau migration key legacy sgk_wb_index đã bị xóa → đọc IDB canonical trước, fallback LS
 export async function getWhiteboardIndexAsync() {
   try {
-    const { default: indexedDBService, STORES } = await import("../indexedDB.js");
+    const { default: indexedDBService, STORES } = await import("../data/indexedDB.js");
     try {
       if (indexedDBService?.constructor?.isAvailable()) {
         const all = await indexedDBService.getAll(STORES.WB_BOARDS);

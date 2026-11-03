@@ -5,17 +5,17 @@
 // - Fallback dán thủ công khi bị chặn/paywall/đăng nhập
 import React, { useEffect, useState } from "react";
 import { Link2, Download, Sparkles, Save, ClipboardPaste, Image as ImageIcon } from "lucide-react";
-import { getApiBase } from "../apiConfig";
-import aiService, { getFriendlyErrorMessage } from "../aiService";
-import { getGeminiApiKey } from "../storage";
-import { loadSettings } from "../settingsStore";
-import { savePlan as saveKhbdV2, mkPlan } from "./planModel";
-import { extractPlanJson, aiJsonToPlan, AI_SYSTEM } from "./planAi";
+import { getApiBase } from "../services/apiConfig.js";
+import aiService, { getFriendlyErrorMessage } from "../ai/aiService.js";
+import { getGeminiApiKey } from "../data/storage.js";
+import { loadSettings } from "../services/settingsStore.js";
+import { savePlan as saveKhbdV2, mkPlan } from "./planModel.js";
+import { extractPlanJson, aiJsonToPlan, AI_SYSTEM } from "./planAi.js";
 import {
   parseLessonHtml, parsePastedLesson,
   buildLessonPromptFromUrl, fetchLessonHtml, downloadLessonImages,
   splitSourceMarkers,
-} from "./lessonUrlParser";
+} from "./lessonUrlParser.js";
 
 // Preview text có marker → badge [ảnh N] + ảnh đã tải (nếu có) đúng vị trí.
 export function SourcePreview({ text, images }) {

@@ -13,7 +13,7 @@ import {
   levelForXp,
   ACHIEVEMENTS,
   MISSION_TEMPLATES,
-} from "./missionRegistry.js";
+} from "./data/missionRegistry.js";
 
 const TYPE_IDS = new Set(Object.values(MISSION_TYPES).map((t) => t.id));
 

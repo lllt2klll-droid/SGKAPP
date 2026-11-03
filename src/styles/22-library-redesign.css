@@ -192,3 +192,123 @@
 .library-command-center > * { max-width:100% !important; }
 .books-grid, .books-grid-new, .data-table, .skeleton-grid { width:100% !important; max-width:100% !important; }
 .library-toolbar, .upload-dropzone, .welcome-hero, .quick-stats-grid, .continue-strip-section { width:100% !important; max-width:100% !important; }
+
+/* ── Library opening: clear title, readable stats, and a calmer AI callout ── */
+.library-command-center .libx-intro {
+  display:flex; align-items:center; gap:14px; min-width:0; padding:2px 2px 4px;
+}
+.library-command-center .libx-intro-mark {
+  width:48px; height:48px; flex:none; display:grid; place-items:center;
+  border:1px solid var(--color-action-soft,var(--primary-light)); border-radius:15px;
+  background:var(--color-action-soft,var(--primary-light)); color:var(--color-action,var(--primary));
+}
+.library-command-center .libx-intro-copy { min-width:0; }
+.library-command-center .libx-intro-eyebrow {
+  display:block; margin-bottom:3px; color:var(--color-action,var(--primary));
+  font-size:.625rem; line-height:1.2; font-weight:800; letter-spacing:.11em;
+}
+.library-command-center .libx-intro h1 {
+  margin:0; color:var(--text-dark); font-size:clamp(1.25rem,2vw,1.65rem);
+  line-height:1.2; font-weight:850; letter-spacing:-.035em;
+}
+.library-command-center .libx-intro p {
+  margin:5px 0 0; color:var(--text-muted); font-size:.78rem; line-height:1.45;
+}
+.library-command-center .libx-stats {
+  grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px;
+}
+.library-command-center .libx-stat {
+  min-width:0; min-height:82px; gap:11px; padding:12px 14px;
+  border-radius:14px; background:var(--surface); transition:border-color .16s ease,transform .16s ease,box-shadow .16s ease;
+}
+.library-command-center .libx-stat:hover {
+  transform:translateY(-1px); border-color:var(--color-action,var(--primary));
+  box-shadow:0 7px 18px rgba(15,23,42,.07);
+}
+.library-command-center .libx-stat-ic {
+  width:40px; height:40px; flex:none; border-radius:12px;
+  display:grid; place-items:center; background:var(--color-action-soft,var(--primary-light));
+  color:var(--color-action,var(--primary)); font-size:1rem;
+}
+.library-command-center .libx-stat-copy { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.library-command-center .libx-stat-val {
+  color:var(--text-dark); font-size:1.25rem; line-height:1.05; font-weight:850;
+  font-variant-numeric:tabular-nums;
+}
+.library-command-center .libx-stat-label {
+  overflow:hidden; color:var(--text-dark); font-size:.72rem; line-height:1.3;
+  font-weight:750; text-overflow:ellipsis; white-space:nowrap;
+}
+.library-command-center .libx-stat-sub { color:var(--text-muted); font-size:.65rem; line-height:1.25; }
+.library-command-center .libx-continue-section {
+  padding:13px; border:1px solid var(--border-color); border-radius:15px;
+  background:var(--surface-soft,var(--surface));
+}
+.library-command-center .libx-continue-section .libx-sec-head { margin:0 0 10px; }
+.library-command-center .libx-continue-section .libx-sec-title { font-size:.88rem; }
+.library-command-center .libx-continue-section .libx-sec-hint {
+  padding:3px 8px; border-radius:999px; background:var(--surface);
+}
+.library-command-center .libx-continue-section .libx-cont {
+  min-height:84px; background:var(--surface); border-radius:12px;
+}
+.library-command-center .libx-hero {
+  position:relative; gap:13px; flex-wrap:nowrap; padding:15px 17px;
+  border:1px solid var(--color-action-soft,var(--primary-light)); border-radius:15px;
+  color:var(--text-dark);
+  background:linear-gradient(112deg,var(--color-action-soft,var(--primary-light)),var(--surface) 72%);
+}
+.library-command-center .libx-hero-icon {
+  width:42px; height:42px; flex:none; display:grid; place-items:center;
+  border-radius:13px; background:var(--color-action,var(--primary)); color:#fff;
+  box-shadow:0 6px 16px color-mix(in srgb,var(--color-action,var(--primary)) 24%,transparent);
+}
+.library-command-center .libx-hero-copy { min-width:0; flex:1; }
+.library-command-center .libx-hero-eyebrow {
+  display:block; margin-bottom:3px; color:var(--color-action,var(--primary));
+  font-size:.59rem; line-height:1.2; font-weight:850; letter-spacing:.1em;
+}
+.library-command-center .libx-hero h2 {
+  color:var(--text-dark); font-size:.9rem; line-height:1.3; font-weight:800;
+}
+.library-command-center .libx-hero p {
+  margin:4px 0 0; max-width:760px; color:var(--text-muted);
+  font-size:.73rem; line-height:1.45; opacity:1;
+}
+.library-command-center .libx-hero-action {
+  min-height:38px; flex:none; display:inline-flex; align-items:center; justify-content:center;
+  gap:6px; padding:0 13px; border:0; border-radius:10px;
+  background:var(--color-action,var(--primary)); color:var(--color-text-on-accent,#fff);
+  font:inherit; font-size:.73rem; font-weight:750; cursor:pointer;
+  transition:filter .15s ease,transform .15s ease;
+}
+.library-command-center .libx-hero-action:hover { filter:brightness(1.08); transform:translateY(-1px); }
+.library-command-center .libx-hero-action:focus-visible {
+  outline:2px solid var(--color-action,var(--primary)); outline-offset:3px;
+}
+#libx-book-catalog { scroll-margin-top:16px; }
+
+[data-theme="dark"] .library-command-center .libx-stat:hover { box-shadow:0 7px 18px rgba(0,0,0,.2); }
+[data-theme="dark"] .library-command-center .libx-hero {
+  background:linear-gradient(112deg,rgba(99,102,241,.15),var(--surface) 72%);
+}
+[data-theme="dark"] .library-command-center .libx-continue-section { background:rgba(15,23,42,.55); }
+
+@media (max-width: 760px) {
+  .library-command-center .libx-stats { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .library-command-center .libx-stat { min-height:74px; gap:9px; padding:10px; }
+  .library-command-center .libx-stat-ic { width:36px; height:36px; }
+  .library-command-center .libx-hero { align-items:flex-start; flex-wrap:wrap; padding:13px; }
+  .library-command-center .libx-hero-copy { flex-basis:calc(100% - 58px); }
+  .library-command-center .libx-hero-action { margin-left:55px; }
+  .library-command-center .libx-continue-section { padding:10px; }
+}
+@media (max-width: 420px) {
+  .library-command-center .libx-intro { gap:10px; }
+  .library-command-center .libx-intro-mark { width:42px; height:42px; border-radius:13px; }
+  .library-command-center .libx-intro p { font-size:.72rem; }
+  .library-command-center .libx-stat { gap:7px; padding:9px 8px; }
+  .library-command-center .libx-stat-ic { width:32px; height:32px; border-radius:10px; }
+  .library-command-center .libx-stat-label { font-size:.66rem; }
+  .library-command-center .libx-hero-action { margin-left:0; }
+}

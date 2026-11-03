@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 globalThis.localStorage = (()=>{ const m=new Map(); return { getItem:k=>m.get(k)||null, setItem:(k,v)=>m.set(k,String(v)), removeItem:k=>m.delete(k), clear:()=>m.clear(), get length(){return m.size}, key:i=>[...m.keys()][i]||null }})();
 globalThis.window={ dispatchEvent:()=>{}, addEventListener:()=>{}, removeEventListener:()=>{} };
 
-const { normalizeGeneratedQuestion, validateQuestionEntity, QUESTION_SCHEMA } = await import('./questionSchema.js');
-const { addQuestion, getQuestions, deleteQuestion, getWorksheets, saveWorksheet } = await import('./teachingDB.js');
+const { normalizeGeneratedQuestion, validateQuestionEntity, QUESTION_SCHEMA } = await import('./data/questionSchema.js');
+const { addQuestion, getQuestions, deleteQuestion, getWorksheets, saveWorksheet } = await import('./data/teachingDB.js');
 
 describe('PHASE 5 — Question Schema', ()=>{
   beforeEach(()=> localStorage.clear());

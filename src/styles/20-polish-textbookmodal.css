@@ -40,7 +40,7 @@
   min-height: 32px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-color);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -63,7 +63,7 @@
   border: 1px solid var(--border-color);
   background: var(--card-bg);
   color: var(--text-dark);
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 6px 12px;
 }
 .lp-sidebar-section .form-control:focus,
@@ -80,7 +80,7 @@
 .lp-quick-grid .filter-btn {
   min-height: 36px;
   padding: 6px 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   border-radius: 8px;
   white-space: nowrap;
@@ -99,7 +99,7 @@
   height: 36px;
 }
 .lp-filter-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-mid);
   white-space: nowrap;
@@ -127,14 +127,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-dark);
 }
 .lp-recent-sub {
   font-weight: 400;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* Right editor — full width desktop, không trống */
@@ -169,7 +169,7 @@
   flex: 1;
   min-width: 0;
   height: 40px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   border-radius: 8px;
 }
@@ -190,7 +190,7 @@
 }
 .lp-toolbar--secondary .form-control {
   height: 32px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   border-radius: 8px;
 }
 .lp-save-hint {
@@ -198,7 +198,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
@@ -254,7 +254,7 @@
 }
 .lp-card-header h4 {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -281,7 +281,7 @@
   border: 1px solid var(--border-color);
   background: var(--card-bg);
   color: var(--text-dark);
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 6px 12px;
 }
 .lp-card-body .form-control:focus {
@@ -305,7 +305,7 @@
   gap: 12px;
 }
 .lp-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-mid);
   margin-bottom: 4px;
@@ -321,7 +321,7 @@
   background: var(--surface-soft);
 }
 .lp-subsection-title {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
   color: var(--text-dark);
   text-transform: uppercase;
@@ -387,7 +387,7 @@
   gap: 8px;
 }
 .lp-cover-title {
-  font-size: 28px;
+  font-size: 1.75rem;
   font-weight: 800;
   line-height: 1.15;
   color: var(--text-dark);
@@ -401,7 +401,7 @@
   background: var(--surface-soft);
   color: var(--text-dark);
   font-weight: 800;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -426,7 +426,7 @@
   background: transparent;
   outline: none;
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-dark);
 }
 .lp-search-btn {
@@ -442,7 +442,7 @@
   color: var(--text-dark);
   border-radius: 8px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   transition: all 0.15s;
 }

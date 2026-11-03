@@ -4,9 +4,10 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X, Sparkles, Loader2, BookOpen, FileText, Puzzle, Database, ClipboardList, StickyNote, Zap, Check, ArrowLeft, ArrowRight, RefreshCw, Save, Trash2, ChevronUp, ChevronDown, Eye, AlertTriangle, Wand2, LayoutGrid, Library, Crop, Palette, Square } from "lucide-react";
 import { analyzeScan, generateMaterial, regenerateQuestion } from "./scanAIService.js";
-import aiService from "../aiService.js";
+import aiService from "../ai/aiService.js";
 import { saveScanMaterial } from "./materialGenerator.js";
 import CropPreview from "./CropPreview.jsx";
+import ImageDesignPanel from "./ImageDesignPanel.jsx";
 import { appEvents, AppEvents } from "../core/appEvents.js";
 import { emitOpenSource } from "./sourceBadgeUtils.js";
 
@@ -30,6 +31,7 @@ const MATERIAL_CARDS = [
 export default function ScanModal({ scan, onClose, onSaved }) {
   const [step, setStep] = useState(1); // 1: phân tích (scan đã có) — 1-indexed for STEPS
   const [analysis, setAnalysis] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("");
   const [error, setError] = useState("");
@@ -81,7 +83,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
   useEffect(() => {
     if (!savedInfo) return;
     try {
-      import("../researchDB.js").then((m) => { try { setCollOptions(m.getCollections().slice(0, 12)); } catch {} });
+      import("../data/researchDB.js").then((m) => { try { setCollOptions(m.getCollections().slice(0, 12)); } catch {} });
     } catch {}
   }, [savedInfo]);
 
@@ -240,7 +242,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
   const handleAddToCollection = async () => {
     if (!savedInfo || !collPick) return;
     try {
-      const { addClip, getCollections } = await import("../researchDB.js");
+      const { addClip, getCollections } = await import("../data/researchDB.js");
       const colls = getCollections();
       const coll = colls.find((c) => c.id === collPick);
       if (!coll) { setError("Không tìm thấy bộ sưu tập."); return; }
@@ -256,7 +258,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
     const name = newCollName.trim();
     if (!name) return;
     try {
-      const { addCollection, getCollections } = await import("../researchDB.js");
+      const { addCollection, getCollections } = await import("../data/researchDB.js");
       const c = addCollection(name, "Tạo từ Scan SGK");
       const fresh = getCollections().slice(0, 12);
       setCollOptions(fresh);
@@ -328,10 +330,20 @@ export default function ScanModal({ scan, onClose, onSaved }) {
         <style>{`
           /* Modal scan luôn rộng trên desktop, gọn trong viewport mobile */
           .modal-overlay .modal-content.scanm-shell {
-            width: min(1180px, calc(100vw - 20px));
-            max-width: min(1180px, calc(100vw - 20px));
+            width: min(1440px, calc(100vw - 32px)) !important;
+            max-width: min(1440px, calc(100vw - 32px)) !important;
+            max-height: calc(100dvh - 32px) !important;
             margin: 0 auto;
-            padding: 0;
+            padding: 0 !important;
+            overflow: hidden !important;
+            box-sizing: border-box;
+          }
+          @media (max-width: 767px) {
+            .modal-overlay .modal-content.scanm-shell {
+              width: calc(100vw - 24px) !important;
+              max-width: calc(100vw - 24px) !important;
+              max-height: calc(100dvh - 24px) !important;
+            }
           }
           /* Mặc định (modal hẹp / mobile): 1 cột */
           .scanm-shell .scanm-body { display:flex; flex-direction:column; gap:12px; }
@@ -340,23 +352,23 @@ export default function ScanModal({ scan, onClose, onSaved }) {
           .scanm-shell .scanm-right pre, .scanm-shell .scanm-right textarea {
             white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; max-width:100%;
           }
-          .scanm-shell .scanm-stepper { display:flex; align-items:flex-start; padding:12px 18px 10px; border-bottom:1px solid var(--border-color); background:linear-gradient(180deg,#f8fafc 0%,#ffffff 100%); overflow-x:auto; scrollbar-width:thin; }
+          .scanm-shell .scanm-stepper { display:flex; align-items:flex-start; padding:12px 18px 10px; border-bottom:1px solid var(--border-color); background:linear-gradient(180deg,var(--surface-soft) 0%,var(--surface) 100%); overflow-x:auto; scrollbar-width:thin; }
           .scanm-shell .scanm-step { flex:1 1 0; min-width:102px; position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; background:none; border:none; padding:0; }
           .scanm-shell .scanm-step:not(:disabled) { cursor:pointer; }
           .scanm-shell .scanm-step:disabled { cursor:default; }
-          .scanm-shell .scanm-step::before { content:""; position:absolute; top:12px; left:calc(-50% + 17px); right:calc(50% + 17px); height:2px; border-radius:999px; background:#e2e8f0; }
+          .scanm-shell .scanm-step::before { content:""; position:absolute; top:12px; left:calc(-50% + 17px); right:calc(50% + 17px); height:2px; border-radius:999px; background:var(--border-color); }
           .scanm-shell .scanm-step:first-child::before { display:none; }
           .scanm-shell .scanm-step.done::before { background:#16a34a; }
           .scanm-shell .scanm-step.on::before { background:linear-gradient(90deg,#16a34a,var(--color-action, #2d73ff)); }
-          .scanm-shell .scanm-dot { width:25px; height:25px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; background:#cbd5e1; color:#fff; position:relative; z-index:1; border:2px solid #fff; box-shadow:0 1px 3px rgba(15,23,42,0.16); }
+          .scanm-shell .scanm-dot { width:25px; height:25px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size: 0.75rem; font-weight:800; background:#cbd5e1; color:#fff; position:relative; z-index:1; border:2px solid #fff; box-shadow:0 1px 3px rgba(15,23,42,0.16); }
           .scanm-shell .scanm-step.done .scanm-dot { background:#16a34a; }
           .scanm-shell .scanm-step.on .scanm-dot { background:var(--color-action, #2d73ff); box-shadow:0 0 0 4px var(--color-action-soft, rgba(45,115,255,0.18)), 0 2px 8px color-mix(in srgb, var(--color-action, #2d73ff) 38%, transparent); }
           .scanm-shell .scanm-step:not(:disabled):hover .scanm-dot { filter:brightness(1.08); }
           .scanm-shell .scanm-step-tx { display:flex; flex-direction:column; align-items:center; line-height:1.25; }
-          .scanm-shell .scanm-step-label { font-size:11.5px; font-weight:700; color:#94a3b8; white-space:nowrap; }
+          .scanm-shell .scanm-step-label { font-size: 0.7188rem; font-weight:700; color:#94a3b8; white-space:nowrap; }
           .scanm-shell .scanm-step.done .scanm-step-label { color:#16a34a; }
           .scanm-shell .scanm-step.on .scanm-step-label { color:var(--color-action-strong, #1d4ed8); font-weight:800; }
-          .scanm-shell .scanm-step-desc { font-size:9.5px; color:#94a3b8; font-weight:500; white-space:nowrap; }
+          .scanm-shell .scanm-step-desc { font-size: 0.5938rem; color:#94a3b8; font-weight:500; white-space:nowrap; }
           .scanm-shell .scanm-step.on .scanm-step-desc { color:#64748b; }
           /* Modal đủ rộng (container ≥ 860px): 2 cột desktop */
           @container (min-width: 860px) {
@@ -367,11 +379,11 @@ export default function ScanModal({ scan, onClose, onSaved }) {
           }
         `}</style>
         {/* Header — tinh tế: gradient nhẹ + subtitle rõ */}
-        <div className="modal-header" style={{ flexShrink: 0, background:"linear-gradient(135deg, rgba(45,115,255,0.08) 0%, rgba(139,92,246,0.06) 100%)", borderBottom:"1px solid var(--border-color)", padding:"12px 14px" }}>
+        <div className="modal-header" style={{ flexShrink: 0, background:"linear-gradient(135deg, var(--surface-soft) 0%, var(--surface) 100%)", borderBottom:"1px solid var(--border-color)", padding:"12px 14px" }}>
           <h3 style={{ display: "flex", alignItems: "center", gap: 9, margin: 0, fontSize: "0.98rem", letterSpacing:-0.1 }}>
             <span style={{ width:28, height:28, borderRadius:9, background:"#2d73ff", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 12px rgba(45,115,255,0.25)" }}><BookOpen size={15} /></span>
             Tạo học liệu từ vùng SGK
-            <span style={{ fontSize:11, fontWeight:700, color:"#64748b", background:"rgba(255,255,255,0.85)", border:"1px solid #e2e8f0", padding:"2px 7px", borderRadius:999, marginLeft:6 }}>kéo · AI đọc · tạo</span>
+            <span style={{ fontSize: "0.6875rem", fontWeight:700, color:"var(--text-muted)", background:"var(--surface)", border:"1px solid var(--border-color)", padding:"2px 7px", borderRadius:999, marginLeft:6 }}>kéo · AI đọc · tạo</span>
           </h3>
           <button ref={closeBtnRef} className="btn btn-icon" onClick={onClose} aria-label="Đóng (Esc)" style={{ width:32, height:32, borderRadius:999, background:"rgba(255,255,255,0.9)", border:"1px solid #e2e8f0" }}>
             <X size={15} />
@@ -446,7 +458,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                   borderRadius: 6,
                   padding: "6px 10px",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: "0.6875rem",
                   fontWeight: 700,
                   display: "flex",
                   alignItems: "center",
@@ -470,7 +482,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                   borderRadius: 6,
                   padding: "6px 10px",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: "0.6875rem",
                   fontWeight: 700,
                   display: "flex",
                   alignItems: "center",
@@ -483,7 +495,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                 Crop
               </button>
             </div>
-            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+            <p style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: 6, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><BookOpen size={11} /> {scan.book.title}</span>
               <span>• Trang {scan.page}</span>
               <span>• {Math.round(adjustedScan?.width || scan.width || 0)}×{Math.round(adjustedScan?.height || scan.height || 0)}px</span>
@@ -494,22 +506,22 @@ export default function ScanModal({ scan, onClose, onSaved }) {
 
           {/* Cột trái — Câu hỏi / bài tập gốc giữ nguyên từ sách */}
           <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 12, padding: 10 }}>
-            <div style={{ fontWeight: 800, fontSize: 12, color: "#0f766e", display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontWeight: 800, fontSize: "0.75rem", color: "#0f766e", display: "flex", alignItems: "center", gap: 6 }}>
               <BookOpen size={13} /> Câu hỏi · bài tập gốc trong sách
-              <span style={{ marginLeft: "auto", fontSize: 10, background: "#0f766e", color: "#fff", padding: "2px 7px", borderRadius: 999 }}>giữ nguyên</span>
+              <span style={{ marginLeft: "auto", fontSize: "0.625rem", background: "#0f766e", color: "#fff", padding: "2px 7px", borderRadius: 999 }}>giữ nguyên</span>
             </div>
             {!analysis ? (
-              <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>AI đang đọc vùng crop — câu gốc sẽ hiện nguyên văn tại đây, không diễn đạt lại.</div>
+              <div style={{ fontSize: "0.6875rem", color: "#475569", marginTop: 6 }}>AI đang đọc vùng crop — câu gốc sẽ hiện nguyên văn tại đây, không diễn đạt lại.</div>
             ) : originalQuestions.length ? (
-              <ol style={{ margin: "8px 0 0 16px", padding: 0, fontSize: 12, color: "#134e4a", display: "flex", flexDirection: "column", gap: 6 }}>
+              <ol style={{ margin: "8px 0 0 16px", padding: 0, fontSize: "0.75rem", color: "#134e4a", display: "flex", flexDirection: "column", gap: 6 }}>
                 {originalQuestions.slice(0, 8).map((q, i) => (
                   <li key={i} style={{ background: "#fff", border: "1px solid #ccfbf1", borderRadius: 8, padding: "6px 8px", lineHeight: 1.5 }}>{q}</li>
                 ))}
               </ol>
             ) : (
-              <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>Vùng này không chứa câu hỏi riêng — AI giữ nguyên đoạn trích/bảng/sơ đồ làm nguồn.</div>
+              <div style={{ fontSize: "0.6875rem", color: "#475569", marginTop: 6 }}>Vùng này không chứa câu hỏi riêng — AI giữ nguyên đoạn trích/bảng/sơ đồ làm nguồn.</div>
             )}
-            <div style={{ fontSize: 10.5, color: "#0f766e", marginTop: 8 }}>✓ Khi tạo phiếu/câu hỏi ở chế độ “Giữ nguyên gốc”, các câu trên được sao chép nguyên văn lên đầu, AI chỉ bổ sung thêm.</div>
+            <div style={{ fontSize: "0.6563rem", color: "#0f766e", marginTop: 8 }}>✓ Khi tạo phiếu/câu hỏi ở chế độ “Giữ nguyên gốc”, các câu trên được sao chép nguyên văn lên đầu, AI chỉ bổ sung thêm.</div>
           </div>
           </div>{/* /scanm-left */}
 
@@ -522,7 +534,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
             </div>
           )}
           {error && (
-            <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", background: "var(--danger-light)", border: "1px solid var(--danger)", borderRadius: 8, fontSize: 12, color: "var(--danger)" }}>
+            <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", background: "var(--danger-light)", border: "1px solid var(--danger)", borderRadius: 8, fontSize: "0.75rem", color: "var(--danger)" }}>
               <AlertTriangle size={14} style={{ marginTop: 1, flexShrink: 0 }} />
               <span style={{ flex: 1 }}>{error}</span>
               <button className="btn btn-ghost btn-xs" onClick={() => { setError(""); if (step === 1) runAnalyze(); }} style={{ flexShrink: 0 }}><RefreshCw size={12} /> Thử lại</button>
@@ -540,39 +552,72 @@ export default function ScanModal({ scan, onClose, onSaved }) {
           {step === 2 && analysis && !loading && (
             <>
               <div style={{ background:"var(--surface)", border: "1px solid var(--border-color)", borderRadius: 12, padding: 12, boxShadow:"var(--shadow-xs)" }}>
-                <div style={{ fontWeight: 800, fontSize: 13, color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}><span style={{ width:22, height:22, borderRadius:7, background:"var(--color-action, var(--primary))", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center" }}><Eye size={13} /></span> AI phân tích <span style={{ marginLeft:"auto", fontSize:10, fontWeight:800, color: analysis.confidence < 0.6 ? "var(--warning-deep)" : "var(--success-deep)", background: analysis.confidence < 0.6 ? "var(--warning-soft)" : "var(--success-soft)", border:"1px solid var(--border-color)", padding:"2px 7px", borderRadius:999 }}>{(analysis.confidence * 100).toFixed(0)}% tin cậy</span></div>
-                <div style={{ fontSize: 11.5, marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 800, fontSize: "0.8125rem", color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}><span style={{ width:22, height:22, borderRadius:7, background:"var(--color-action, var(--primary))", color:"#fff", display:"inline-flex", alignItems:"center", justifyContent:"center" }}><Eye size={13} /></span> AI phân tích <span style={{ marginLeft:"auto", fontSize: "0.625rem", fontWeight:800, color: analysis.confidence < 0.6 ? "var(--warning-deep)" : "var(--success-deep)", background: analysis.confidence < 0.6 ? "var(--warning-soft)" : "var(--success-soft)", border:"1px solid var(--border-color)", padding:"2px 7px", borderRadius:999 }}>{(analysis.confidence * 100).toFixed(0)}% tin cậy</span></div>
+                <div style={{ fontSize: "0.7188rem", marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <span style={{ background:"var(--color-action-soft, var(--primary-light))", color:"var(--color-action, var(--primary))", border:"1px solid var(--border-color)", padding:"2px 7px", borderRadius:999, fontWeight:700 }}>📚 {analysis.subject || scan.book.subject} • Lớp {analysis.grade || scan.book.grade}</span>
                   {analysis.topic && <span style={{ background:"var(--surface-soft)", color:"var(--text-mid)", border:"1px solid var(--border-color)", padding:"2px 7px", borderRadius:999, fontWeight:700 }}>🏷️ {analysis.topic}</span>}
                 </div>
                 {/* tinh chỉnh trích dẫn — editable */}
                 {!analysisEditOpen ? (
                   <>
-                    <div style={{ fontSize: 12, marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.55, color: "#334155", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8, padding:8 }}>{analysisEdit?.slice(0, 520) || analysis.content?.slice(0,520)}{(analysisEdit || analysis.content || "").length > 520 ? "…" : ""}</div>
-                    <button className="btn btn-ghost btn-xs" onClick={()=>setAnalysisEditOpen(true)} style={{ marginTop:6, fontSize:11, borderRadius:999, border:"1px dashed #cbd5e1" }}><Wand2 size={12} /> Tinh chỉnh trích dẫn</button>
+                    <div style={{ fontSize: "0.75rem", marginTop: 8, whiteSpace: "pre-wrap", lineHeight: 1.55, color: "#334155", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8, padding:8 }}>{analysisEdit?.slice(0, 520) || analysis.content?.slice(0,520)}{(analysisEdit || analysis.content || "").length > 520 ? "…" : ""}</div>
+                    <button className="btn btn-ghost btn-xs" onClick={()=>setAnalysisEditOpen(true)} style={{ marginTop:6, fontSize: "0.6875rem", borderRadius:999, border:"1px dashed #cbd5e1" }}><Wand2 size={12} /> Tinh chỉnh trích dẫn</button>
                   </>
                 ) : (
                   <div style={{ marginTop:8 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:"#475569", marginBottom:4 }}>Tinh chỉnh nội dung AI sẽ dùng để tạo (không đổi ảnh gốc)</div>
-                    <textarea className="form-control" rows={4} value={analysisEdit} onChange={(e)=>setAnalysisEdit(e.target.value)} placeholder="Sửa/trích chính xác nội dung SGK để AI bám sát hơn…" style={{ fontSize:12, lineHeight:1.5 }} />
+                    <div style={{ fontSize: "0.6875rem", fontWeight:700, color:"#475569", marginBottom:4 }}>Tinh chỉnh nội dung AI sẽ dùng để tạo (không đổi ảnh gốc)</div>
+                    <textarea className="form-control" rows={4} value={analysisEdit} onChange={(e)=>setAnalysisEdit(e.target.value)} placeholder="Sửa/trích chính xác nội dung SGK để AI bám sát hơn…" style={{ fontSize: "0.75rem", lineHeight:1.5 }} />
                     <div style={{ display:"flex", gap:6, marginTop:6 }}>
                       <button className="btn btn-primary btn-xs" onClick={()=>setAnalysisEditOpen(false)} style={{ borderRadius:999 }}>Xong</button>
                       <button className="btn btn-ghost btn-xs" onClick={()=>{ setAnalysisEdit(analysis.content||""); setAnalysisEditOpen(false); }} style={{ borderRadius:999 }}>Hoàn tác</button>
-                      <span style={{ fontSize:10, color:"#64748b", marginLeft:"auto", alignSelf:"center" }}>{analysisEdit.length} ký tự → AI sẽ dùng {Math.min(700, analysisEdit.length)} đầu</span>
+                      <span style={{ fontSize: "0.625rem", color:"#64748b", marginLeft:"auto", alignSelf:"center" }}>{analysisEdit.length} ký tự → AI sẽ dùng {Math.min(700, analysisEdit.length)} đầu</span>
                     </div>
                   </div>
                 )}
                 {analysis.keyPoints?.length > 0 && (
-                  <ul style={{ margin: "8px 0 0 16px", fontSize: 11, color: "#475569" }}>
+                  <ul style={{ margin: "8px 0 0 16px", fontSize: "0.6875rem", color: "#475569" }}>
                     {analysis.keyPoints.slice(0, 3).map((k, i) => <li key={i}>{k}</li>)}
                   </ul>
                 )}
                 {analysis.existingQuestions?.length > 0 && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: "#64748b", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 8px" }}><strong>Câu có sẵn:</strong> {analysis.existingQuestions.slice(0, 2).join(" | ").slice(0, 180)}</div>
+                  <div style={{ marginTop: 6, fontSize: "0.6875rem", color: "#64748b", background:"#fff", border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 8px" }}><strong>Câu có sẵn:</strong> {analysis.existingQuestions.slice(0, 2).join(" | ").slice(0, 180)}</div>
                 )}
-                {analysis.confidence < 0.6 && <div style={{ fontSize: 11, color: "#b45309", marginTop: 8, display: "flex", gap: 6, background:"#fffbeb", border:"1px solid #fde68a", padding:"6px 8px", borderRadius:8 }}><AlertTriangle size={12} /> AI chưa chắc chắn — vui lòng tinh chỉnh trích dẫn rồi mới tạo.</div>}
+                {analysis.confidence < 0.6 && <div style={{ fontSize: "0.6875rem", color: "#b45309", marginTop: 8, display: "flex", gap: 6, background:"#fffbeb", border:"1px solid #fde68a", padding:"6px 8px", borderRadius:8 }}><AlertTriangle size={12} /> AI chưa chắc chắn — vui lòng tinh chỉnh trích dẫn rồi mới tạo.</div>}
               </div>
 
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 8 }}>
+                <button
+                  type="button"
+                  className={`btn ${selectedTask === "materials" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setSelectedTask("materials")}
+                  aria-pressed={selectedTask === "materials"}
+                  style={{ justifyContent: "flex-start", gap: 9, padding: 11, minHeight: 58, textAlign: "left" }}
+                >
+                  <FileText size={18} />
+                  <span><strong style={{ display: "block" }}>Tạo học liệu</strong><small style={{ fontSize: "0.68rem" }}>Phiếu học tập, câu hỏi, hoạt động…</small></span>
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${selectedTask === "image" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setSelectedTask("image")}
+                  aria-pressed={selectedTask === "image"}
+                  style={{ justifyContent: "flex-start", gap: 9, padding: 11, minHeight: 58, textAlign: "left", borderColor: selectedTask === "image" ? "#4f46e5" : "#c7d2fe" }}
+                >
+                  <Palette size={18} />
+                  <span><strong style={{ display: "block" }}>Thiết kế ảnh</strong><small style={{ fontSize: "0.68rem" }}>Tạo ảnh mới dựa trên đúng vùng crop</small></span>
+                </button>
+              </div>
+
+              {selectedTask === "image" && (
+                <ImageDesignPanel
+                  scan={adjustedScan || scan}
+                  analysis={analysis}
+                  onBack={() => setSelectedTask("materials")}
+                />
+              )}
+
+              {selectedTask === "materials" && (
+                <>
               <div className="scanm-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px,1fr))", gap: 8 }}>
                 {MATERIAL_CARDS.map((c) => {
                   const isSelected = materialType === c.id;
@@ -591,10 +636,10 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                       }}
                       title={c.id === "original" ? "Sao chép nguyên văn câu hỏi/bài tập trong vùng crop, không diễn đạt lại" : c.desc}
                     >
-                      {isSuggested && !isSelected && <span style={{ position: "absolute", top: 4, right: 6, fontSize: 9, background: c.color, color: "#fff", padding: "1px 5px", borderRadius: 99, fontWeight: 800 }}>★ Gợi ý</span>}
-                      {c.id === "original" && !isSelected && <span style={{ position: "absolute", top: 4, right: 6, fontSize: 9, background: "#0f766e", color: "#fff", padding: "1px 5px", borderRadius: 99, fontWeight: 800 }}>giữ gốc</span>}
+                      {isSuggested && !isSelected && <span style={{ position: "absolute", top: 4, right: 6, fontSize: "0.5625rem", background: c.color, color: "#fff", padding: "1px 5px", borderRadius: 99, fontWeight: 800 }}>★ Gợi ý</span>}
+                      {c.id === "original" && !isSelected && <span style={{ position: "absolute", top: 4, right: 6, fontSize: "0.5625rem", background: "#0f766e", color: "#fff", padding: "1px 5px", borderRadius: 99, fontWeight: 800 }}>giữ gốc</span>}
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>{c.icon} <span style={{ fontWeight: 800, fontSize: "0.85rem" }}>{c.label}</span></span>
-                      <span style={{ fontSize: 10, opacity: 0.9, marginTop: 2 }}>{c.desc}</span>
+                      <span style={{ fontSize: "0.625rem", opacity: 0.9, marginTop: 2 }}>{c.desc}</span>
                     </button>
                   );
                 })}
@@ -609,48 +654,50 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                 </button>
               </div>
               {analysis.suggestedMaterials?.length > 0 && (
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>⭐ AI đề xuất: {analysis.suggestedMaterials.join(", ")}</div>
+                <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }}>⭐ AI đề xuất: {analysis.suggestedMaterials.join(", ")}</div>
               )}
 
               {/* §26 Multi-generation — one scan → many materials */}
               <div style={{ border: "1px dashed var(--border-color)", borderRadius: 10, padding: 10, background: "var(--surface)" }}>
-                <div style={{ fontWeight: 800, fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}><LayoutGrid size={14} /> ✨ Tạo bộ học liệu (1 scan → nhiều loại)</div>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", margin: "4px 0 6px" }}>Chọn nhiều loại — AI tạo lần lượt, lưu tất cả (không nhân bản ảnh)</div>
+                <div style={{ fontWeight: 800, fontSize: "0.75rem", display: "flex", alignItems: "center", gap: 6 }}><LayoutGrid size={14} /> ✨ Tạo bộ học liệu (1 scan → nhiều loại)</div>
+                <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)", margin: "4px 0 6px" }}>Chọn nhiều loại — AI tạo lần lượt, lưu tất cả (không nhân bản ảnh)</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {MATERIAL_CARDS.map((c) => (
-                    <label key={`batch-${c.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, border: "1px solid var(--border-color)", padding: "4px 8px", borderRadius: 99, background: batchTypes.includes(c.id) ? "var(--primary-light)" : "var(--surface-soft)", cursor: "pointer" }}>
+                    <label key={`batch-${c.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.6875rem", border: "1px solid var(--border-color)", padding: "4px 8px", borderRadius: 99, background: batchTypes.includes(c.id) ? "var(--primary-light)" : "var(--surface-soft)", cursor: "pointer" }}>
                       <input type="checkbox" checked={batchTypes.includes(c.id)} onChange={(e) => setBatchTypes((prev) => e.target.checked ? [...prev, c.id] : prev.filter((x) => x !== c.id))} style={{ accentColor: "var(--primary)" }} /> {c.label}
                     </label>
                   ))}
                 </div>
                 <button className="btn btn-secondary btn-xs" style={{ marginTop: 8 }} onClick={handleSaveAllBatch} disabled={loading || (!batchTypes.length && !materialType)}><Sparkles size={12} /> Tạo & lưu bộ ({batchTypes.length || (materialType ? 1 : 0)})</button>
               </div>
+                </>
+              )}
             </>
           )}
 
           {/* Step 3: Cấu hình */}
           {step === 3 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <h4 style={{ margin: 0, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}><Wand2 size={14} /> Cấu hình — {MATERIAL_CARDS.find((c)=>c.id===materialType)?.label || materialType}</h4>
+              <h4 style={{ margin: 0, fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: 6 }}><Wand2 size={14} /> Cấu hình — {MATERIAL_CARDS.find((c)=>c.id===materialType)?.label || materialType}</h4>
               {/* core */}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Bám nguồn
+                <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Bám nguồn
                   <select className="form-control" value={config.fidelity} onChange={(e)=>setConfig({...config, fidelity: e.target.value, keepOriginal: e.target.value === "Giữ nguyên gốc" ? true : config.keepOriginal})} style={{ minWidth: 150 }}>
                     <option>Giữ nguyên gốc</option><option>Bám sát SGK</option><option>Biến đổi nhẹ</option><option>Sáng tạo mở rộng</option>
                   </select>
                 </label>
-                <label style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6, marginTop: 18, background: config.keepOriginal ? "#f0fdfa" : "#fff", border: config.keepOriginal ? "1px solid #99f6e4" : "1px solid #e2e8f0", padding: "6px 10px", borderRadius: 999, cursor: "pointer", fontWeight: 700, color: config.keepOriginal ? "#0f766e" : "#475569" }} title="Giữ nguyên văn câu hỏi/bài tập trong sách, AI không diễn đạt lại">
+                <label style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: 6, marginTop: 18, background: config.keepOriginal ? "#f0fdfa" : "#fff", border: config.keepOriginal ? "1px solid #99f6e4" : "1px solid #e2e8f0", padding: "6px 10px", borderRadius: 999, cursor: "pointer", fontWeight: 700, color: config.keepOriginal ? "#0f766e" : "#475569" }} title="Giữ nguyên văn câu hỏi/bài tập trong sách, AI không diễn đạt lại">
                   <input type="checkbox" checked={!!config.keepOriginal} onChange={(e)=>setConfig({...config, keepOriginal: e.target.checked, fidelity: e.target.checked ? "Giữ nguyên gốc" : (config.fidelity === "Giữ nguyên gốc" ? "Bám sát SGK" : config.fidelity)})} style={{ accentColor: "#0f766e" }} /> Giữ nguyên câu hỏi/bài tập
                 </label>
                 {(materialType === "game" || materialType === "worksheet" || materialType === "question") && (
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Số câu
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Số câu
                     <select className="form-control" value={config.numQuestions} onChange={(e)=>setConfig({...config, numQuestions: Number(e.target.value)})} style={{ minWidth: 90 }}>
                       <option value={5}>5</option><option value={8}>8</option><option value={10}>10</option><option value={15}>15</option><option value={20}>20</option>
                     </select>
                   </label>
                 )}
                 {(materialType === "game" || materialType === "worksheet" || materialType === "question") && (
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Độ khó
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Độ khó
                     <select className="form-control" value={config.difficulty} onChange={(e)=>setConfig({...config, difficulty: e.target.value})} style={{ minWidth: 120 }}>
                       <option>Dễ</option><option>Trung bình</option><option>Khó</option><option>Phân hóa</option>
                     </select>
@@ -660,12 +707,12 @@ export default function ScanModal({ scan, onClose, onSaved }) {
 
               {materialType === "game" && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Loại game
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Loại game
                     <select className="form-control" value={config.gameType} onChange={(e)=>setConfig({...config, gameType: e.target.value})} style={{ minWidth: 140 }}>
                       <option>Quiz</option><option>Ghép đôi</option><option>Kahoot</option><option>Ô chữ</option><option>Drag & Drop</option>
                     </select>
                   </label>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Thời lượng
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Thời lượng
                     <select className="form-control" value={config.timeLimit} onChange={(e)=>setConfig({...config, timeLimit: e.target.value})} style={{ minWidth: 110 }}>
                       <option>3 phút</option><option>5 phút</option><option>10 phút</option><option>15 phút</option>
                     </select>
@@ -674,29 +721,29 @@ export default function ScanModal({ scan, onClose, onSaved }) {
               )}
               {materialType === "worksheet" && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Loại câu
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Loại câu
                     <select className="form-control" value={config.questionType} onChange={(e)=>setConfig({...config, questionType: e.target.value})} style={{ minWidth: 130 }}>
                       <option>Trắc nghiệm</option><option>Tự luận</option><option>Hỗn hợp</option>
                     </select>
                   </label>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Mức độ
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Mức độ
                     <select className="form-control" value={config.level} onChange={(e)=>setConfig({...config, level: e.target.value})} style={{ minWidth: 120 }}>
                       <option>Biết</option><option>Hiểu</option><option>Vận dụng</option>
                     </select>
                   </label>
-                  <label style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6, marginTop: 18 }}>
+                  <label style={{ fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: 6, marginTop: 18 }}>
                     <input type="checkbox" checked={config.withAnswer} onChange={(e)=>setConfig({...config, withAnswer: e.target.checked})} /> Kèm đáp án
                   </label>
                 </div>
               )}
               {materialType === "question" && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Loại
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Loại
                     <select className="form-control" value={config.questionType} onChange={(e)=>setConfig({...config, questionType: e.target.value})} style={{ minWidth: 130 }}>
                       <option>Trắc nghiệm</option><option>Tự luận</option><option>Đúng/Sai</option>
                     </select>
                   </label>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Mức độ
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Mức độ
                     <select className="form-control" value={config.level} onChange={(e)=>setConfig({...config, level: e.target.value})} style={{ minWidth: 120 }}>
                       <option>Biết</option><option>Hiểu</option><option>Vận dụng</option>
                     </select>
@@ -705,18 +752,18 @@ export default function ScanModal({ scan, onClose, onSaved }) {
               )}
               {materialType === "activity" && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Giai đoạn KHBD
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Giai đoạn KHBD
                     <select className="form-control" value={config.phase} onChange={(e)=>setConfig({...config, phase: e.target.value})} style={{ minWidth: 150 }}>
                       <option value="khoiDong">Khởi động</option><option value="khamPha">Khám phá</option><option value="luyenTap">Luyện tập</option><option value="vanDung">Vận dụng</option>
                     </select>
                   </label>
-                  <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Thời lượng
+                  <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Thời lượng
                     <input className="form-control" value={config.duration} onChange={(e)=>setConfig({...config, duration: e.target.value})} placeholder="15 phút" style={{ minWidth: 110 }} />
                   </label>
                 </div>
               )}
               <div>
-                <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Chỉ dẫn thêm cho AI (tùy chọn)
+                <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Chỉ dẫn thêm cho AI (tùy chọn)
                   <textarea className="form-control" rows={2} value={config.teacherInstruction} onChange={(e)=>setConfig({...config, teacherInstruction: e.target.value})} placeholder="VD: Ưu tiên câu hỏi vận dụng thực tế, có 1 câu mở rộng…" style={{ resize: "vertical" }} />
                 </label>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:6 }}>
@@ -725,28 +772,28 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                       const cur = config.teacherInstruction || "";
                       const next = cur ? (cur.includes(chip) ? cur : cur + (cur.endsWith(" ")||cur.endsWith("\n")?"":" · ") + chip) : chip;
                       setConfig({...config, teacherInstruction: next});
-                    }} style={{ fontSize:11, padding:"3px 8px", borderRadius:999, border:"1px solid var(--border-color)", background: (config.teacherInstruction||"").includes(chip) ? "var(--color-action-soft, var(--primary-light))" : "var(--surface)", color:(config.teacherInstruction||"").includes(chip) ? "var(--color-action, var(--primary))" : "var(--text-mid)", fontWeight:600, cursor:"pointer" }}>{(config.teacherInstruction||"").includes(chip) ? "✓ " : "+ "}{chip}</button>
+                    }} style={{ fontSize: "0.6875rem", padding:"3px 8px", borderRadius:999, border:"1px solid var(--border-color)", background: (config.teacherInstruction||"").includes(chip) ? "var(--color-action-soft, var(--primary-light))" : "var(--surface)", color:(config.teacherInstruction||"").includes(chip) ? "var(--color-action, var(--primary))" : "var(--text-mid)", fontWeight:600, cursor:"pointer" }}>{(config.teacherInstruction||"").includes(chip) ? "✓ " : "+ "}{chip}</button>
                   ))}
-                  {config.teacherInstruction && <button onClick={()=>setConfig({...config, teacherInstruction:""})} style={{ fontSize:11, padding:"3px 8px", borderRadius:999, border:"1px solid var(--danger)", background:"var(--danger-soft)", color:"var(--danger-deep)", fontWeight:700, cursor:"pointer" }}>✕ Xóa</button>}
+                  {config.teacherInstruction && <button onClick={()=>setConfig({...config, teacherInstruction:""})} style={{ fontSize: "0.6875rem", padding:"3px 8px", borderRadius:999, border:"1px solid var(--danger)", background:"var(--danger-soft)", color:"var(--danger-deep)", fontWeight:700, cursor:"pointer" }}>✕ Xóa</button>}
                 </div>
               </div>
 
               {/* §28 Advanced collapsed */}
               <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, overflow: "hidden" }}>
-                <button onClick={()=>setShowAdvanced((v)=>!v)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background: showAdvanced ? "var(--surface-soft)" : "transparent", border:"none", cursor:"pointer", fontSize:12, fontWeight:700 }}>
+                <button onClick={()=>setShowAdvanced((v)=>!v)} style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background: showAdvanced ? "var(--surface-soft)" : "transparent", border:"none", cursor:"pointer", fontSize: "0.75rem", fontWeight:700 }}>
                   <span>⚙ Tùy chỉnh nâng cao</span><span style={{ transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)", display:"inline-block" }}>▾</span>
                 </button>
                 {showAdvanced && (
                   <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8, borderTop:"1px solid var(--border-color)", background:"var(--surface-soft)" }}>
                     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                      <label style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>Đối tượng
+                      <label style={{ fontSize: "0.6875rem", display:"flex", flexDirection:"column", gap:4 }}>Đối tượng
                         <select className="form-control" value={config.audience} onChange={(e)=>setConfig({...config, audience:e.target.value})} style={{ minWidth:110 }}><option>Cá nhân</option><option>Cặp đôi</option><option>Nhóm</option><option>Cả lớp</option></select>
                       </label>
-                      <label style={{ fontSize:11, display:"flex", flexDirection:"column", gap:4 }}>Xáo trộn đáp án
+                      <label style={{ fontSize: "0.6875rem", display:"flex", flexDirection:"column", gap:4 }}>Xáo trộn đáp án
                         <select className="form-control" value={config.randomizeAnswers ? "on" : "off"} onChange={(e)=>setConfig({...config, randomizeAnswers: e.target.value === "on"})} style={{ minWidth:130 }}><option value="off">Giữ thứ tự sách</option><option value="on">Xáo trộn vị trí đáp án</option></select>
                       </label>
                     </div>
-                    <div style={{ fontSize:11, color:"var(--text-muted)" }}>Mặc định đã tối ưu. Chỉ mở khi cần tinh chỉnh chuyên sâu.</div>
+                    <div style={{ fontSize: "0.6875rem", color:"var(--text-muted)" }}>Mặc định đã tối ưu. Chỉ mở khi cần tinh chỉnh chuyên sâu.</div>
                   </div>
                 )}
               </div>
@@ -764,33 +811,33 @@ export default function ScanModal({ scan, onClose, onSaved }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span className="gl-chip" style={{ background: "var(--primary-light)", color: "var(--primary)" }}>📷 {scan.book.title} • Trang {scan.page} • {materialType} • {questions.length || generated.parsed?.questions?.length || 0} mục</span>
                 {(config.keepOriginal || materialType === "original") && <span className="gl-chip" style={{ background: "#f0fdfa", color: "#0f766e", border: "1px solid #99f6e4" }}>📖 Giữ nguyên gốc</span>}
-                {generated.parsed?.title || generated.parsed?.name ? null : <span style={{ fontSize: 11, color: "var(--text-muted)" }}>(chưa có tiêu đề — hãy đặt bên dưới)</span>}
+                {generated.parsed?.title || generated.parsed?.name ? null : <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }}>(chưa có tiêu đề — hãy đặt bên dưới)</span>}
               </div>
 
               {/* Đối chiếu nguyên bản SGK — luôn hiện để GV kiểm tra */}
               {originalQuestions.length > 0 && (
                 <details open={materialType === "original"} style={{ border: "1px solid #99f6e4", borderRadius: 8, background: "#f0fdfa", padding: "8px 10px" }}>
-                  <summary style={{ fontSize: 12, fontWeight: 800, color: "#0f766e", cursor: "pointer" }}>📖 Nguyên bản trong sách ({originalQuestions.length} câu) — bấm để {materialType === "original" ? "thu gọn" : "đối chiếu"}</summary>
-                  <ol style={{ margin: "8px 0 0 16px", fontSize: 12, color: "#134e4a", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <summary style={{ fontSize: "0.75rem", fontWeight: 800, color: "#0f766e", cursor: "pointer" }}>📖 Nguyên bản trong sách ({originalQuestions.length} câu) — bấm để {materialType === "original" ? "thu gọn" : "đối chiếu"}</summary>
+                  <ol style={{ margin: "8px 0 0 16px", fontSize: "0.75rem", color: "#134e4a", display: "flex", flexDirection: "column", gap: 4 }}>
                     {originalQuestions.slice(0, 10).map((q, i) => <li key={i} style={{ lineHeight: 1.5 }}>{q}</li>)}
                   </ol>
                 </details>
               )}
-              <label style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>Tiêu đề (có thể sửa)
+              <label style={{ fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 4 }}>Tiêu đề (có thể sửa)
                 <input className="form-control" value={editTitle} onChange={(e)=>setEditTitle(e.target.value)} placeholder="Tiêu đề học liệu" style={{ fontWeight: 700 }} aria-label="Tiêu đề học liệu" />
               </label>
 
               {/* Note / Activity preview */}
               {isNoteOrActivity && !questions.length && (
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: 10, background: "var(--surface-soft)", display: "flex", flexDirection: "column", gap: 8, maxHeight: 360, overflow: "auto" }}>
-                  {generated.parsed?.summary && <div style={{ fontSize: 12 }}><strong>Tóm tắt:</strong> {generated.parsed.summary}</div>}
-                  {generated.parsed?.content && <div style={{ fontSize: 12, whiteSpace: "pre-wrap", background: "var(--surface)", border: "1px solid var(--border-color)", borderRadius: 6, padding: 8 }}>{generated.parsed.content}</div>}
+                  {generated.parsed?.summary && <div style={{ fontSize: "0.75rem" }}><strong>Tóm tắt:</strong> {generated.parsed.summary}</div>}
+                  {generated.parsed?.content && <div style={{ fontSize: "0.75rem", whiteSpace: "pre-wrap", background: "var(--surface)", border: "1px solid var(--border-color)", borderRadius: 6, padding: 8 }}>{generated.parsed.content}</div>}
                   {Array.isArray(generated.parsed?.keyPoints) && generated.parsed.keyPoints.length > 0 && (
-                    <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12 }}>{generated.parsed.keyPoints.map((k,i)=><li key={i}>{k}</li>)}</ul>
+                    <ul style={{ margin: 0, paddingLeft: 16, fontSize: "0.75rem" }}>{generated.parsed.keyPoints.map((k,i)=><li key={i}>{k}</li>)}</ul>
                   )}
-                  {generated.parsed?.steps && <div style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>{JSON.stringify(generated.parsed.steps, null, 2).slice(0, 800)}</div>}
+                  {generated.parsed?.steps && <div style={{ fontSize: "0.75rem", whiteSpace: "pre-wrap" }}>{JSON.stringify(generated.parsed.steps, null, 2).slice(0, 800)}</div>}
                   {!generated.parsed?.content && !generated.parsed?.summary && !generated.parsed?.keyPoints && (
-                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, margin: 0 }}>{JSON.stringify(generated.parsed || generated.raw, null, 2).slice(0, 1200)}</pre>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: "0.6875rem", margin: 0 }}>{JSON.stringify(generated.parsed || generated.raw, null, 2).slice(0, 1200)}</pre>
                   )}
                 </div>
               )}
@@ -800,34 +847,34 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                 <div style={{ border: "1px solid var(--border-color)", borderRadius: 8, padding: 8, background: "var(--surface)", display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflow: "auto" }}>
                   {questions.slice(0, 30).map((q, idx) => (
                     <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "var(--surface-soft)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
-                      <span style={{ fontWeight: 800, fontSize: 12, minWidth: 26, textAlign: "center", paddingTop: 2, background: "var(--primary-light)", borderRadius: 6 }}>#{idx + 1}</span>
+                      <span style={{ fontWeight: 800, fontSize: "0.75rem", minWidth: 26, textAlign: "center", paddingTop: 2, background: "var(--primary-light)", borderRadius: 6 }}>#{idx + 1}</span>
                       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-                        {(q.origin === "sgk_original" || q.keepOriginal) && <span style={{ alignSelf: "flex-start", fontSize: 10, fontWeight: 800, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", padding: "1px 7px", borderRadius: 999 }}>📖 Nguyên văn SGK</span>}
+                        {(q.origin === "sgk_original" || q.keepOriginal) && <span style={{ alignSelf: "flex-start", fontSize: "0.625rem", fontWeight: 800, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", padding: "1px 7px", borderRadius: 999 }}>📖 Nguyên văn SGK</span>}
                         <input
                           className="form-control"
                           value={q.q || q.question || q.title || ""}
                           onChange={(e)=>updateQuestionText(idx, q.q !== undefined ? "q" : "question", e.target.value)}
                           placeholder="Nội dung câu hỏi"
-                          style={{ fontSize: 12, fontWeight: 600 }}
+                          style={{ fontSize: "0.75rem", fontWeight: 600 }}
                           aria-label={`Câu ${idx+1}`}
                         />
                         {Array.isArray(q.options) && q.options.length > 0 && (
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                             {q.options.slice(0, 4).map((opt, oi) => (
                               <div key={oi} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ fontWeight: 800, fontSize: 11, width: 18, textAlign: "center", color: (q.answer === oi || q.correctIndex === oi) ? "var(--success)" : "var(--text-muted)" }}>{String.fromCharCode(65+oi)}</span>
-                                <input className="form-control" value={opt} onChange={(e)=>updateOption(idx, oi, e.target.value)} style={{ fontSize: 11, padding: "4px 6px" }} aria-label={`Đáp án ${String.fromCharCode(65+oi)}`} />
+                                <span style={{ fontWeight: 800, fontSize: "0.6875rem", width: 18, textAlign: "center", color: (q.answer === oi || q.correctIndex === oi) ? "var(--success)" : "var(--text-muted)" }}>{String.fromCharCode(65+oi)}</span>
+                                <input className="form-control" value={opt} onChange={(e)=>updateOption(idx, oi, e.target.value)} style={{ fontSize: "0.6875rem", padding: "4px 6px" }} aria-label={`Đáp án ${String.fromCharCode(65+oi)}`} />
                               </div>
                             ))}
                           </div>
                         )}
                         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                          <label style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>Đáp án
-                            <select value={typeof q.correctIndex === "number" ? q.correctIndex : (typeof q.answer === "number" ? q.answer : 0)} onChange={(e)=>updateQuestionText(idx, "correctIndex", Number(e.target.value))} className="form-control" style={{ fontSize: 11, padding: "2px 6px", height: 28, width: 60 }}>
+                          <label style={{ fontSize: "0.6875rem", display: "flex", alignItems: "center", gap: 4 }}>Đáp án
+                            <select value={typeof q.correctIndex === "number" ? q.correctIndex : (typeof q.answer === "number" ? q.answer : 0)} onChange={(e)=>updateQuestionText(idx, "correctIndex", Number(e.target.value))} className="form-control" style={{ fontSize: "0.6875rem", padding: "2px 6px", height: 28, width: 60 }}>
                               <option value={0}>A</option><option value={1}>B</option><option value={2}>C</option><option value={3}>D</option>
                             </select>
                           </label>
-                          {(q.explanation || q.answer) && typeof q.answer === "string" && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Giải thích: {(q.explanation || q.answer).slice(0, 80)}</span>}
+                          {(q.explanation || q.answer) && typeof q.answer === "string" && <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }}>Giải thích: {(q.explanation || q.answer).slice(0, 80)}</span>}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
@@ -841,7 +888,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                     </div>
                   ))}
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", paddingTop: 4, borderTop: "1px dashed var(--border-color)" }}>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{questions.length} câu • có thể sửa trực tiếp, kéo thứ tự, hoặc tạo lại từng câu</span>
+                    <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }}>{questions.length} câu • có thể sửa trực tiếp, kéo thứ tự, hoặc tạo lại từng câu</span>
                     <button className="btn btn-secondary btn-xs" onClick={addQuestionManual}>+ Thêm câu</button>
                   </div>
                 </div>
@@ -849,15 +896,15 @@ export default function ScanModal({ scan, onClose, onSaved }) {
 
               {!questions.length && !isNoteOrActivity && (
                 <div role="alert" style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> AI trả về thiếu danh sách câu hỏi</div>
-                  <div style={{ fontSize: 11.5, color: "#78716c" }}>Nguyên bản 7 câu trong sách (cột trái) vẫn được giữ. Bấm <strong>Tạo lại toàn bộ</strong> để AI thử lại — thường lần 2 sẽ chuẩn.</div>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={14} /> AI trả về thiếu danh sách câu hỏi</div>
+                  <div style={{ fontSize: "0.7188rem", color: "#78716c" }}>Nguyên bản 7 câu trong sách (cột trái) vẫn được giữ. Bấm <strong>Tạo lại toàn bộ</strong> để AI thử lại — thường lần 2 sẽ chuẩn.</div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <button className="btn btn-primary btn-xs" onClick={handleGenerate} disabled={loading}><RefreshCw size={12} /> Tạo lại ngay</button>
                     <button className="btn btn-ghost btn-xs" onClick={()=>setStep(3)}><ArrowLeft size={12} /> Sửa cấu hình</button>
                   </div>
-                  <details style={{ fontSize: 11 }}>
+                  <details style={{ fontSize: "0.6875rem" }}>
                     <summary style={{ cursor: "pointer", color: "#78716c" }}>Xem phản hồi thô của AI</summary>
-                    <pre style={{ whiteSpace: "pre-wrap", fontSize: 10.5, maxHeight: 160, overflow: "auto", background: "#fff", padding: 8, borderRadius: 6, border: "1px solid #fde68a", marginTop: 6 }}>{String(generated.raw || "").slice(0, 1500)}</pre>
+                    <pre style={{ whiteSpace: "pre-wrap", fontSize: "0.6563rem", maxHeight: 160, overflow: "auto", background: "#fff", padding: 8, borderRadius: 6, border: "1px solid #fde68a", marginTop: 6 }}>{String(generated.raw || "").slice(0, 1500)}</pre>
                   </details>
                 </div>
               )}
@@ -867,7 +914,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                 <button className="btn btn-ghost btn-xs" onClick={()=>setStep(3)}><ArrowLeft size={12} /> Sửa cấu hình</button>
                 <button className="btn btn-ghost btn-xs" onClick={handleGenerate} disabled={loading}><RefreshCw size={12} /> Tạo lại toàn bộ</button>
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", background: "var(--surface-soft)", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color)" }}>
+              <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)", background: "var(--surface-soft)", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border-color)" }}>
                 Sau khi lưu: học liệu sẽ có nhãn <strong>📚 Nguồn: SGK {scan.book.title} — tr.{scan.page}</strong> để bấm “Xem nguồn” mở lại đúng trang.
               </div>
 
@@ -881,20 +928,20 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                     <button className="btn btn-secondary btn-xs" onClick={()=>{ try{ window.location.hash=""; }catch{}; onClose(); }}><Eye size={12} /> Đóng</button>
                   </div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Đưa vào KHBD: soạn trực tiếp trong module Giáo án mới.</span>
+                    <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)" }}>Đưa vào KHBD: soạn trực tiếp trong module Giáo án mới.</span>
                   </div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                    <select className="form-control" value={collPick} onChange={(e)=>setCollPick(e.target.value)} style={{ flex:1, minWidth:160, fontSize:11 }}>
+                    <select className="form-control" value={collPick} onChange={(e)=>setCollPick(e.target.value)} style={{ flex:1, minWidth:160, fontSize: "0.6875rem" }}>
                       <option value="">Thêm vào bộ sưu tập…</option>
                       {collOptions.map((c)=><option key={c.id} value={c.id}>{c.name.slice(0,30)}</option>)}
                     </select>
                     <button className="btn btn-secondary btn-xs" onClick={handleAddToCollection} disabled={!collPick}><Library size={12} /> Thêm vào BST</button>
                   </div>
                   <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-                    <input className="form-control" value={newCollName} onChange={(e)=>setNewCollName(e.target.value)} placeholder="Tên BST mới…" style={{ flex:1, minWidth:160, fontSize:11 }} onKeyDown={(e)=>{ if(e.key==="Enter") handleCreateCollection(); }} />
+                    <input className="form-control" value={newCollName} onChange={(e)=>setNewCollName(e.target.value)} placeholder="Tên BST mới…" style={{ flex:1, minWidth:160, fontSize: "0.6875rem" }} onKeyDown={(e)=>{ if(e.key==="Enter") handleCreateCollection(); }} />
                     <button className="btn btn-ghost btn-xs" onClick={handleCreateCollection} disabled={!newCollName.trim()}><Library size={12} /> Tạo BST mới</button>
                   </div>
-                  {savedInfo.type==="batch" && <div style={{ fontSize:11 }}>{savedInfo.batch.length} mục đã lưu: {savedInfo.batch.map((b)=>b.type).join(", ")}</div>}
+                  {savedInfo.type==="batch" && <div style={{ fontSize: "0.6875rem" }}>{savedInfo.batch.length} mục đã lưu: {savedInfo.batch.map((b)=>b.type).join(", ")}</div>}
                 </div>
               )}
             </div>
@@ -909,15 +956,15 @@ export default function ScanModal({ scan, onClose, onSaved }) {
           {step === 3 && <button className="btn btn-primary" onClick={handleGenerate} disabled={loading || !materialType}><Sparkles size={14} /> {loading ? "Đang tạo…" : "AI tạo"}</button>}
           {step >= 4 && !savedInfo && (
             <>
-              <span style={{ fontSize: 11, color: "var(--text-muted)", alignSelf: "center", marginRight: "auto" }}>📷 {scan.book.title} • tr.{scan.page}</span>
+              <span style={{ fontSize: "0.6875rem", color: "var(--text-muted)", alignSelf: "center", marginRight: "auto" }}>📷 {scan.book.title} • tr.{scan.page}</span>
               <button className="btn btn-secondary" onClick={handleSendToWhiteboard} disabled={loading} title="Đưa ảnh + trích dẫn sang Bảng trắng (giữ liên kết nguồn)"><Palette size={14} /> Đưa vào Bảng trắng</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={loading || !generated} aria-busy={loading}><Save size={14} /> Lưu vào kho</button>
             </>
           )}
-          {savedInfo && <span style={{ fontSize: 11, color: "var(--success)", alignSelf:"center" }}>✓ Đã lưu — dùng hành động ở trên</span>}
+          {savedInfo && <span style={{ fontSize: "0.6875rem", color: "var(--success)", alignSelf:"center" }}>✓ Đã lưu — dùng hành động ở trên</span>}
         </div>
         {step >= 4 && generated && (
-          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border-color)", display: "flex", gap: 6, flexWrap: "wrap", fontSize: 11, background: "var(--surface-soft)" }}>
+          <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border-color)", display: "flex", gap: 6, flexWrap: "wrap", fontSize: "0.6875rem", background: "var(--surface-soft)" }}>
             <span style={{ color: "var(--text-muted)" }}>Sau khi lưu:</span>
             <span style={{ background: "var(--surface)", border: "1px solid var(--border-color)", padding: "2px 6px", borderRadius: 6 }}>📷 AI từ SGK</span>
             <span style={{ background: "var(--surface)", border: "1px solid var(--border-color)", padding: "2px 6px", borderRadius: 6 }}>📚 {scan.book.subject} • Lớp {scan.book.grade}</span>
@@ -955,13 +1002,22 @@ export default function ScanModal({ scan, onClose, onSaved }) {
               initialCrop={scan.crop}
               onCancel={() => setShowCropPreview(false)}
               onConfirm={(result) => {
-                setAdjustedScan({
+                const croppedScan = {
                   ...scan,
                   dataUrl: result.dataUrl,
                   width: result.width,
                   height: result.height,
                   crop: result.crop
-                });
+                };
+                setAdjustedScan(croppedScan);
+                setAnalysis(null);
+                setAnalysisEdit("");
+                setAnalysisEditOpen(false);
+                setGenerated(null);
+                setSavedInfo(null);
+                setSelectedTask(null);
+                setError("");
+                setStep(1);
                 setShowCropPreview(false);
               }}
             />

@@ -377,9 +377,9 @@ export default function CropPreview({
         .cropd-root { display:flex; flex-direction:column; gap:12px; padding:16px; max-height:88vh; }
         .cropd-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
         .cropd-title { margin:0; font-size:1rem; font-weight:700; color:var(--text-dark); display:flex; align-items:center; gap:8px; }
-        .cropd-badge { font-size:10.5px; font-weight:700; color:var(--color-action-strong, var(--color-action)); background:var(--color-action-soft, var(--primary-light)); border:1px solid var(--border-color); padding:2px 8px; border-radius:999px; }
+        .cropd-badge { font-size: 0.6563rem; font-weight:700; color:var(--color-action-strong, var(--color-action)); background:var(--color-action-soft, var(--primary-light)); border:1px solid var(--border-color); padding:2px 8px; border-radius:999px; }
         .cropd-toolbar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-        .cropd-tbtn { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:6px 10px; border-radius:8px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-mid); cursor:pointer; }
+        .cropd-tbtn { display:inline-flex; align-items:center; gap:5px; font-size: 0.7188rem; font-weight:600; padding:6px 10px; border-radius:8px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-mid); cursor:pointer; }
         .cropd-tbtn:hover { border-color:var(--color-action, var(--primary)); color:var(--color-action, var(--primary)); }
         .cropd-tbtn.on { background:var(--color-action-soft, #eff6ff); border-color:var(--color-action, #2d73ff); color:var(--color-action-strong, #1d4ed8); }
         .cropd-tbtn.primary { background:var(--color-action, var(--primary)); border-color:var(--color-action, var(--primary)); color:#fff; }
@@ -392,14 +392,14 @@ export default function CropPreview({
         .cropd-canvas-wrap { background:#0f172a; border-radius:12px; padding:12px; overflow:auto; min-height:320px; max-height:64vh; position:relative; }
         .cropd-side { display:flex; flex-direction:column; gap:10px; }
         .cropd-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; }
-        .cropd-card h5 { margin:0 0 6px; font-size:12px; color:#0f172a; }
+        .cropd-card h5 { margin:0 0 6px; font-size: 0.75rem; color:#0f172a; }
         .cropd-row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-        .cropd-chip { font-size:11px; padding:4px 9px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; font-weight:700; color:#475569; }
+        .cropd-chip { font-size: 0.6875rem; padding:4px 9px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; font-weight:700; color:#475569; }
         .cropd-chip.on { background:var(--color-action, #2d73ff); border-color:var(--color-action, #2d73ff); color:#fff; }
-        .cropd-meta { font-size:11.5px; color:#475569; line-height:1.6; }
-        .cropd-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:#64748b; }
+        .cropd-meta { font-size: 0.7188rem; color:#475569; line-height:1.6; }
+        .cropd-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size: 0.75rem; color:#64748b; }
         .cropd-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
-        .cropd-btn { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:800; padding:9px 16px; border-radius:10px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; }
+        .cropd-btn { display:inline-flex; align-items:center; gap:6px; font-size: 0.8125rem; font-weight:800; padding:9px 16px; border-radius:10px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; }
         .cropd-btn.primary { background:var(--color-action, #2d73ff); border-color:var(--color-action, #2d73ff); color:#fff; }
       `}</style>
 
@@ -488,7 +488,7 @@ export default function CropPreview({
                   }}
                 />
               ))}
-              <span style={{ position:"absolute", left:"50%", top:-24, transform:"translateX(-50%)", background:"#0f172a", color:"#fff", fontSize:10.5, fontWeight:800, padding:"3px 8px", borderRadius:999, whiteSpace:"nowrap" }}>
+              <span style={{ position:"absolute", left:"50%", top:-24, transform:"translateX(-50%)", background:"#0f172a", color:"#fff", fontSize: "0.6563rem", fontWeight:800, padding:"3px 8px", borderRadius:999, whiteSpace:"nowrap" }}>
                 {quality.w}×{quality.h} · {pct}% ảnh
               </span>
             </div>

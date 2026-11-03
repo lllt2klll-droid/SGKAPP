@@ -212,6 +212,7 @@ function serializeEl(node) {
 function serializeNode(svgNode) {
   const clone = svgNode.cloneNode(true);
   clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.querySelectorAll?.("[data-wb-editor-controls]").forEach((el) => el.remove());
   return new XMLSerializer().serializeToString(clone);
 }
 

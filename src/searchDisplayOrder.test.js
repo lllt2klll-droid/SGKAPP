@@ -4,7 +4,7 @@
 // đang highlight.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { groupResultsForDisplay, TYPE_ORDER, typeRank } from "./searchDisplayOrder.js";
+import { groupResultsForDisplay, TYPE_ORDER, typeRank } from "./data/searchDisplayOrder.js";
 
 globalThis.__SGK_TEST__ = true;
 
