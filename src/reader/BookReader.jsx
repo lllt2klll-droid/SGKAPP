@@ -175,6 +175,17 @@ function loadReaderWebTools() {
   });
 }
 
+function copyCanvasContents(source, target) {
+  if (!source || !target) return;
+  target.width = source.width;
+  target.height = source.height;
+  target.style.width = source.style.width;
+  target.style.height = source.style.height;
+  target.style.imageRendering = "auto";
+  const context = target.getContext("2d");
+  if (context) context.drawImage(source, 0, 0);
+}
+
 export default function BookReader({
   book,
   onBack,
@@ -225,7 +236,8 @@ export default function BookReader({
   const [isDraggingPan, setIsDraggingPan] = useState(false);
   const [isTouchGesturing, setIsTouchGesturing] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
-  const [pageTurnDirection, setPageTurnDirection] = useState("");
+  const [pageFlipSnapshot, setPageFlipSnapshot] = useState(null);
+  const pendingPageFlipRenderRef = useRef(null);
   const lastRenderedPageRef = useRef(null);
   const lastRenderedBookRef = useRef(book.filename);
   const [zoomPillVisible, setZoomPillVisible] = useState(false);
@@ -878,7 +890,7 @@ export default function BookReader({
     const availW = Math.max(220, container.clientWidth - 48);
     const availH = Math.max(200, container.clientHeight - 32 || 600);
     const isTwo = twoPageModeRef.current && pageNumRef.current + 1 <= numPagesRef.current;
-    const gap = isTwo ? 16 : 0;
+    const gap = 0;
     const totalW = (isTwo ? pageWidthRef.current * 2 + gap : pageWidthRef.current) * curZoom;
     const pageH = pageHeightRef.current || pageWidthRef.current * 1.414;
     const totalH = pageH * curZoom;
@@ -1284,6 +1296,50 @@ export default function BookReader({
   useEffect(() => {
     if (!pdfDoc) return;
     const token = ++renderGenRef.current;
+    pendingPageFlipRenderRef.current = null;
+    const previousPage =
+      lastRenderedBookRef.current === book.filename
+        ? lastRenderedPageRef.current
+        : null;
+    let pageFlipCandidate = null;
+    if (previousPage !== null && previousPage !== pageNum && settings.accessibility?.pageFlip3D !== false) {
+      const direction = pageNum > previousPage ? "next" : "prev";
+      const preferredCanvas = twoPageMode && direction === "next"
+        ? canvas2Ref.current
+        : canvasRef.current;
+      const canvasEl = preferredCanvas?.width && preferredCanvas.height
+        ? preferredCanvas
+        : canvasRef.current;
+      if (canvasEl?.width && canvasEl.height) {
+        try {
+          const slot = canvasEl === canvas2Ref.current ? "right" : "left";
+          pageFlipCandidate = {
+            id: token,
+            src: canvasEl.toDataURL("image/jpeg", 0.92),
+            direction,
+            slot,
+            width: canvasEl.style.width,
+            height: canvasEl.style.height,
+            ready: false,
+          };
+        } catch (error) {
+          console.warn("[BookReader] Could not capture page for flip animation:", error);
+        }
+      }
+    }
+    setPageFlipSnapshot(pageFlipCandidate);
+
+    const decodeFlipImages = async (sources) => {
+      await Promise.all(sources.filter(Boolean).map((src) => {
+        const image = new Image();
+        return new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = reject;
+          image.src = src;
+          if (typeof image.decode === "function") image.decode().then(resolve, reject);
+        });
+      }));
+    };
 
     const renderOne = async (pNum, canvasEl, taskRef) => {
       if (!canvasEl || token !== renderGenRef.current) return null;
@@ -1323,8 +1379,24 @@ export default function BookReader({
     const run = async () => {
       setIsRendering(true);
       try {
+        if (pageFlipCandidate) {
+          try {
+            await decodeFlipImages([pageFlipCandidate.src]);
+            await new Promise((resolve) => window.requestAnimationFrame(
+              () => window.requestAnimationFrame(resolve),
+            ));
+          } catch (error) {
+            console.warn("[BookReader] Could not prepare page flip images:", error);
+            pageFlipCandidate = null;
+            setPageFlipSnapshot(null);
+          }
+        }
         if (token !== renderGenRef.current) return;
-        const res = await renderOne(pageNum, canvasRef.current, renderTaskRef);
+        const targetCanvas = pageFlipCandidate ? document.createElement("canvas") : canvasRef.current;
+        const targetCanvas2 = pageFlipCandidate && twoPageMode
+          ? document.createElement("canvas")
+          : canvas2Ref.current;
+        const res = await renderOne(pageNum, targetCanvas, renderTaskRef);
         if (token !== renderGenRef.current) return;
 
         const applyVisualState = async (
@@ -1366,6 +1438,51 @@ export default function BookReader({
           }
         };
 
+        let rightRes = null;
+        if (twoPageMode && pageNum + 1 <= numPages) {
+          rightRes = await renderOne(
+            pageNum + 1,
+            targetCanvas2,
+            renderTask2Ref,
+          );
+          if (token !== renderGenRef.current) return;
+        }
+        if (token !== renderGenRef.current) return;
+
+        if (pageFlipCandidate) {
+          const reverseCanvas = pageFlipCandidate.direction === "next"
+            ? targetCanvas
+            : (twoPageMode ? targetCanvas2 : targetCanvas);
+          try {
+            const backSrc = reverseCanvas?.width && reverseCanvas.height
+              ? reverseCanvas.toDataURL("image/jpeg", 0.82)
+              : "";
+            await decodeFlipImages([backSrc]);
+            if (twoPageMode) {
+              const underSheetSource = pageFlipCandidate.direction === "next"
+                ? rightRes?.canvasEl
+                : res?.canvasEl;
+              const underSheetTarget = pageFlipCandidate.direction === "next"
+                ? canvas2Ref.current
+                : canvasRef.current;
+              copyCanvasContents(underSheetSource, underSheetTarget);
+            }
+            pendingPageFlipRenderRef.current = {
+              id: token,
+              left: res?.canvasEl || null,
+              right: rightRes?.canvasEl || null,
+              bookFilename: book.filename,
+              pageNum,
+            };
+            setPageFlipSnapshot((current) => current?.id === token
+              ? { ...current, backSrc, ready: true }
+              : current);
+          } catch (error) {
+            console.warn("[BookReader] Could not capture reverse page for flip animation:", error);
+            setPageFlipSnapshot((current) => current?.id === token ? null : current);
+          }
+        }
+
         if (res) {
           await applyVisualState(
             pageNum,
@@ -1375,34 +1492,19 @@ export default function BookReader({
             setPageImageBase64,
           );
         }
-
-        if (twoPageMode && pageNum + 1 <= numPages) {
-          const rightRes = await renderOne(
+        if (rightRes) {
+          await applyVisualState(
             pageNum + 1,
-            canvas2Ref.current,
-            renderTask2Ref,
+            rightRes.canvasEl,
+            setRightPageIsImage,
+            setRightPageText,
+            setRightPageImageBase64,
           );
-          if (token !== renderGenRef.current) return;
-          if (rightRes) {
-            await applyVisualState(
-              pageNum + 1,
-              rightRes.canvasEl,
-              setRightPageIsImage,
-              setRightPageText,
-              setRightPageImageBase64,
-            );
-          }
         }
-        if (token !== renderGenRef.current) return;
 
-        const previousPage =
-          lastRenderedBookRef.current === book.filename
-            ? lastRenderedPageRef.current
-            : null;
-        lastRenderedBookRef.current = book.filename;
-        lastRenderedPageRef.current = pageNum;
-        if (previousPage !== null && previousPage !== pageNum) {
-          setPageTurnDirection(pageNum > previousPage ? "next" : "prev");
+        if (!pageFlipCandidate) {
+          lastRenderedBookRef.current = book.filename;
+          lastRenderedPageRef.current = pageNum;
         }
 
         if (token === renderGenRef.current) {
@@ -1433,6 +1535,18 @@ export default function BookReader({
       if (t2) t2.cancel();
     };
   }, [pdfDoc, pageNum, zoom, twoPageMode, numPages, book.filename]);
+
+  const finishPageFlip = useCallback((id) => {
+    const pending = pendingPageFlipRenderRef.current;
+    if (pending?.id === id) {
+      copyCanvasContents(pending.left, canvasRef.current);
+      copyCanvasContents(pending.right, canvas2Ref.current);
+      lastRenderedBookRef.current = pending.bookFilename;
+      lastRenderedPageRef.current = pending.pageNum;
+      pendingPageFlipRenderRef.current = null;
+    }
+    setPageFlipSnapshot((current) => current?.id === id ? null : current);
+  }, []);
 
   // ── Load notes for the current spread (left page + right page) ─
   useEffect(() => {
@@ -2194,7 +2308,7 @@ export default function BookReader({
           })),
         };
       } else {
-        alert("Chưa có mục lục cho sách này để tải.");
+        notify("Chưa có mục lục cho sách này để tải.", "warning");
         return;
       }
       const data = await exportTocSimple([bookForExport]);
@@ -2217,7 +2331,8 @@ export default function BookReader({
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
-      alert("Không tải được mục lục: " + (e?.message || "lỗi"));
+      console.error("[BookReader] TOC export failed", e);
+      notify(`Không tải được mục lục: ${e?.message || "lỗi"}`, "error");
     }
   };
   // Nạp buffer Excel mục lục vào panel + store — dùng chung cho upload Excel
@@ -2258,9 +2373,10 @@ export default function BookReader({
     try {
       const buf = await file.arrayBuffer();
       const { count, title } = await applyTocBuffer(buf);
-      alert(`Đã tải lên ${count} mục cho "${title}"`);
+      notify(`Đã tải lên ${count} mục cho "${title}".`, "success");
     } catch (e) {
-      alert("Không tải được mục lục: " + (e?.message || "lỗi"));
+      console.error("[BookReader] TOC import failed", e);
+      notify(`Không tải được mục lục: ${e?.message || "lỗi"}`, "error");
     } finally {
       if (tocFileRef.current) tocFileRef.current.value = "";
     }
@@ -2452,17 +2568,17 @@ export default function BookReader({
 
       // Validate canvas state
       if (!container) {
-        alert("Không tìm thấy vùng hiển thị PDF. Vui lòng thử lại.");
+        notify("Không tìm thấy vùng hiển thị PDF. Vui lòng thử lại.", "error");
         return;
       }
       if (!c1) {
-        alert("Canvas chưa sẵn sàng. Đang tải PDF...");
+        notify("Canvas chưa sẵn sàng. Đang tải PDF...", "warning");
         return;
       }
 
       // Check if canvas is currently rendering
       if (isRendering) {
-        alert("Đang tải trang. Vui lòng đợi tải xong rồi quét lại.");
+        notify("Đang tải trang. Vui lòng đợi tải xong rồi quét lại.", "warning");
         return;
       }
 
@@ -2472,13 +2588,13 @@ export default function BookReader({
 
       // Validate canvas dimensions
       if (c1Rect.width <= 0 || c1Rect.height <= 0) {
-        alert("Canvas chưa hiển thị. Vui lòng đợi tải xong.");
+        notify("Canvas chưa hiển thị. Vui lòng đợi tải xong.", "warning");
         return;
       }
 
       // Validate selection
       if (!sel || sel.w < 10 || sel.h < 10) {
-        alert("Vùng quét quá nhỏ. Hãy chọn lại vùng lớn hơn.");
+        notify("Vùng quét quá nhỏ. Hãy chọn lại vùng lớn hơn.", "warning");
         return;
       }
 
@@ -2498,9 +2614,7 @@ export default function BookReader({
       });
 
       if (!result || !result.dataUrl) {
-        alert(
-          "Không thể cắt vùng đã chọn. Vùng có thể nằm ngoài trang hoặc quá nhỏ.",
-        );
+        notify("Không thể cắt vùng đã chọn. Vùng có thể nằm ngoài trang hoặc quá nhỏ.", "error");
         return;
       }
 
@@ -2516,7 +2630,10 @@ export default function BookReader({
       // persist immediately to history (so "Scan gần đây" shows even if modal cancelled)
       try {
         await saveScan(rawScan);
-      } catch {}
+      } catch (error) {
+        console.error("[BookReader] scan history save failed", error);
+        notify("Chưa lưu được vào lịch sử quét; bạn vẫn có thể tiếp tục với ảnh vừa quét.", "warning");
+      }
 
       setScanPreview({
         ...rawScan,
@@ -2525,9 +2642,9 @@ export default function BookReader({
       });
       setScanMode(false);
     } catch (e) {
-      console.error("Scan crop failed:", e);
+      console.error("[BookReader] scan crop failed", e);
       const errorMsg = e?.message || "Lỗi không xác định";
-      alert(`Không thể cắt vùng đã chọn: ${errorMsg}. Thử lại.`);
+      notify(`Không thể cắt vùng đã chọn: ${errorMsg}. Thử lại.`, "error");
     } finally {
       selectionProcessingRef.current = false;
     }
@@ -4998,6 +5115,7 @@ export default function BookReader({
                 max={totalBookPages || 1}
                 value={pageInputVal}
                 onChange={(e) => setPageInputVal(e.target.value)}
+                aria-label="Nhập số trang sách"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const n = parseInt(pageInputVal);
@@ -5588,22 +5706,21 @@ export default function BookReader({
                   </div>
                 )}
                 <div
-                  className="pdf-view-inner"
+                  className={`pdf-view-inner${twoPageMode && pageNum + 1 <= numPages ? " pdf-view-inner-spread" : ""}${pageFlipSnapshot ? ` pdf-view-inner-turn-${pageFlipSnapshot.direction}` : ""}`}
                   style={{
                     transform: `translate(${panX}px, ${panY}px)`,
                     transformOrigin: "center center",
                     willChange: "transform",
                     transition: isDraggingPan || isTouchGesturing ? "none" : "transform 0.12s ease",
                     display: "flex",
-                    gap: "1rem",
+                    gap: 0,
                     alignItems: "flex-start",
                     justifyContent: "center",
                   }}
                 >
                   {/* Page 1 canvas */}
                   <div
-                    className={`pdf-canvas-box${pageTurnDirection ? ` is-page-turning page-turn-${pageTurnDirection}` : ""}${whiteboardPagePicker ? " whiteboard-page-selectable" : ""}`}
-                    onAnimationEnd={() => setPageTurnDirection("")}
+                    className={`pdf-canvas-box${whiteboardPagePicker ? " whiteboard-page-selectable" : ""}`}
                     onClick={(event) => handleWhiteboardPageClick(event, pageNum)}
                     onKeyDown={(event) => handleWhiteboardPageKeyDown(event, pageNum)}
                     role={whiteboardPagePicker ? "button" : undefined}
@@ -5613,10 +5730,27 @@ export default function BookReader({
                     title="Nhấp đúp vào trang để thêm ghi chú"
                   >
                     <canvas ref={canvasRef} />
-
+                    {pageFlipSnapshot?.slot === "left" && (
+                      <div
+                        key={pageFlipSnapshot.id}
+                        className={`pdf-page-flip-sheet page-flip-${pageFlipSnapshot.direction}${pageFlipSnapshot.ready ? " page-flip-ready" : ""}`}
+                        style={{ width: pageFlipSnapshot.width, height: pageFlipSnapshot.height }}
+                        onAnimationEnd={(event) => {
+                          if (event.target === event.currentTarget) {
+                            finishPageFlip(pageFlipSnapshot.id);
+                          }
+                        }}
+                        aria-hidden="true"
+                      >
+                        <img className="pdf-page-flip-front" src={pageFlipSnapshot.src} alt="" />
+                        <div className="pdf-page-flip-back">
+                          {pageFlipSnapshot.backSrc && <img src={pageFlipSnapshot.backSrc} alt="" />}
+                        </div>
+                      </div>
+                    )}
                     {notesOverlay(0)}
 
-                    {isRendering && (
+                    {isRendering && !pageFlipSnapshot && (
                       <div className="overlay-veil">
                         <div className="spinner" />
                       </div>
@@ -5626,7 +5760,7 @@ export default function BookReader({
                   {/* Page 2 canvas (two-page mode) */}
                   {twoPageMode && pageNum + 1 <= numPages && (
                     <div
-                      className={`pdf-canvas-box${pageTurnDirection ? ` is-page-turning page-turn-${pageTurnDirection}` : ""}${whiteboardPagePicker ? " whiteboard-page-selectable" : ""}`}
+                      className={`pdf-canvas-box${whiteboardPagePicker ? " whiteboard-page-selectable" : ""}`}
                       onClick={(event) => handleWhiteboardPageClick(event, pageNum + 1)}
                       onKeyDown={(event) => handleWhiteboardPageKeyDown(event, pageNum + 1)}
                       role={whiteboardPagePicker ? "button" : undefined}
@@ -5636,6 +5770,24 @@ export default function BookReader({
                       title="Nhấp đúp vào trang để thêm ghi chú"
                     >
                       <canvas ref={canvas2Ref} />
+                      {pageFlipSnapshot?.slot === "right" && (
+                        <div
+                          key={pageFlipSnapshot.id}
+                          className={`pdf-page-flip-sheet page-flip-${pageFlipSnapshot.direction}${pageFlipSnapshot.ready ? " page-flip-ready" : ""}`}
+                          style={{ width: pageFlipSnapshot.width, height: pageFlipSnapshot.height }}
+                          onAnimationEnd={(event) => {
+                            if (event.target === event.currentTarget) {
+                              finishPageFlip(pageFlipSnapshot.id);
+                            }
+                          }}
+                          aria-hidden="true"
+                        >
+                          <img className="pdf-page-flip-front" src={pageFlipSnapshot.src} alt="" />
+                          <div className="pdf-page-flip-back">
+                            {pageFlipSnapshot.backSrc && <img src={pageFlipSnapshot.backSrc} alt="" />}
+                          </div>
+                        </div>
+                      )}
                       {notesOverlay(1)}
                     </div>
                   )}
@@ -6623,7 +6775,7 @@ export default function BookReader({
                       </div>
                     )}
                     {planError && (
-                      <div style={{ fontSize: "0.78rem", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "0.4rem 0.55rem" }}>
+                      <div role="alert" aria-live="assertive" style={{ fontSize: "0.78rem", color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "0.4rem 0.55rem" }}>
                         {planError}
                       </div>
                     )}
@@ -7378,7 +7530,7 @@ export default function BookReader({
                   : type === "game"
                     ? "kho hoạt động"
                     : "ghi chú";
-            alert(`✓ Đã lưu vào ${dest}`);
+            notify(`Đã lưu vào ${dest}.`, "success");
             // optional: emit event để kho tự refresh
             try {
               appEvents.emit(AppEvents.SCAN_SAVED, { type, saved });

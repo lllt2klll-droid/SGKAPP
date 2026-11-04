@@ -192,6 +192,10 @@ app.use((err, _req, res, next) => {
 
 // ── Supported file types (must be defined BEFORE resolveBooksDir due to TDZ) ──
 const SUPPORTED_EXTS = [".pdf",".docx",".doc",".pptx",".ppt",".xlsx",".xls",".txt",".md",".html",".htm",".epub",".jpg",".jpeg",".png",".gif",".webp"];
+const BOOK_SUBJECT_SLUGS = Object.freeze({
+  "Toán":"toan","Tiếng Việt":"tieng-viet","Tiếng Anh":"tieng-anh","Tiếng Đức":"tieng-duc","Tiếng Hàn":"tieng-han","Tiếng Nhật":"tieng-nhat","Tiếng Nga":"tieng-nga","Tiếng Pháp":"tieng-phap","Tiếng Trung Quốc":"tieng-trung-quoc","Đạo đức":"dao-duc","Tự nhiên và Xã hội":"tu-nhien-va-xa-hoi","Lịch sử và Địa lí":"lich-su-va-dia-li","Khoa học":"khoa-hoc","Tin học":"tin-hoc","Công nghệ":"cong-nghe","Giáo dục thể chất":"giao-duc-the-chat","Âm nhạc":"am-nhac","Mĩ thuật":"mi-thuat","Hoạt động trải nghiệm":"hoat-dong-trai-nghiem","Khác":"khac",
+});
+const VALID_BOOK_SUBJECTS = new Set(Object.keys(BOOK_SUBJECT_SLUGS));
 function getExt(name) {
   const m = String(name || "").toLowerCase().match(/(\.[a-z0-9]+)$/);
   return m ? m[1] : ".pdf";
@@ -306,6 +310,15 @@ function sanitizeStoredBookName(name) {
 
   const safe = (base || "sach-moi").slice(0, 90);
   return `${safe || "sach-moi"}${ext}`;
+}
+
+function buildBookMetadataFilename(title, grade, subject, term, ext) {
+  const subjectSlug = BOOK_SUBJECT_SLUGS[subject] || BOOK_SUBJECT_SLUGS["Khác"];
+  const prefix = `${String(grade).padStart(2, "0")}-sgk-${subjectSlug}-`;
+  const suffix = `-tap-${term}${ext}`;
+  const safeTitle = sanitizeStoredBookName(`${title}${ext}`).slice(0, -ext.length);
+  const titleSlug = safeTitle.slice(0, Math.max(1, 90 - prefix.length - suffix.length)).replace(/-+$/g, "") || "sach";
+  return sanitizeStoredBookName(`${prefix}${titleSlug}${suffix}`);
 }
 
 function isValidPdfFile(filePath) {
@@ -1086,6 +1099,63 @@ app.put("/api/books/:filename", writeRateLimit, requireWriteAuth, (req, res) => 
   } catch (e) {
     console.error("update text book error:", e);
     return res.status(500).json({ error: e.message || "Không thể cập nhật sách." });
+  }
+});
+
+app.patch("/api/books/:filename/metadata", writeRateLimit, requireWriteAuth, (req, res) => {
+  if (isMaliciousFilenameParam(req.params.filename)) return res.status(403).json({ error: "Yêu cầu không hợp lệ" });
+  try {
+    let filename = req.params.filename;
+    try { filename = decodeURIComponent(filename); } catch {}
+    if (filename.includes("\0")) return res.status(403).json({ error: "Yêu cầu không hợp lệ." });
+
+    const filePath = findPdfPath(filename);
+    const relative = path.relative(BOOKS_DIR, filePath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return res.status(403).json({ error: "Yêu cầu không hợp lệ." });
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return res.status(404).json({ error: "Không tìm thấy sách." });
+
+    const ext = getExt(filePath);
+    if (!SUPPORTED_EXTS.includes(ext)) return res.status(400).json({ error: "Định dạng sách chưa được hỗ trợ." });
+    const title = String(req.body?.title || "").trim();
+    const grade = Number(req.body?.grade);
+    const term = Number(req.body?.term);
+    const subject = String(req.body?.subject || "").trim();
+    if (title.length < 3 || title.length > 160) return res.status(400).json({ error: "Tiêu đề cần từ 3 đến 160 ký tự." });
+    if (!Number.isInteger(grade) || grade < 1 || grade > 5) return res.status(400).json({ error: "Lớp phải từ 1 đến 5." });
+    if (!Number.isInteger(term) || (term !== 1 && term !== 2)) return res.status(400).json({ error: "Tập phải là 1 hoặc 2." });
+    if (!VALID_BOOK_SUBJECTS.has(subject)) return res.status(400).json({ error: "Môn học không hợp lệ." });
+
+    const preferredName = buildBookMetadataFilename(title, grade, subject, term, ext);
+    const directory = path.dirname(filePath);
+    const oldFilename = path.basename(filePath);
+    let finalFilename = oldFilename;
+    let finalPath = filePath;
+    if (preferredName.toLowerCase() !== oldFilename.toLowerCase()) {
+      const extension = getExt(preferredName);
+      const stem = preferredName.slice(0, -extension.length);
+      let candidate = preferredName;
+      for (let suffix = 2; candidate.toLowerCase() !== oldFilename.toLowerCase() && fs.existsSync(path.join(directory, candidate)); suffix += 1) {
+        candidate = `${stem}-${suffix}${extension}`;
+      }
+      if (candidate.toLowerCase() !== oldFilename.toLowerCase()) {
+        finalPath = path.join(directory, candidate);
+        fs.renameSync(filePath, finalPath);
+        finalFilename = candidate;
+      } else {
+        finalFilename = oldFilename;
+      }
+    }
+
+    const meta = parseBookFilename(finalFilename, finalPath);
+    meta.title = title;
+    meta.grade = grade;
+    meta.subject = subject;
+    meta.term = term;
+    meta.size = fs.statSync(finalPath).size;
+    return res.json({ ok: true, book: { ...meta, filename: finalFilename }, oldFilename });
+  } catch (e) {
+    console.error("update book metadata error:", e);
+    return res.status(500).json({ error: e.message || "Không thể cập nhật thông tin sách." });
   }
 });
 

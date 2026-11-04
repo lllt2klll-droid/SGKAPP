@@ -349,7 +349,7 @@ function FromPagesWizard({
   );
 }
 
-export default function LessonPlanView({ initialPlanId, books }) {
+export default function LessonPlanView({ initialPlanId, books, onOpenBook }) {
   const [plans, setPlans] = useState(() => getPlans());
   const [currentId, setCurrentId] = useState(() => initialPlanId || null);
   const [planQuery, setPlanQuery] = useState("");
@@ -357,6 +357,7 @@ export default function LessonPlanView({ initialPlanId, books }) {
   const [planGrade, setPlanGrade] = useState("");
   const [planSort, setPlanSort] = useState("updated");
   const [busy, setBusy] = useState(false);
+  const [actionNotice, setActionNotice] = useState(null);
   const [legacy, setLegacy] = useState(() => hasLegacyData());
   // ? Wizard tạo giáo án từ trang sách (không AI: tên bài + trang + thời lượng + cấu trúc khu B) --
   const [pending, setPending] = useState(null);
@@ -419,6 +420,7 @@ export default function LessonPlanView({ initialPlanId, books }) {
   };
   const update = (patch) => {
     if (!plan) return;
+    setActionNotice(null);
     const next = savePlan({ ...plan, ...patch });
     setPlans(getPlans());
     return next;
@@ -451,19 +453,25 @@ export default function LessonPlanView({ initialPlanId, books }) {
   const handleFixSections = () => {
     if (!plan) return;
     const { acts, fixed } = reassignSectionsByName(plan.hoatDong);
-    if (!fixed) { alert("Các hoạt động đã đúng khu A/B/C/D."); return; }
+    if (!fixed) {
+      setActionNotice({ type: "info", text: "Các hoạt động đã được xếp đúng khu A/B/C/D." });
+      return;
+    }
     update({ hoatDong: acts });
-    alert(`Đã chuyển ${fixed} hoạt động vào đúng khu — kiểm tra lại mục III rồi xuất Word.`);
+    setActionNotice({ type: "success", text: `Đã sắp xếp lại ${fixed} hoạt động. Hãy kiểm tra mục III trước khi xuất Word.` });
   };
   // ? Nút chỉnh: copy mẫu .docx → fill → tải ngay
   const handleAddKhbd = async () => {
     if (!plan) return;
     setBusy(true);
+    setActionNotice(null);
     try {
       update({}); // chốt nháp trước khi xuất
       await exportPlanDocx(plan);
+      setActionNotice({ type: "success", text: "Đã tạo và tải giáo án Word về máy." });
     } catch (e) {
-      alert(`Xuất .docx thất bại: ${e?.message || "không rõ nguyên nhân"}`);
+      console.error("[LessonPlanView] export failed", e);
+      setActionNotice({ type: "error", text: `Không xuất được file Word: ${e?.message || "Vui lòng thử lại."}` });
     } finally {
       setBusy(false);
     }
@@ -472,7 +480,10 @@ export default function LessonPlanView({ initialPlanId, books }) {
     if (!confirm("Xóa toàn bộ dữ liệu KHBD cũ (sgk_lessonplans_*, sgk_autosave_*)? Dữ liệu mới khbd_v2_* được giữ nguyên.")) return;
     const removed = clearLegacyData();
     setLegacy(hasLegacyData());
-    alert(removed.length ? `Đã xóa ${removed.length} key cũ:\n${removed.slice(0, 10).join("\n")}` : "Không còn data cũ.");
+    setActionNotice({
+      type: "success",
+      text: removed.length ? `Đã dọn ${removed.length} mục dữ liệu cũ.` : "Không còn dữ liệu cũ cần dọn.",
+    });
   };
 
   // ? Wizard: mở form (tên bài + trang + thời lượng + cấu trúc khu B linh hoạt)
@@ -577,10 +588,17 @@ export default function LessonPlanView({ initialPlanId, books }) {
 
   // ? AI chia giờ: gợi ý phút cho từng hoạt động theo từng 1 tiết, confirm rồi mới áp
   const handleAiTime = async () => {
-    if (!plan || !(plan.hoatDong || []).length) { alert("Chưa có hoạt động nào để chia giờ."); return; }
+    if (!plan || !(plan.hoatDong || []).length) {
+      setActionNotice({ type: "warning", text: "Hãy thêm hoạt động trước khi chia thời gian." });
+      return;
+    }
     const apiKey = getGeminiApiKey();
-    if (!apiKey) { alert("Chưa có Gemini API Key — vào Cài đặt → AI để nhập khóa."); return; }
+    if (!apiKey) {
+      setActionNotice({ type: "warning", text: "Cần cấu hình khóa Gemini trong Cài đặt → AI để chia thời gian tự động." });
+      return;
+    }
     setAiBusy(true);
+    setActionNotice(null);
     try {
       const model = (() => { try { return loadSettings().ai?.model || "gemini-2.5-flash"; } catch { return "gemini-2.5-flash"; } })();
       const target = numMin((plan.thoiGian || "").replace(/[^\d.,]/g, "")) || 35;
@@ -608,8 +626,13 @@ export default function LessonPlanView({ initialPlanId, books }) {
         return al && Number(al.phut) > 0 ? { ...a, phut: String(Math.round(Number(al.phut))) } : a;
       });
       update({ hoatDong: next });
+      setActionNotice({ type: "success", text: "Đã cập nhật thời lượng theo gợi ý." });
     } catch (e) {
-      alert(`AI chia giờ thất bại: ${getFriendlyErrorMessage(e?.status, e?.message) || e.message || e}`);
+      console.error("[LessonPlanView] AI time allocation failed", e);
+      setActionNotice({
+        type: "error",
+        text: `Không chia được thời lượng: ${getFriendlyErrorMessage(e?.status, e?.message) || e.message || e}`,
+      });
     } finally {
       setAiBusy(false);
     }
@@ -640,7 +663,10 @@ export default function LessonPlanView({ initialPlanId, books }) {
   };
   const insertQuestionStep = (actId, q) => {
     const st = questionToStep(q);
-    if (!st.gv.trim() && !st.hs.trim()) { alert("Câu hỏi trống."); return; }
+    if (!st.gv.trim() && !st.hs.trim()) {
+      setActionNotice({ type: "warning", text: "Câu hỏi này chưa có nội dung để chèn." });
+      return;
+    }
     const act = (plan.hoatDong || []).find((a) => a.id === actId);
     if (!act) return;
     updateActivity(actId, { steps: [...(act.steps || []), { id: makeKhbdId("buoc"), gv: st.gv, hs: st.hs }] });
@@ -658,24 +684,40 @@ export default function LessonPlanView({ initialPlanId, books }) {
     if (!act || !step) return;
     const cur = Array.isArray(step[side]) ? step[side] : [];
     const room = IMG_MAX_PER_SIDE - cur.length;
-    if (room <= 0) { alert(`Mỗi bên tối đa ${IMG_MAX_PER_SIDE} ảnh.`); return; }
+    if (room <= 0) {
+      setActionNotice({ type: "warning", text: `Mỗi bên tối đa ${IMG_MAX_PER_SIDE} ảnh.` });
+      return;
+    }
     const fresh = [];
+    const errors = [];
     for (const f of list.slice(0, room)) {
       try {
         const c = await compressImageFile(f);
         fresh.push({ id: makeImgId(), dataUrl: c.dataUrl, width: c.width, height: c.height, name: c.name });
-      } catch (e) { alert(`Bỏ qua 1 ảnh lỗi: ${e.message || e}`); }
+      } catch (e) {
+        console.error("[LessonPlanView] image compression failed", e);
+        errors.push(`${f.name || "Ảnh"}: ${e.message || "không đọc được"}`);
+      }
     }
-    if (!fresh.length) return;
+    if (!fresh.length) {
+      if (errors.length) setActionNotice({ type: "error", text: `Không thêm được ảnh. ${errors.join("; ")}` });
+      return;
+    }
     const tentative = {
       ...plan,
       hoatDong: (plan.hoatDong || []).map((a) => a.id === actId
         ? { ...a, steps: (a.steps || []).map((s) => (s.id === stepId ? { ...s, [side]: [...cur, ...fresh] } : s)) }
         : a),
     };
-    if (estimatePlanBytes(tentative) > PLAN_MAX_BYTES) { alert("Kế hoạch quá nặng (>4.5MB) — hãy xóa bớt ảnh cũ rồi thêm."); return; }
+    if (estimatePlanBytes(tentative) > PLAN_MAX_BYTES) {
+      setActionNotice({ type: "error", text: "Kế hoạch vượt giới hạn dung lượng 4,5 MB. Hãy xóa bớt ảnh rồi thử lại." });
+      return;
+    }
     savePlan(tentative);
     setPlans(getPlans());
+    setActionNotice(errors.length
+      ? { type: "warning", text: `Đã thêm ${fresh.length} ảnh; ${errors.length} ảnh không đọc được.` }
+      : { type: "success", text: `Đã thêm ${fresh.length} ảnh vào giáo án.` });
   };
   const removeStepImage = (actId, stepId, side, imgId) => {
     const act = (plan?.hoatDong || []).find((a) => a.id === actId);
@@ -703,6 +745,15 @@ export default function LessonPlanView({ initialPlanId, books }) {
             <span><CheckCircle2 size={14} /> Tự động lưu</span>
           </div>
         </div>
+        {actionNotice && (
+          <div
+            className={`khbd-card khbd-action-notice khbd-action-notice--${actionNotice.type}`}
+            role={actionNotice.type === "error" ? "alert" : "status"}
+            aria-live={actionNotice.type === "error" ? "assertive" : "polite"}
+          >
+            {actionNotice.text}
+          </div>
+        )}
         <div className="khbd-vault-page-toolbar">
           <label className="khbd-vault-search">
             <Search size={16} />
@@ -736,7 +787,10 @@ export default function LessonPlanView({ initialPlanId, books }) {
               const p = fillSampleLessonPlan();
               refresh();
               setCurrentId(p.id);
-            } catch (e) { alert(`Tạo bài mẫu thất bại: ${e.message || e}`); }
+            } catch (e) {
+              console.error("[LessonPlanView] sample plan creation failed", e);
+              setActionNotice({ type: "error", text: `Không tạo được bài mẫu: ${e.message || e}` });
+            }
           }}>
             <Sparkles size={14} /> Bài mẫu
           </button>
@@ -857,7 +911,10 @@ export default function LessonPlanView({ initialPlanId, books }) {
             const p = fillSampleLessonPlan();
             refresh();
             setCurrentId(p.id);
-          } catch (e) { alert(`Tạo bài mẫu thất bại: ${e.message || e}`); }
+          } catch (e) {
+            console.error("[LessonPlanView] sample plan creation failed", e);
+            setActionNotice({ type: "error", text: `Không tạo được bài mẫu: ${e.message || e}` });
+          }
           }} title="Tạo bài mẫu Toán lớp 1 (Phép cộng trong phạm vi 10)"><Sparkles size={13} /> Bài mẫu</button>
           <button className="btn btn-secondary btn-sm" onClick={openWizard} title="Tạo khung giáo án từ trang sách (tên bài + từ trang tới trang + thời lượng)">
             <BookOpen size={13} /> Tạo từ trang sách{pending ? " •" : ""}
@@ -902,6 +959,60 @@ export default function LessonPlanView({ initialPlanId, books }) {
           </div>
         </div>
         <div className="khbd-saved"><CheckCircle2 size={12} /> Tự động lưu nháp</div>
+        {actionNotice && (
+          <div
+            className={`khbd-card khbd-action-notice khbd-action-notice--${actionNotice.type}`}
+            role={actionNotice.type === "error" ? "alert" : "status"}
+            aria-live={actionNotice.type === "error" ? "assertive" : "polite"}
+          >
+            {actionNotice.text}
+          </div>
+        )}
+        {(Array.isArray(plan.bookReferences) ? plan.bookReferences : []).length > 0 && (
+          <section className="khbd-card" aria-label="Sách tham khảo đã dùng">
+            <h4><BookOpen size={15} /> Sách và trang đã dùng</h4>
+            {(plan.bookReferences || []).map((reference, index) => {
+              const book = (Array.isArray(books) ? books : []).find((item) =>
+                (item.filename || item.id || "") === (reference.bookId || ""),
+              );
+              const pageStart = Number(reference.pageStart) || null;
+              const pageEnd = Number(reference.pageEnd) || pageStart;
+              const bookLabel = reference.bookTitle || book?.title || reference.bookId || "Sách tham khảo";
+              const filename = book?.filename || reference.bookId || "";
+              const isWordBook = /\.(html?|txt|md)$/i.test(filename);
+              const pageToOpen = pageStart ? pageStart + (isWordBook ? 0 : 1) : 1;
+              return (
+                <div className="khbd-hint" key={reference.id || `${reference.bookId}-${index}`}>
+                  <div>
+                    <b>{bookLabel}</b>
+                    {reference.bookSeries && <> · {reference.bookSeries}</>}
+                    {pageStart && <> · tr. {pageStart}{pageEnd && pageEnd !== pageStart ? `–${pageEnd}` : ""}</>}
+                  </div>
+                  {reference.lesson && <div>Bài: {reference.lesson}</div>}
+                  <button
+                    className="btn btn-secondary btn-xs"
+                    onClick={() => onOpenBook?.(book, pageToOpen, currentId)}
+                    disabled={!book || typeof onOpenBook !== "function"}
+                    title={!book ? "Sách này không còn trong thư viện" : "Mở sách tại trang đã tham khảo"}
+                  >
+                    <BookOpen size={12} /> {pageStart ? `Mở sách tại trang ${pageStart}` : "Mở sách"}
+                  </button>
+                </div>
+              );
+            })}
+            {Array.isArray(plan.sourceSnapshot) && plan.sourceSnapshot.length > 0 && (
+              <details>
+                <summary>Xem nội dung đã trích từ sách</summary>
+                {plan.sourceSnapshot.map((excerpt, index) => (
+                  <p className="khbd-hint" key={`${excerpt.page ?? "page"}-${index}`}>
+                    {excerpt.page != null && <b>Tr. {excerpt.page}: </b>}
+                    {excerpt.text || ""}
+                  </p>
+                ))}
+              </details>
+            )}
+          </section>
+        )}
 
         {/* ── Nhập giáo án từ URL (ưu tiên kenhgiaovien): bản thô y hệt + AI chuẩn hóa ── */}
         <details className="khbd-card" style={{ borderLeft: "4px solid var(--success, #16a34a)" }}>

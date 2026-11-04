@@ -1,5 +1,5 @@
 // ─── Trợ năng (accessibility) — cấu hình mặc định + tìm kiếm trong Cài đặt ───
-// 6 khóa "tinh tế" mới: followSystem, underlineLinks, wideSpacing,
+// Các khóa "tinh tế": followSystem, underlineLinks, wideSpacing,
 // readingRuler, preventFlashing, visualAlerts (xem applySettings để biết tác động).
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -11,18 +11,19 @@ globalThis.__SGK_TEST__ = true;
 const A11Y_KEYS = [
   "highContrast", "largerText", "reduceMotion", "focusIndicators",
   "followSystem", "underlineLinks", "wideSpacing", "readingRuler",
-  "preventFlashing", "visualAlerts",
+  "preventFlashing", "visualAlerts", "pageFlip3D",
 ];
 
 describe("Trợ năng — DEFAULT_SETTINGS.accessibility", () => {
-  it("đủ 10 khóa, không thừa không thiếu", () => {
+  it("đủ 11 khóa, không thừa không thiếu", () => {
     assert.deepEqual(Object.keys(DEFAULT_SETTINGS.accessibility).sort(), [...A11Y_KEYS].sort());
   });
 
-  it("mặc định: chỉ focusIndicators + followSystem bật, phần còn lại tắt", () => {
+  it("mặc định: focusIndicators, followSystem và lật trang 3D bật", () => {
     const a = DEFAULT_SETTINGS.accessibility;
     assert.equal(a.focusIndicators, true);
     assert.equal(a.followSystem, true);
+    assert.equal(a.pageFlip3D, true);
     for (const k of ["highContrast", "largerText", "reduceMotion", "underlineLinks", "wideSpacing", "readingRuler", "preventFlashing", "visualAlerts"]) {
       assert.equal(a[k], false, `${k} phải tắt theo mặc định`);
     }
@@ -45,6 +46,12 @@ describe("Trợ năng — SETTINGS_SEARCH_INDEX", () => {
 
   it("từ khoá tính năng mới: thanh đọc, gạch chân, giãn chữ, chớp, hệ thống", () => {
     for (const q of ["thanh đọc", "gạch chân", "giãn chữ", "nhấp nháy", "prefers"]) {
+      assert.ok(hit(q).length > 0, `query "${q}" phải trả về section accessibility`);
+    }
+  });
+
+  it("từ khóa lật trang tìm được tùy chọn hiệu ứng 3D trong Trợ năng", () => {
+    for (const q of ["lật trang", "lật sách", "lật 3d"]) {
       assert.ok(hit(q).length > 0, `query "${q}" phải trả về section accessibility`);
     }
   });

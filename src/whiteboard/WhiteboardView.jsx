@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import {
   MousePointer2, Hand, Pencil, Eraser, Type, Shapes, ArrowUpRight, Image as ImageIcon,
   StickyNote, Network, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2, Grid3X3, Copy, CopyPlus, Trash2,
@@ -15,7 +15,7 @@ import {
   uid, blankBoard, blankObject, listBoards, loadBoard, persistBoard, createBoard,
   listBoardsAsync, loadBoardAsync, persistBoardAsync, createBoardAsync,
   deleteBoardAsync, duplicateBoardAsync,
-  deleteBoard as deleteBoardStore, renameBoard as renameBoardStore, duplicateBoard as dupBoardStore,
+  deleteBoard as deleteBoardStore, duplicateBoard as dupBoardStore,
   parseBoardJSON, ensureFits, WB_PENDING_KEY,
   WB_FONTS, WB_FONT_KEY, resolveWbFont
 } from "./whiteboardStore.js";
@@ -514,6 +514,7 @@ export default function WhiteboardView() {
       try { await persistBoardAsync(b); } catch {}
       notifyBoardsUpdate({ boardId: b.id, action: "create" });
       try { setBoards(await listBoardsAsync()); } catch { setBoards(listBoards()); }
+      setRenameDraft(b.name);
       setBoard(b); setActiveId(b.id); setSelection([]); initHistory(b);
       notify("Đã tạo bảng mới");
       playWb("open");
@@ -524,24 +525,26 @@ export default function WhiteboardView() {
     }
   }, [initHistory, notify, getWbSettings, playWb]);
 
-  const handleRename = useCallback(async () => {
+  const handleRename = useCallback(async (draft = renameDraft) => {
     if (!board) return;
-    const raw = renameDraft.trim();
+    const raw = String(draft ?? "").trim();
     if (!raw) { notify("Tên bảng không được để trống."); return; }
     if (raw.length > 120) { notify(`Tên bảng tối đa 120 ký tự (đang ${raw.length}).`); return; }
     const name = raw;
     // Trùng tên được phép (như Google Docs) — không chặn, chỉ lưu
+    clearTimeout(saveTimerRef.current);
+    saveSeqRef.current += 1;
     try {
-      const nb = renameBoardStore(board.id, name);
-      if (nb) {
-        try { await persistBoardAsync(nb); } catch (e) { setSaveState("error"); }
-        try { setBoards(await listBoardsAsync()); } catch { setBoards(listBoards()); }
-        setBoard(nb);
-        notifyBoardsUpdate({ boardId: board.id, action: "rename" });
-        notify("Đã đổi tên");
-      }
+      const nb = await persistBoardAsync({ ...board, name });
+      pendingSaveRef.current = null;
+      try { setBoards(await listBoardsAsync()); } catch { setBoards(listBoards()); }
+      setBoard(nb);
+      notifyBoardsUpdate({ boardId: board.id, action: "rename" });
+      notify("Đã đổi tên");
     } catch (e) {
-      notify("Đổi tên thất bại: " + (e?.message || ""));
+      console.error("[WhiteboardView] rename failed", e);
+      setSaveState("error");
+      notify("Đổi tên thất bại: " + (e?.message || "Không lưu được bảng"));
     }
   }, [board, renameDraft, notify, notifyBoardsUpdate]);
 
@@ -604,6 +607,18 @@ export default function WhiteboardView() {
     try { setBoards(await listBoardsAsync()); } catch { try { setBoards(listBoards()); } catch {} }
   }, []);
 
+  const toggleBoardList = useCallback(async () => {
+    const opening = !showBoardList;
+    setShowBoardList(opening);
+    if (!opening) return;
+    try {
+      setBoards(await listBoardsAsync());
+      setBoardsError("");
+    } catch (error) {
+      setBoardsError(error?.message || "Không thể làm mới danh sách bảng.");
+    }
+  }, [showBoardList]);
+
   const toggleBoardSel = useCallback((id) => {
     setBoardSel((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }, []);
@@ -614,16 +629,25 @@ export default function WhiteboardView() {
     if (raw.length > 120) { notify(`Tên bảng tối đa 120 ký tự (đang ${raw.length}).`); setRenamingId(null); return; }
     const clean = raw.slice(0, 120);
     try {
-      const nb = renameBoardStore(id, clean);
-      if (nb) {
-        try { await persistBoardAsync(nb); } catch (e) { setSaveState("error"); }
-        await refreshBoardList();
-        notifyBoardsUpdate({ boardId: id, action: "rename" });
-        if (id === board?.id) { setBoard(nb); setRenameDraft(clean); }
-        notify("Đã đổi tên bảng");
+      const currentBoard = id === board?.id ? board : await loadBoardAsync(id);
+      if (!currentBoard) throw new Error("Không tìm thấy bảng cần đổi tên");
+      if (id === board?.id) {
+        clearTimeout(saveTimerRef.current);
+        saveSeqRef.current += 1;
       }
+      const nb = await persistBoardAsync({ ...currentBoard, name: clean });
+      if (id === board?.id) {
+        pendingSaveRef.current = null;
+        setBoard(nb);
+        setRenameDraft(clean);
+      }
+      await refreshBoardList();
+      notifyBoardsUpdate({ boardId: id, action: "rename" });
+      notify("Đã đổi tên bảng");
     } catch (e) {
-      notify("Đổi tên thất bại: " + (e?.message || ""));
+      console.error("[WhiteboardView] rename board failed", e);
+      if (id === board?.id) setSaveState("error");
+      notify("Đổi tên thất bại: " + (e?.message || "Không lưu được bảng"));
     } finally {
       setRenamingId(null);
     }
@@ -2193,7 +2217,7 @@ export default function WhiteboardView() {
   }, [notify, notifyBoardsUpdate]);
 
   // Sync rename draft when board changes
-  useEffect(() => { setRenameDraft(board?.name || ""); }, [board?.id, board?.name]);
+  useLayoutEffect(() => { setRenameDraft(board?.name || ""); }, [board?.id, board?.name]);
 
   // Tự dọn các note placeholder “Trang này dạng ảnh …” còn sót từ bản cũ
   useEffect(() => {
@@ -2502,7 +2526,7 @@ export default function WhiteboardView() {
       {/* Unibar — gộp header + topbar thành 1 hàng duy nhất để tối đa canvas */}
       <div className="whiteboard-unibar">
         <div className="wb-uni-left">
-          <input className="whiteboard-title-input wb-uni-title" value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)} onBlur={handleRename} onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }} placeholder="Tên bảng" />
+          <input className="whiteboard-title-input wb-uni-title" value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)} onBlur={(e) => handleRename(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }} placeholder="Tên bảng" />
           <span className={`whiteboard-save-dot ${saveDotClass}`} title={saveDotTitle}>●</span>
           <div className="wb-sep-v" />
           <button className="btn btn-ghost btn-xs wb-tbtn" onClick={() => { if (canUndo) applyHistory(histIdxRef.current - 1); }} disabled={!canUndo} title="Hoàn tác (Ctrl+Z)"><Undo2 size={14} /></button>
@@ -2566,7 +2590,7 @@ export default function WhiteboardView() {
           </div>
           <button className={`btn btn-ghost btn-sm wb-hbtn wb-hbtn--icon ${showMinimap ? "is-on" : ""}`} onClick={() => setShowMinimap((v) => !v)} title={showMinimap ? "Ẩn bản đồ thu nhỏ" : "Hiện bản đồ thu nhỏ"}>🗺</button>
           <div className="whiteboard-board-wrap">
-            <button className="btn btn-secondary btn-sm wb-hbtn" onClick={() => setShowBoardList((v) => !v)} title="Danh sách bảng — chuyển bảng, đổi tên, nhân bản"><LayoutTemplate size={14} /></button>
+            <button className="btn btn-secondary btn-sm wb-hbtn" onClick={toggleBoardList} title="Danh sách bảng — chuyển bảng, đổi tên, nhân bản"><LayoutTemplate size={14} /></button>
             {showBoardList && (
               <>
                 <div className="whiteboard-board-backdrop" onClick={() => setShowBoardList(false)} />

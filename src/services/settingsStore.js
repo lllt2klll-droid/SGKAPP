@@ -86,6 +86,7 @@ export const DEFAULT_SETTINGS = {
     readingRuler: false,     // vệt sáng theo chuột giúp theo dõi dòng
     preventFlashing: false,  // tắt hiệu ứng nhấp nháy lặp vô hạn
     visualAlerts: false,     // viền chớp khi có toast — thấy thông báo dù không nghe
+    pageFlip3D: true,        // hiệu ứng lật trang 3D trong BookReader
   },
   export: {
     includeTimestamp: true,
@@ -988,6 +989,7 @@ export const SETTINGS_SEARCH_INDEX = [
   { q: ["gạch chân", "underline", "giãn chữ", "giãn dòng", "khoảng chữ", "wide spacing"], section: "accessibility", anchor: "sec-a11y" },
   { q: ["chớp", "nhấp nháy", "chống chớp", "báo động hình"], section: "accessibility", anchor: "sec-a11y" },
   { q: ["theo hệ thống", "prefers", "hệ điều hành", "theo máy"], section: "accessibility", anchor: "sec-a11y" },
+  { q: ["lật trang", "lật sách", "lật 3d", "page flip"], section: "accessibility", anchor: "sec-a11y" },
   { q: ["quét a11y", "quét accessibility", "quét trợ năng", "a11y", "audit"], section: "accessibility", anchor: "sec-a11y-tools" },
   { q: ["data", "dữ liệu", "storage", "backup", "restore", "import", "export", "sao lưu"], section: "backup", anchor: "sec-backup" },
   { q: ["lưu trữ", "dung lượng", "phân bổ", "đĩa", "dọn cache"], section: "backup", anchor: "sec-storage" },

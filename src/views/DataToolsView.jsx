@@ -239,7 +239,12 @@ export default function DataToolsView() {
         setLastBackup(now);
       } catch (e) { console.warn("[DataToolsView] save sgk_last_backup failed", e); }
       try { appEvents.emit(AppEvents.DATA_UPDATED, { source: "backup-export" }); } catch (e) { console.warn("[DataToolsView] emit data-updated failed", e); }
-      notify("backup", "ok", `Đã tải xuống file sao lưu (${result.total} mục: ${result.localCount} localStorage + ${result.indexedCount} IndexedDB).`);
+      const backupNote = !result.indexedDataAvailable
+        ? " Cảnh báo: IndexedDB không khả dụng nên file chỉ chứa dữ liệu localStorage."
+        : !result.indexedDataComplete
+          ? " Lưu ý: một số kho IndexedDB được chủ động bỏ qua."
+          : "";
+      notify("backup", "ok", `Đã tải xuống file sao lưu (${result.total} mục: ${result.localCount} localStorage + ${result.indexedCount} IndexedDB).${backupNote}`);
     } catch (err) {
       notify("backup", "err", `Không xuất được file sao lưu: ${err.message}`);
     }
@@ -319,7 +324,7 @@ export default function DataToolsView() {
       }
       setProgress(100);
       notify("restore", verifyOk ? "ok" : "err", verifyOk
-        ? `Khôi phục xong: ${res.count}/${res.total} mục hợp lệ${indexedMsg}. Xác minh: đạt. Ứng dụng sẽ tự tải lại…`
+        ? `Khôi phục xong: ${res.count}/${res.total} mục hợp lệ${indexedMsg}. Xác minh localStorage và IndexedDB: đạt.${res.indexedDataComplete ? "" : " Lưu ý: file này không chứa đầy đủ dữ liệu IndexedDB."} Ứng dụng sẽ tự tải lại…`
         : `Khôi phục xong nhưng xác minh CẢNH BÁO (${verifyDetail}). Hãy kiểm tra dữ liệu trước khi tiếp tục.`);
       if (!verifyOk) {
         setImporting(false);
@@ -562,6 +567,12 @@ export default function DataToolsView() {
                   <AlertTriangle size={16} style={{ color: 'var(--warning-deep)', flexShrink: 0, marginTop: 1 }} />
                   <span>Dữ liệu hiện tại sẽ bị <b>ghi đè</b> bởi file này. Hãy sao lưu dữ liệu hiện tại nếu bạn muốn có thể quay lại.</span>
                 </div>
+                {!preview.indexedDataComplete && (
+                  <div className="dt-warning" role="alert">
+                    <AlertTriangle size={16} style={{ color: 'var(--warning-deep)', flexShrink: 0, marginTop: 1 }} />
+                    <span>File này không chứa đầy đủ dữ liệu IndexedDB{preview.indexedDataSkippedStores.length ? ` (đã bỏ qua: ${preview.indexedDataSkippedStores.join(", ")})` : ""}. Khôi phục sẽ không thể đưa lại phần dữ liệu đó.</span>
+                  </div>
+                )}
                 <label className="dt-import-confirm">
                   <input type="checkbox" checked={confirmChecked} onChange={(event) => setConfirmChecked(event.target.checked)} />
                   Tôi đã kiểm tra và đồng ý thay thế dữ liệu hiện tại

@@ -73,7 +73,7 @@ describe('AI soạn KHBD — planAi', () => {
     const p = aiJsonToPlan(SAMPLE_AI_JSON, {
       title: 'Bài 12 – Phép cộng trong phạm vi 10', lesson: 'Bài 12',
       subject: 'Toán', grade: '2', bookId: 'toan2.pdf', bookTitle: 'Toán 2',
-      pageStart: 12, pageEnd: 14, duration: '35',
+      bookSeries: 'Chân trời sáng tạo', pageStart: 12, pageEnd: 14, duration: '35',
     });
     assert.equal(p.title, 'Bài 12 – Phép cộng trong phạm vi 10');
     assert.equal(p.thoiGian, '35 phút');
@@ -91,6 +91,11 @@ describe('AI soạn KHBD — planAi', () => {
     assert.equal(total, 35);
     assert.equal(p.bookReferences[0].pageStart, 12);
     assert.equal(p.bookReferences[0].pageEnd, 14);
+    assert.equal(p.bookReferences[0].bookId, 'toan2.pdf');
+    assert.equal(p.bookReferences[0].bookTitle, 'Toán 2');
+    assert.equal(p.bookReferences[0].bookSeries, 'Chân trời sáng tạo');
+    assert.equal(p.metadata.bookId, 'toan2.pdf');
+    assert.equal(p.metadata.textbookSeries, 'Chân trời sáng tạo');
   });
 
   it('aiJsonToPlan: AI thiếu khu / thiếu phút thì bù khung + chuẩn tổng', () => {

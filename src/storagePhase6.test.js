@@ -168,4 +168,36 @@ describe('PHASE 6 — Backup/Restore/Wipe/Sync', ()=>{
     // State unchanged
     assert.equal(localStorage.getItem('sgk_lessonplans'), before);
   });
+
+  it('backup preview rejects malformed IndexedDB records and non-string local data', ()=>{
+    const header = { app: 'hanhtrang-tieu-hoc', version: 2, schemaVersion: 2, data: {} };
+    assert.equal(parseBackupPreview(JSON.stringify({
+      ...header, data: { sgk_favs: { not: 'serialized' } },
+    })).valid, false);
+    assert.equal(parseBackupPreview(JSON.stringify({
+      ...header, indexedData: { clips: [{ missingId: true }] },
+    })).valid, false);
+    assert.equal(parseBackupPreview(JSON.stringify({
+      ...header, indexedData: { wb_images: [{ id: 'img', blob: { __blob: true, data: '', size: 12 } }] },
+    })).valid, false);
+    const oldAutoSnapshot = parseBackupPreview(JSON.stringify({
+      ...header, label: 'auto:scheduled', indexedData: {},
+    }));
+    assert.equal(oldAutoSnapshot.valid, true);
+    assert.equal(oldAutoSnapshot.preview.indexedDataComplete, false);
+  });
+
+  it('restore refuses IndexedDB data when the browser cannot access IndexedDB', async()=>{
+    localStorage.setItem('sgk_favs', JSON.stringify(['keep.pdf']));
+    const payload = {
+      app: 'hanhtrang-tieu-hoc',
+      version: 2,
+      schemaVersion: 2,
+      data: { sgk_favs: JSON.stringify(['replace.pdf']) },
+      indexedData: { clips: [{ id: 'clip-1', text: 'must not be lost' }] },
+    };
+    await assert.rejects(importBackup(JSON.stringify(payload)), /IndexedDB không khả dụng/);
+    assert.deepEqual(JSON.parse(localStorage.getItem('sgk_favs')), ['keep.pdf']);
+  });
+
 });

@@ -1069,6 +1069,7 @@ function AccessibilitySection({ settings, onChange, onClose }) {
         <Field label="Viền focus rõ" hint="Đi phím Tab thấy ô đang chọn"><Toggle label="FI" checked={!!a.focusIndicators} onChange={(v) => onChange(["accessibility", "focusIndicators"], v)} /></Field>
         <Field label="Gạch chân liên kết" hint="Nhận ra link không chỉ bằng màu (WCAG 1.4.1)"><Toggle label="Gạch chân" checked={!!a.underlineLinks} onChange={(v) => onChange(["accessibility", "underlineLinks"], v)} /></Field>
         <Field label="Thanh đọc theo con trỏ" hint="Vệt sáng chạy theo chuột — dễ theo dõi dòng"><Toggle label="Thanh đọc" checked={!!a.readingRuler} onChange={(v) => onChange(["accessibility", "readingRuler"], v)} /></Field>
+        <Field label="Hiệu ứng lật trang 3D" hint="Tắt để chuyển trang thông thường trong BookReader"><Toggle label="Lật trang 3D" checked={a.pageFlip3D !== false} onChange={(v) => onChange(["accessibility", "pageFlip3D"], v)} /></Field>
         <Field label="Chớp viền khi có thông báo" hint="Thấy toast dù không nghe được âm thanh"><Toggle label="Báo động" checked={!!a.visualAlerts} onChange={(v) => onChange(["accessibility", "visualAlerts"], v)} /></Field>
       </Card>
 

@@ -162,6 +162,11 @@ test("D2 • modal xác nhận xóa: focus mặc định vào Hủy, Escape đó
   await openDeleteModal();
   assert.match(await page.locator("#del-title").textContent(), /thùng rác/i);
 
+  await page.waitForFunction(
+    () => (document.activeElement?.textContent || "").trim() === "Hủy",
+    null,
+    { timeout: 3000 },
+  );
   const focused = await page.evaluate(() => (document.activeElement?.textContent || "").trim());
   assert.equal(focused, "Hủy", `focus mặc định phải là nút an toàn, thấy "${focused}"`);
 

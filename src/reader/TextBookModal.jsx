@@ -523,15 +523,17 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       if (isMod && k==="p"){ e.preventDefault(); handlePrint(); return; }
       if (isMod && k==="f" && !e.shiftKey){ e.preventDefault(); setShowFind(v=>!v); return; }
       if (isMod && k==="h"){ e.preventDefault(); setShowFind(true); return; }
-      const inEditor=!!e.target?.closest?.(".word-editable");
-      if(!inEditor) return;
       if (isMod && k==="k"){
-        // Phân quyền Ctrl+K: search overlay đang giữ focus → phím thuộc search,
-        // modal không được nuốt (chèn link) — tránh chạy chung với overlay.
+        // The modal owns Ctrl+K unless the search overlay has focus.
         const a = document.activeElement;
         if (a && a.closest && a.closest(".global-search-overlay")) return;
-        e.preventDefault(); insertLink(); return;
+        e.preventDefault();
+        e.stopPropagation();
+        insertLink();
+        return;
       }
+      const inEditor=!!e.target?.closest?.(".word-editable");
+      if(!inEditor) return;
       if (isMod && k==="b"){ e.preventDefault(); exec("bold"); return; }
       if (isMod && k==="i"){ e.preventDefault(); exec("italic"); return; }
       if (isMod && k==="u"){ e.preventDefault(); exec("underline"); return; }

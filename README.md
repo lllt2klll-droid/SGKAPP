@@ -66,7 +66,7 @@ Tải file sách được giới hạn tối đa 80 MB mỗi file. Tên file đ�
 | `npm run start:bg` | Khởi chạy backend nền trên Windows |
 | `npm run lint` | Chạy oxlint |
 | `npm test` | Chạy unit/integration tests bằng `node:test` |
-| `npm run test:e2e` | Chạy các bài e2e trong `tests/e2e/` |
+| `npm run test:e2e` | Chạy tuần tự các bài e2e trong `tests/e2e/` để tránh tranh chấp browser/server giữa spec |
 
 `npm run preview` phục vụ bản frontend đã build; khi cần API, cần chạy backend riêng. `npm start` chạy backend Express. Trong quy trình deploy GitHub Pages hiện tại, workflow chỉ build và deploy frontend tĩnh; API cần được cung cấp riêng nếu muốn bật các tính năng phụ thuộc backend.
 

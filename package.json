@@ -11,7 +11,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "test": "node --no-warnings --loader ./test-loader.mjs --test src/**/*.test.js src/**/*.test.jsx src/**/*.spec.js src/**/*.spec.jsx tests/*.test.js tests/*.spec.js server/**/*.test.js server/**/*.spec.js",
-    "test:e2e": "node --test tests/e2e/**/*.spec.js",
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/**/*.spec.js",
     "preview": "vite preview",
     "start": "node --no-warnings server.js",
     "start:bg": "powershell -NoProfile -Command \"Start-Process -FilePath 'node' -ArgumentList '--no-warnings','server.js' -WorkingDirectory $PWD -WindowStyle Hidden\"",

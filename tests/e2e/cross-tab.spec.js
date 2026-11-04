@@ -155,6 +155,9 @@ before(async () => {
   for (const p of [pageA, pageB]) {
     p.on("dialog", (d) => d.accept());
     p.on("pageerror", (e) => console.error("[e2e pageerror]", e.message));
+    p.on("console", (message) => {
+      if (message.type() === "error") console.error("[e2e console]", message.text());
+    });
     await openBase(p);
   }
   // Cho app khởi động xong (migrations/ghi cài đặt lúc boot) trước khi bắt sự kiện
@@ -216,9 +219,16 @@ test("H4 • tab A lưu bảng đang mở chung → tab B hiện banner, Tải b
   // A mở bảng trắng + tạo bảng mới (A đứng trên bảng mới)
   await openWhiteboard(pageA);
   await sleep(800);
+  const previousBoardName = await pageA.locator(".wb-uni-title").inputValue();
   await pageA.locator('button[title="Tạo bảng mới"]').click();
   await waitForToast(pageA, "Đã tạo bảng mới", {
     timeout: 15000, message: "toast Đã tạo bảng mới (A)",
+  });
+  await waitFor(async () => {
+    const currentBoardName = await pageA.locator(".wb-uni-title").inputValue();
+    return currentBoardName && currentBoardName !== previousBoardName;
+  }, {
+    timeout: 15000, message: "tab A đã chuyển sang bảng mới",
   });
   // Đổi tên để tab B tìm đúng bảng
   await pageA.locator(".wb-uni-title").fill(boardName);
@@ -226,8 +236,39 @@ test("H4 • tab A lưu bảng đang mở chung → tab B hiện banner, Tải b
   await waitForToast(pageA, "Đã đổi tên", {
     timeout: 15000, message: "toast Đã đổi tên (A)",
   });
+  let lastIndexedBoards = [];
+  try {
+    await waitFor(async () => {
+      const result = await pageA.evaluate(async (name) => {
+        const request = indexedDB.open("SGKAppDB");
+        const db = await new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        const rows = await new Promise((resolve, reject) => {
+          const query = db.transaction("whiteboard_boards", "readonly").objectStore("whiteboard_boards").getAll();
+          query.onsuccess = () => resolve(query.result || []);
+          query.onerror = () => reject(query.error);
+        });
+        db.close();
+        return {
+          found: rows.some((row) => row.name === name),
+          boards: rows.map(({ id, name: rowName }) => ({ id, name: rowName })),
+        };
+      }, boardName);
+      lastIndexedBoards = result.boards;
+      return result.found;
+    }, {
+      timeout: 10000,
+      message: "IDB đã lưu tên bảng mới ở tab A",
+    });
+  } catch (error) {
+    throw new Error(`${error.message}; IndexedDB boards=${JSON.stringify(lastIndexedBoards)}`);
+  }
 
-  // B đang ở Dashboard; mount lại view để đọc danh sách vừa cập nhật từ IDB.
+  // Reload B to read the committed IndexedDB board list after A creates it.
+  await openBase(pageB);
+  await installCapture(pageB);
   await openWhiteboard(pageB);
   await sleep(800);
   if ((await pageB.locator(".wb-uni-title").inputValue()) !== boardName) {
@@ -248,7 +289,13 @@ test("H4 • tab A lưu bảng đang mở chung → tab B hiện banner, Tải b
       }
     }
     assert.ok(otherBoard, "phải có bảng khác để chuyển khỏi activeId cũ");
+    const otherBoardName = (await otherBoard.locator(".whiteboard-drawer-name").innerText())
+      .replace(/\s*•\s*Đang mở$/, "")
+      .trim();
     await otherBoard.locator(".wb-board-main").click();
+    await waitFor(async () => (await pageB.locator(".wb-uni-title").inputValue()) === otherBoardName, {
+      timeout: 15000, message: "tab B chuyển khỏi bảng đang hoạt động trước khi mở bảng mới",
+    });
     await pageB.locator('button[title="Danh sách bảng — chuyển bảng, đổi tên, nhân bản"]').click();
     await sharedBoard.locator(".wb-board-main").click();
   }
@@ -317,6 +364,7 @@ test("H3 • chiều ngược lại: tab B tạo bảng → tab A nhận", async
   await sleep(800);
   await clearCapture(pageA);
 
+  await openBase(pageB);
   await openWhiteboard(pageB);
   await sleep(600);
   await pageB.locator('button[title="Tạo bảng mới"]').click();

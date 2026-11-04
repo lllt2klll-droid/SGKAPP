@@ -164,6 +164,9 @@ test("Lối tắt công cụ web trên toolbar BookReader được lưu và bỏ
     const addShortcut = page.getByRole("button", {
       name: "Thêm GitHub vào toolbar BookReader",
     });
+    await page.locator(".wt-tile").filter({
+      has: page.getByRole("button", { name: "Mở GitHub" }),
+    }).hover();
     await addShortcut.click();
     assert.deepEqual(
       await page.evaluate(() => JSON.parse(localStorage.getItem("readerToolbarTools") || "[]")),
@@ -180,6 +183,9 @@ test("Lối tắt công cụ web trên toolbar BookReader được lưu và bỏ
       name: "Gỡ GitHub khỏi toolbar BookReader",
     }).getAttribute("aria-pressed"), "true");
 
+    await page.locator(".wt-tile").filter({
+      has: page.getByRole("button", { name: "Mở GitHub" }),
+    }).hover();
     await page.getByRole("button", {
       name: "Gỡ GitHub khỏi toolbar BookReader",
     }).click();

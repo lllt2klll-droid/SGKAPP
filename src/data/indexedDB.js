@@ -308,7 +308,7 @@ class IndexedDBService {
    * @param {string} storeName - Store name
    * @returns {Promise<Array>} Array of raw records
    */
-  async getAllRecords(storeName) {
+  async getAllRecords(storeName, { strict = false } = {}) {
     try {
       await this.init();
 
@@ -327,6 +327,7 @@ class IndexedDBService {
       if (err?.code !== "IDB_UNAVAILABLE" && !__isTestSilence()) {
         console.error(`IndexedDB getAllRecords failed for ${storeName}:`, err);
       }
+      if (strict) throw err;
       return [];
     }
   }

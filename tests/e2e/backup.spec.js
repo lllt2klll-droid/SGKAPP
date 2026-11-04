@@ -35,6 +35,83 @@ let tmpBooks = null;
 let tmpDir = null;
 let backupPath = null;
 let bookTitle = null;
+const LARGE_LOCAL_KEY = "sgk_autosave_e2e_large";
+const LARGE_LOCAL_CONTENT = "L".repeat(256 * 1024);
+const LARGE_SCAN_CONTENT = "S".repeat(768 * 1024);
+const LARGE_IMAGE_CONTENT = "I".repeat(384 * 1024);
+
+async function seedLargeBackupData() {
+  await page.evaluate(async ({ localKey, localContent, scanContent, imageContent }) => {
+    localStorage.setItem(localKey, JSON.stringify({ content: localContent }));
+    const request = indexedDB.open("SGKAppDB");
+    const db = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(["scan_assets", "wb_images", "note_images"], "readwrite");
+    tx.objectStore("scan_assets").put({ id: "e2e-large-scan", content: scanContent });
+    tx.objectStore("wb_images").put({
+      id: "e2e-large-whiteboard-image",
+      blob: new Blob([imageContent], { type: "image/png" }),
+    });
+    tx.objectStore("note_images").put({
+      id: "e2e-large-note-image",
+      bookFilename: "e2e-book.pdf",
+      blob: new Blob([imageContent], { type: "image/jpeg" }),
+    });
+    tx.objectStore("note_images").put({
+      id: "e2e-legacy-note-image",
+      bookFilename: "e2e-legacy-book.pdf",
+      dataUrl: "data:image/png;base64,AQID",
+    });
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    db.close();
+  }, {
+    localKey: LARGE_LOCAL_KEY,
+    localContent: LARGE_LOCAL_CONTENT,
+    scanContent: LARGE_SCAN_CONTENT,
+    imageContent: LARGE_IMAGE_CONTENT,
+  });
+}
+
+async function readIndexedFixtures() {
+  return page.evaluate(async () => {
+    const request = indexedDB.open("SGKAppDB");
+    const db = await new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const tx = db.transaction(["scan_assets", "wb_images", "note_images"], "readonly");
+    const read = (store) => new Promise((resolve, reject) => {
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    const [scans, boardImages, noteImages] = await Promise.all([
+      read("scan_assets"), read("wb_images"), read("note_images"),
+    ]);
+    db.close();
+    const blobInfo = async (record) => record?.blob ? {
+      size: record.blob.size,
+      type: record.blob.type,
+      text: await record.blob.text(),
+    } : null;
+    return {
+      scans: scans.filter((x) => x.id === "e2e-large-scan"),
+      boardImages: await Promise.all(boardImages.filter((x) => x.id === "e2e-large-whiteboard-image").map(async (x) => ({ id: x.id, blob: await blobInfo(x) }))),
+      noteImages: await Promise.all(noteImages.filter((x) => x.id === "e2e-large-note-image").map(async (x) => ({
+        id: x.id,
+        bookFilename: x.bookFilename,
+        blob: await blobInfo(x),
+      }))),
+      legacyNoteImages: noteImages.filter((x) => x.id === "e2e-legacy-note-image"),
+    };
+  });
+}
 
 async function healthy(url) {
   try {
@@ -172,6 +249,7 @@ test("F1 • ghim 1 sách từ thư viện (tạo dữ liệu thật qua UI)", a
 });
 
 test("F2 • Xuất file sao lưu → tải về JSON hợp lệ, có sgk_favs", async () => {
+  await seedLargeBackupData();
   await gotoDataTools();
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 20000 }),
@@ -192,6 +270,13 @@ test("F2 • Xuất file sao lưu → tải về JSON hợp lệ, có sgk_favs",
   assert.ok(payload.data, "payload phải có nhánh data (localStorage)");
   assert.deepEqual(JSON.parse(payload.data.sgk_favs), [BOOK_FILE], "file sao lưu phải chứa sgk_favs");
   assert.ok(typeof payload.indexedData === "object", "file sao lưu phải có nhánh indexedData");
+  assert.equal(payload.indexedDataAvailable, true, "IndexedDB phải được nhận diện khi xuất");
+  assert.equal(payload.indexedDataComplete, true, "sao lưu thủ công phải bao phủ mọi kho IndexedDB");
+  assert.equal(JSON.parse(payload.data[LARGE_LOCAL_KEY]).content.length, LARGE_LOCAL_CONTENT.length);
+  assert.equal(payload.indexedData.scan_assets.find((x) => x.id === "e2e-large-scan").content.length, LARGE_SCAN_CONTENT.length);
+  assert.equal(payload.indexedData.wb_images.find((x) => x.id === "e2e-large-whiteboard-image").blob.size, LARGE_IMAGE_CONTENT.length);
+  assert.equal(payload.indexedData.note_images.find((x) => x.id === "e2e-large-note-image").blob.mimeType, "image/jpeg");
+  assert.ok(fs.statSync(src).size > 1024 * 1024, "fixture dữ liệu lớn phải có mặt trong file sao lưu");
 
   await page.waitForSelector(".dt-msg.ok", { timeout: 10000 });
   assert.match(await page.locator(".dt-msg.ok").textContent(), /Đã tải xuống file sao lưu/);
@@ -222,6 +307,9 @@ test("F3 • Xóa toàn bộ dữ liệu: yêu cầu sao lưu, xác nhận hai l
     return userKeys.filter((k) => !empty(localStorage.getItem(k)));
   });
   assert.deepEqual(survived, [], `dữ liệu người dùng còn sót: ${survived.join(", ")}`);
+  const afterWipe = await readIndexedFixtures();
+  assert.equal(afterWipe.scans.length + afterWipe.boardImages.length + afterWipe.noteImages.length + afterWipe.legacyNoteImages.length, 0,
+    "wipe phải xóa các record IndexedDB thuộc fixture");
 });
 
 test("F4 • Khôi phục từ file vừa xuất: preview → tick → xác nhận → dữ liệu quay lại", async () => {
@@ -243,11 +331,27 @@ test("F4 • Khôi phục từ file vừa xuất: preview → tick → xác nh�
 
   const navP = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 25000 });
   await confirmBtn.click();
-  await navP;
+  const nav = await navP.catch(() => null);
+  if (!nav) {
+    const message = await page.locator(".dt-msg").textContent().catch(() => "");
+    assert.fail(`khôi phục không tải lại trang; thông báo: ${message}`);
+  }
   await waitForAppReady();
   await waitFor(async () => (await favs()).length === 1, { message: "sgk_favs sau khôi phục" });
 
   assert.deepEqual(await favs(), [BOOK_FILE], "khôi phục phải trả lại đúng sgk_favs");
+  const localLarge = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "null"), LARGE_LOCAL_KEY);
+  assert.equal(localLarge.content.length, LARGE_LOCAL_CONTENT.length, "localStorage dữ liệu lớn phải giữ nguyên");
+  const restored = await readIndexedFixtures();
+  assert.equal(restored.scans[0]?.content.length, LARGE_SCAN_CONTENT.length, "record scan lớn phải khôi phục nguyên vẹn");
+  assert.equal(restored.boardImages[0]?.blob.size, LARGE_IMAGE_CONTENT.length, "Blob bảng trắng giữ nguyên kích thước");
+  assert.equal(restored.boardImages[0]?.blob.type, "image/png");
+  assert.equal(restored.noteImages[0]?.blob.size, LARGE_IMAGE_CONTENT.length, "Blob ghi chú giữ nguyên kích thước");
+  assert.equal(restored.noteImages[0]?.blob.type, "image/jpeg");
+  assert.equal(restored.noteImages[0]?.bookFilename, "e2e-book.pdf", "metadata ảnh ghi chú phải giữ nguyên");
+  assert.equal(restored.legacyNoteImages[0]?.dataUrl, "data:image/png;base64,AQID", "ảnh ghi chú inline cũ phải giữ nguyên");
+  assert.equal(restored.legacyNoteImages[0]?.bookFilename, "e2e-legacy-book.pdf");
+  assert.equal(restored.boardImages[0].blob.text, LARGE_IMAGE_CONTENT);
 
   await gotoLibrary();
   const card = page.locator(".libx-book, .libx-row").filter({ hasText: bookTitle });

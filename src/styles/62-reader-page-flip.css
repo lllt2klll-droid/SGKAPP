@@ -1,82 +1,157 @@
-.pdf-canvas-box.is-page-turning {
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  animation: reader-page-turn-next 560ms cubic-bezier(0.2, 0.72, 0.25, 1) both;
+.pdf-canvas-box {
+  perspective: 1800px;
+  isolation: isolate;
 }
 
-.pdf-canvas-box.is-page-turning::after {
+.pdf-view-inner-spread > .pdf-canvas-box:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.pdf-view-inner-spread > .pdf-canvas-box:last-child {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.pdf-view-inner-turn-prev > .pdf-canvas-box:first-child,
+.pdf-view-inner-turn-next > .pdf-canvas-box:last-child {
+  z-index: 1;
+}
+
+.pdf-view-inner-turn-prev > .pdf-canvas-box:last-child,
+.pdf-view-inner-turn-next > .pdf-canvas-box:first-child {
+  z-index: 0;
+}
+
+.pdf-page-flip-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: visible;
+  border-radius: inherit;
+  background: #f7f3e9;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.pdf-page-flip-sheet.page-flip-next.page-flip-ready {
+  transform-origin: left center;
+  animation: reader-page-flip-forward 760ms cubic-bezier(0.45, 0.02, 0.55, 0.98) both;
+}
+
+.pdf-page-flip-sheet.page-flip-prev.page-flip-ready {
+  transform-origin: right center;
+  animation: reader-page-flip-backward 760ms cubic-bezier(0.45, 0.02, 0.55, 0.98) both;
+}
+
+.pdf-page-frozen-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.pdf-page-frozen-sheet img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.pdf-page-flip-front,
+.pdf-page-flip-back {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  backface-visibility: hidden;
+}
+
+.pdf-page-flip-front {
+  display: block;
+  object-fit: fill;
+  box-shadow: inset 0 0 1px rgba(48, 37, 20, 0.35);
+}
+
+.pdf-page-flip-back {
+  transform: rotateY(180deg);
+  background:
+    linear-gradient(90deg, rgba(91, 69, 39, 0.12), transparent 16%),
+    #f7f3e9;
+  box-shadow: inset 0 0 1px rgba(48, 37, 20, 0.3);
+}
+
+.pdf-page-flip-back img {
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  opacity: 0.96;
+}
+
+.pdf-page-flip-sheet::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 2;
   border-radius: inherit;
   pointer-events: none;
-  background-size: 220% 100%;
-  opacity: 0;
+  backface-visibility: hidden;
   background: linear-gradient(
     90deg,
-    transparent 48%,
-    rgba(26, 34, 48, 0.04) 66%,
-    rgba(255, 255, 255, 0.58) 78%,
-    rgba(26, 34, 48, 0.12) 100%
+    rgba(34, 28, 19, 0.2),
+    transparent 18%,
+    transparent 76%,
+    rgba(255, 255, 255, 0.42)
   );
-  animation: reader-page-fold-light 560ms ease-out both;
+  opacity: 0;
 }
 
-.pdf-canvas-box.page-turn-prev.is-page-turning {
-  animation-name: reader-page-turn-prev;
+.pdf-page-flip-sheet.page-flip-ready::after {
+  animation: reader-page-flip-shade 760ms ease-in-out both;
 }
 
-.pdf-canvas-box.page-turn-prev.is-page-turning::after {
+.pdf-page-flip-sheet.page-flip-ready.page-flip-prev::after {
   transform: scaleX(-1);
 }
 
-@keyframes reader-page-turn-next {
+@keyframes reader-page-flip-forward {
   0% {
-    opacity: 0.78;
-    transform: perspective(1400px) rotateY(-10deg) translateX(12px) scale(0.99);
-    transform-origin: left center;
-    filter: drop-shadow(-8px 2px 12px rgba(32, 43, 61, 0.2));
+    transform: rotateY(0);
+    box-shadow: 0 3px 8px rgba(28, 30, 36, 0.1);
   }
-  55% {
-    opacity: 1;
-    transform: perspective(1400px) rotateY(2deg) translateX(-2px);
-    filter: drop-shadow(-2px 2px 5px rgba(32, 43, 61, 0.12));
+  45% {
+    box-shadow: 0 10px 24px rgba(28, 30, 36, 0.28);
   }
   100% {
-    transform: perspective(1400px) rotateY(0) translateX(0);
-    filter: none;
+    transform: rotateY(-180deg);
+    box-shadow: 0 2px 6px rgba(28, 30, 36, 0.08);
   }
 }
 
-@keyframes reader-page-turn-prev {
+@keyframes reader-page-flip-backward {
   0% {
-    opacity: 0.78;
-    transform: perspective(1400px) rotateY(10deg) translateX(-12px) scale(0.99);
-    transform-origin: right center;
-    filter: drop-shadow(8px 2px 12px rgba(32, 43, 61, 0.2));
+    transform: rotateY(0);
+    box-shadow: 0 3px 8px rgba(28, 30, 36, 0.1);
   }
-  55% {
-    opacity: 1;
-    transform: perspective(1400px) rotateY(-2deg) translateX(2px);
-    filter: drop-shadow(2px 2px 5px rgba(32, 43, 61, 0.12));
+  45% {
+    box-shadow: 0 10px 24px rgba(28, 30, 36, 0.28);
   }
   100% {
-    transform: perspective(1400px) rotateY(0) translateX(0);
-    filter: none;
+    transform: rotateY(180deg);
+    box-shadow: 0 2px 6px rgba(28, 30, 36, 0.08);
   }
 }
 
-@keyframes reader-page-fold-light {
-  0% {
-    opacity: 0;
-    background-position: 100% 0;
-  }
-  32% {
-    opacity: 0.8;
-  }
+@keyframes reader-page-flip-shade {
+  0%,
   100% {
     opacity: 0;
-    background-position: 0 0;
+  }
+  42%,
+  58% {
+    opacity: 0.85;
   }
 }

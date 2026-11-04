@@ -213,6 +213,7 @@ const SORT_OPTIONS = [
 ];
 
 const SUBJECTS = PRIMARY_SUBJECTS; // giữ nguyên master, chi tiết trong subjectCatalog.js
+const BOOK_INFO_SUBJECTS = [...new Set([...PRIMARY_SUBJECTS, "Khác"])];
 const TERMS = [1, 2];
 
 class AppErrorBoundary extends React.Component {
@@ -468,6 +469,7 @@ export default function App() {
   const [showTextModal, setShowTextModal] = useState(false);
   const [editingTextBook, setEditingTextBook] = useState(null);
   const [lpOpenId, setLpOpenId] = useState(null);
+  const [readerReturnTarget, setReaderReturnTarget] = useState(null);
   // Từ khóa lọc sổ tay từ vựng khi được mở từ Tìm kiếm toàn cục
   const [vocabQuery, setVocabQuery] = useState("");
   // tinh tế: thay confirm/prompt bằng modal
@@ -478,12 +480,17 @@ export default function App() {
   });
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameValue, setRenameValue] = useState("");
+  const [renameGrade, setRenameGrade] = useState(1);
+  const [renameSubject, setRenameSubject] = useState("Khác");
+  const [renameTerm, setRenameTerm] = useState(1);
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [renameError, setRenameError] = useState("");
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [urlTitle, setUrlTitle] = useState("");
   // Bẫy focus cho 3 modal (Tab xoay vòng, Escape đóng, trả focus)
   const deleteTrapRef = useFocusTrap(!!deleteTarget, () => setDeleteTarget(null));
-  const renameTrapRef = useFocusTrap(!!renameTarget, () => setRenameTarget(null));
+  const renameTrapRef = useFocusTrap(!!renameTarget, () => { if (!renameSaving) setRenameTarget(null); });
   const urlTrapRef = useFocusTrap(!!showUrlModal, () => setShowUrlModal(false));
   const noticeTimerRef = useRef(null);
   // ── A1 • Cảnh báo bộ nhớ trình duyệt (quota + ước tính dung lượng) ──
@@ -888,7 +895,8 @@ export default function App() {
 
   // Reset to library view when opening a book or returning
   // Tôn trọng Cài đặt: Riêng tư → Ghi nhớ lịch sử (tắt = không lưu) + Hành vi → Rung
-  const handleOpenBook = useCallback((book, initialPage = null) => {
+  const handleOpenBook = useCallback((book, initialPage = null, returnTarget = null) => {
+    setReaderReturnTarget(returnTarget);
     const at = Date.now();
     setOpenRequestId((id) => id + 1);
     setOpenInitialPage(initialPage);
@@ -946,8 +954,10 @@ export default function App() {
   }, []);
 
   const handleBack = useCallback(() => {
-    closeBook("library");
-  }, [closeBook]);
+    const target = readerReturnTarget;
+    setReaderReturnTarget(null);
+    closeBook(target?.view || "library", target?.planId ? { planId: target.planId } : undefined);
+  }, [closeBook, readerReturnTarget]);
 
   // onNavigate cho GlobalSearch — PHẢI useCallback: inline arrow đổi reference mỗi
   // render App → effect tìm kiếm re-run (quét lại toàn bộ localStorage) dù query không đổi.
@@ -1076,31 +1086,90 @@ export default function App() {
     if (!book) return;
     setRenameTarget(book);
     setRenameValue(book.title);
+    setRenameGrade(Number(book.grade) || 1);
+    setRenameSubject(BOOK_INFO_SUBJECTS.includes(book.subject) ? book.subject : "Khác");
+    setRenameTerm(Number(book.term) === 2 ? 2 : 1);
+    setRenameError("");
   }, []);
-  const confirmRenameBook = useCallback(() => {
+  const confirmRenameBook = useCallback(async () => {
     const book = renameTarget;
-    if (!book) return;
+    if (!book || renameSaving) return;
     const newTitle = renameValue.trim();
-    if (!newTitle || newTitle === book.title) { setRenameTarget(null); return; }
-    if (newTitle.length < 2) { setError("Tên sách phải ít nhất 2 ký tự."); return; }
-    const customTitles = safeGetJSON("sgk_custom_titles", {}, (d) => d && typeof d === "object" && !Array.isArray(d));
-    customTitles[book.filename] = newTitle;
+    if (newTitle.length < 3 || newTitle.length > 160) {
+      setRenameError("Tiêu đề cần từ 3 đến 160 ký tự.");
+      return;
+    }
+    setRenameSaving(true);
+    setRenameError("");
     try {
-      const res = safeSetJSON("sgk_custom_titles", customTitles);
-      if (!res.ok) {
-        if (res.quota) {
-          setError("Không thể lưu dữ liệu vì bộ nhớ trình duyệt đã đầy");
-        } else {
-          setError(res.message || "Không thể đổi tên sách.");
+      const response = await fetch(`${API_BASE}/api/books/${encodeURIComponent(book.filename)}/metadata`, {
+        method: "PATCH",
+        headers: writeHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          title: newTitle,
+          grade: renameGrade,
+          subject: renameSubject,
+          term: renameTerm,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || "Không thể cập nhật thông tin sách.");
+      if (!data?.book?.filename) throw new Error("Máy chủ chưa trả lại thông tin sách đã cập nhật.");
+
+      const updatedBook = { ...data.book, title: newTitle };
+      const oldFilename = data.oldFilename || book.filename;
+      let syncWarning = "";
+      if (oldFilename !== updatedBook.filename) {
+        try {
+          const { migrateBookData } = await import("./data/storage.js");
+          const migration = await migrateBookData(oldFilename, updatedBook.filename);
+          if (!migration.ok) {
+            console.warn("[App] migrateBookData failed after book metadata update:", migration.error);
+            syncWarning = "Thông tin sách đã lưu, nhưng một số ghi chú/đánh dấu cũ chưa được chuyển sang tên mới.";
+          }
+        } catch (e) {
+          console.error("[App] migrateBookData failed after book metadata update:", e);
+          syncWarning = "Thông tin sách đã lưu, nhưng không thể đồng bộ dữ liệu đọc cũ.";
         }
-        return;
       }
-      setBooks((prev) => prev.map((b) => b.filename === book.filename ? { ...b, title: newTitle } : b));
+
+      const customTitles = safeGetJSON("sgk_custom_titles", {}, (d) => d && typeof d === "object" && !Array.isArray(d));
+      if (oldFilename !== updatedBook.filename) delete customTitles[oldFilename];
+      customTitles[updatedBook.filename] = newTitle;
+      const titleSave = safeSetJSON("sgk_custom_titles", customTitles);
+      if (!titleSave.ok) {
+        console.warn("[App] Could not persist custom book title:", titleSave.error || titleSave.message);
+        syncWarning = "Thông tin sách đã lưu, nhưng tên hiển thị chưa đồng bộ được vào bộ nhớ trình duyệt.";
+      }
+
+      setBooks((prev) => {
+        const exists = prev.some((item) => item.filename === oldFilename || item.filename === updatedBook.filename);
+        const next = prev.map((item) =>
+          item.filename === oldFilename || item.filename === updatedBook.filename ? updatedBook : item
+        );
+        return exists ? next : [...next, updatedBook];
+      });
+      if (currentBook && (currentBook.filename === oldFilename || currentBook.filename === updatedBook.filename)) {
+        setCurrentBook(updatedBook);
+        setBookContentNonce((nonce) => nonce + 1);
+      }
       setDataVersion((v) => v + 1);
-      try { if (shouldShowNotifications()) setUploadNotice("Đã đổi tên sách thành công."); } catch { setUploadNotice("Đã đổi tên sách thành công."); }
-    } catch (e) { console.warn("[App] confirmRenameBook failed:", e); setError(e.message || "Không thể đổi tên sách."); }
-    finally { setRenameTarget(null); }
-  }, [renameTarget, renameValue]);
+      try { appEventsCore.emit(AppEventsCore.DATA_UPDATED, { domain: "books", action: "metadata_updated" }); }
+      catch (e) { console.warn("[App] Could not publish book metadata update:", e); }
+      try {
+        if (shouldShowNotifications()) setUploadNotice(syncWarning || `Đã cập nhật thông tin "${newTitle}".`);
+      } catch {
+        setUploadNotice(syncWarning || `Đã cập nhật thông tin "${newTitle}".`);
+      }
+      setUploadError(syncWarning);
+      setRenameTarget(null);
+    } catch (e) {
+      console.warn("[App] confirmRenameBook failed:", e);
+      setRenameError(e.message || "Không thể cập nhật thông tin sách.");
+    } finally {
+      setRenameSaving(false);
+    }
+  }, [renameTarget, renameValue, renameGrade, renameSubject, renameTerm, currentBook, renameSaving]);
 
   const clearHistory = useCallback(() => {
     setHistory([]);
@@ -1346,11 +1415,11 @@ export default function App() {
   useEffect(() => {
     if (!deleteTarget && !renameTarget && !showUrlModal) return;
     const h = (e) => {
-      if (e.key === "Escape") { setDeleteTarget(null); setRenameTarget(null); setShowUrlModal(false); }
+      if (e.key === "Escape") { setDeleteTarget(null); if (!renameSaving) setRenameTarget(null); setShowUrlModal(false); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [deleteTarget, renameTarget, showUrlModal]);
+  }, [deleteTarget, renameTarget, showUrlModal, renameSaving]);
 
   // -- Global keyboard shortcuts cực chi tiết (đọc từ settings.keyboard.shortcuts, mặc định đã có) --
   useEffect(() => {
@@ -2328,8 +2397,9 @@ export default function App() {
                   initialPage={openInitialPage}
                   openRequestId={openRequestId}
                   onOpenLessonPlan={(id) => {
-                    setLpOpenId(id);
-                    closeBook("lessonplans");
+                   setReaderReturnTarget(null);
+                   setLpOpenId(id);
+                   closeBook("lessonplans");
                   }}
                   onEditWord={() => handleEditTextBook(currentBook)}
                   contentVersion={bookContentNonce}
@@ -2661,7 +2731,13 @@ export default function App() {
                     inventory: { books, onOpenBook: handleOpenBook },
                     collections: { books, onOpenBook: handleOpenBook, onNavigate: closeBook },
                     references: { books, onNavigate: closeBook },
-                    lessonplans: { books, onNavigate: closeBook, initialPlanId: lpOpenId },
+                    lessonplans: {
+                      books,
+                      onNavigate: closeBook,
+                      onOpenBook: (book, page, planId) =>
+                        handleOpenBook(book, page, { view: "lessonplans", planId }),
+                      initialPlanId: lpOpenId,
+                    },
                     activities: { books, onNavigate: closeBook },
                     worksheets: { books, onNavigate: closeBook },
                     questionbank: { books, onNavigate: closeBook },
@@ -2755,17 +2831,46 @@ export default function App() {
             </div>
           </div>
         )}
-        {/* Modal đổi tên • thay prompt */}
+        {/* Modal chỉnh thông tin sách • metadata được dùng trong bộ lọc và thư viện */}
         {renameTarget && (
-          <div className="modal-overlay" onClick={()=>setRenameTarget(null)} role="dialog" aria-modal="true" aria-labelledby="rename-title">
-            <div ref={renameTrapRef} className="modal-content" onClick={(e)=>e.stopPropagation()} style={{maxWidth:"min(440px, calc(100vw - 20px))"}}>
-              <div className="modal-header"><h2 id="rename-title">Đổi tên sách</h2><button className="btn btn-ghost btn-xs" onClick={()=>setRenameTarget(null)} aria-label="Đóng"><X size={16}/></button></div>
-              <div style={{padding:"1rem 1.1rem"}}>
-                <label className="form-label" htmlFor="rename-input">Tên mới</label>
-                <input id="rename-input" className="form-control" value={renameValue} onChange={(e)=>setRenameValue(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter") confirmRenameBook(); if(e.key==="Escape") setRenameTarget(null); }} placeholder="Nhập tên mới..." autoFocus />
-                <div style={{display:"flex",gap:"0.5rem",justifyContent:"flex-end",marginTop:"1rem"}}>
-                  <button className="btn btn-ghost" onClick={()=>setRenameTarget(null)}>Hủy</button>
-                  <button className="btn btn-primary" onClick={confirmRenameBook}>Lưu</button>
+          <div className="modal-overlay" onClick={()=>{ if(!renameSaving) setRenameTarget(null); }} role="dialog" aria-modal="true" aria-labelledby="rename-title">
+            <div ref={renameTrapRef} className="modal-content" onClick={(e)=>e.stopPropagation()} style={{maxWidth:"min(560px, calc(100vw - 20px))"}}>
+              <div className="modal-header"><h2 id="rename-title">Sửa thông tin sách</h2><button className="btn btn-ghost btn-xs" onClick={()=>setRenameTarget(null)} aria-label="Đóng" disabled={renameSaving}><X size={16}/></button></div>
+              <div style={{padding:"1rem 1.1rem",display:"flex",flexDirection:"column",gap:"0.75rem"}}>
+                <div>
+                  <label className="form-label" htmlFor="rename-input">Tiêu đề sách</label>
+                  <input id="rename-input" className="form-control" value={renameValue} maxLength={160} onChange={(e)=>{setRenameValue(e.target.value); setRenameError("");}} onKeyDown={(e)=>{ if(e.key==="Enter") confirmRenameBook(); if(e.key==="Escape" && !renameSaving) setRenameTarget(null); }} placeholder="Nhập tiêu đề..." autoFocus disabled={renameSaving} />
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:"0.6rem"}}>
+                  <div>
+                    <label className="form-label" htmlFor="rename-grade">Lớp</label>
+                    <select id="rename-grade" className="sort-select" value={renameGrade} onChange={(e)=>setRenameGrade(Number(e.target.value))} disabled={renameSaving}>
+                      {[1,2,3,4,5].map((grade)=><option key={grade} value={grade}>Lớp {grade}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor="rename-subject">Môn học</label>
+                    <select id="rename-subject" className="sort-select" value={renameSubject} onChange={(e)=>setRenameSubject(e.target.value)} disabled={renameSaving}>
+                      {BOOK_INFO_SUBJECTS.map((subject)=><option key={subject} value={subject}>{subject}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" htmlFor="rename-term">Tập</label>
+                    <select id="rename-term" className="sort-select" value={renameTerm} onChange={(e)=>setRenameTerm(Number(e.target.value))} disabled={renameSaving}>
+                      <option value={1}>Tập 1</option>
+                      <option value={2}>Tập 2</option>
+                    </select>
+                  </div>
+                </div>
+                <p className="text-body-sm" style={{margin:0}}>
+                  Thông tin này dùng trong tìm kiếm và lọc thư viện. Khi cần đổi tên tệp, tiến độ đọc, ghi chú và đánh dấu sẽ được chuyển theo sách.
+                </p>
+                {renameError && <p className="form-error" role="alert" style={{margin:0}}>{renameError}</p>}
+                <div style={{display:"flex",gap:"0.5rem",justifyContent:"flex-end",marginTop:"0.25rem"}}>
+                  <button className="btn btn-ghost" onClick={()=>setRenameTarget(null)} disabled={renameSaving}>Hủy</button>
+                  <button className="btn btn-primary" onClick={confirmRenameBook} disabled={renameSaving}>
+                    {renameSaving ? "Đang lưu..." : "Lưu thông tin"}
+                  </button>
                 </div>
               </div>
             </div>
@@ -3702,7 +3807,7 @@ function LibraryView({
                     {[".txt", ".md"].includes(_ext) && (
                       <button className="libx-icobtn libx-hide-mobile" onClick={(e) => { e.stopPropagation(); onEditTextBook?.(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }} aria-label="Sửa nội dung" title="Sửa nội dung (chỉ .txt/.md)"><Edit3 size={14} /></button>
                     )}
-                    <button className="libx-icobtn libx-hide-mobile" onClick={(e) => { e.stopPropagation(); onRenameBook(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }} aria-label="Đổi tên" title="mũi tên"><Pencil size={14} /></button>
+                    <button className="libx-icobtn libx-hide-mobile" onClick={(e) => { e.stopPropagation(); onRenameBook(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }} aria-label="Sửa thông tin sách" title="Sửa thông tin sách"><Pencil size={14} /></button>
                     <button className="libx-icobtn danger libx-hide-mobile" onClick={(e) => { e.stopPropagation(); onDeleteBook(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }} aria-label="Xóa" title="Xóa"><Trash2 size={14} /></button>
                     <span className="libx-rowmenu-anchor">
                       <button
@@ -3743,7 +3848,7 @@ function LibraryView({
                             role="menuitem"
                             onClick={(e) => { e.stopPropagation(); onRenameBook(row); setOpenRowMenu(null); }}
                           >
-                            <Pencil size={14} /> Đổi tên
+                            <Pencil size={14} /> Sửa thông tin sách
                           </button>
                           <button
                             className="libx-rowmenu-item danger"
@@ -3885,8 +3990,8 @@ function BookCard({
               e.stopPropagation();
               onRename?.();
             }}
-            aria-label={`đổi tên sách ${book.title}`}
-            title="Đổi tên"
+            aria-label={`Sửa thông tin sách ${book.title}`}
+            title="Sửa thông tin sách"
           >
             <Pencil size={14} />
           </button>

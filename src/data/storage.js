@@ -9,6 +9,27 @@ import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "../safeS
 import { appEvents, AppEvents } from "../core/appEvents.js";
 import { BACKUP_KEYS as _BACKUP_KEYS_CORE, STORAGE_KEYS as _STORAGE_KEYS_CORE, isBackupKey as _isBackupKeyCore, isCacheKey as _isCacheKeyCore } from "../core/storageKeys.js";
 
+const INDEXED_DB_KEY_PATHS = {
+  [STORES.OCR]: "key",
+  [STORES.SEARCH_INDEX]: "key",
+  [STORES.CLIPS]: "id",
+  [STORES.REFS]: "id",
+  [STORES.CONCEPTS]: "id",
+  [STORES.EVIDENCE]: "id",
+  [STORES.SCAN]: "id",
+  [STORES.WB_IMAGES]: "id",
+  [STORES.WB_BOARDS]: "id",
+  [STORES.NOTE_IMAGES]: "id",
+};
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 // Test rollback cố tình gây lỗi quota — im lặng log dự kiến.
 function __isTestSilence() {
   try {
@@ -17,7 +38,6 @@ function __isTestSilence() {
   } catch {}
   return false;
 }
-
 function __cleanupWarn(scope, err) {
   if (__isTestSilence()) return;
   console.warn(`[storage] ${scope} chưa dọn được:`, err?.message || err);
@@ -55,29 +75,41 @@ function base64ToBlob(base64, mimeType) {
     return new Blob([], { type: mimeType || "image/png" });
   }
 }
+function isValidSerializedBlob(blob) {
+  if (!blob?.__blob || typeof blob.data !== "string" ||
+      typeof blob.mimeType !== "string" || !Number.isSafeInteger(blob.size) || blob.size < 0 ||
+      blob.data.length % 4 !== 0 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(blob.data)) {
+    return false;
+  }
+  const padding = blob.data.endsWith("==") ? 2 : blob.data.endsWith("=") ? 1 : 0;
+  return (blob.data.length / 4) * 3 - padding === blob.size;
+}
 async function serializeWBRecord(rec) {
   if (!rec || !rec.blob) return rec;
   const blob = rec.blob;
   // Already serialized?
-  if (blob && typeof blob === "object" && blob.__blob) return rec;
-  if (typeof Blob !== "undefined" && blob instanceof Blob) {
-    try {
-      const buf = await blob.arrayBuffer();
-      return {
-        id: rec.id,
-        createdAt: rec.createdAt,
-        blob: { __blob: true, mimeType: blob.type || "image/png", size: blob.size, data: arrayBufferToBase64(buf) },
-      };
-    } catch (e) { console.warn("[storage] WB_IMAGES serialize failed", rec.id, e); return rec; }
+  if (blob && typeof blob === "object" && blob.__blob) {
+    if (!isValidSerializedBlob(blob)) {
+      throw new Error(`Dữ liệu ảnh IndexedDB không hợp lệ (${rec.id || "không có id"}).`);
+    }
+    return rec;
   }
-  return rec;
+  if (typeof Blob !== "undefined" && blob instanceof Blob) {
+    const buf = await blob.arrayBuffer();
+    return {
+      ...rec,
+      blob: { __blob: true, mimeType: blob.type || "image/png", size: blob.size, data: arrayBufferToBase64(buf) },
+    };
+  }
+  throw new Error(`Không thể sao lưu ảnh IndexedDB (${rec.id || "không có id"}).`);
 }
 function deserializeWBRecord(rec) {
   if (!rec || !rec.blob || typeof rec.blob !== "object" || !rec.blob.__blob) return rec;
-  try {
-    const b = base64ToBlob(rec.blob.data, rec.blob.mimeType);
-    return { ...rec, blob: b };
-  } catch (e) { console.warn("[storage] WB_IMAGES deserialize failed", rec.id, e); return rec; }
+  const b = base64ToBlob(rec.blob.data, rec.blob.mimeType);
+  if (b.size !== rec.blob.size) {
+    throw new Error(`Ảnh ${rec.id || ""} bị thiếu hoặc hỏng dữ liệu (${b.size}/${rec.blob.size} byte).`);
+  }
+  return { ...rec, blob: b };
 }
 
 export const PREFIX = "sgk_";
@@ -339,7 +371,7 @@ async function exportIndexedDBData({ skipStores = [] } = {}) {
   try {
     for (const store of Object.values(STORES)) {
       if (skip.has(store)) continue;
-      const records = await indexedDBService.getAllRecords(store);
+      const records = await indexedDBService.getAllRecords(store, { strict: true });
       if (records.length > 0) {
         if (store === STORES.WB_IMAGES || store === STORES.NOTE_IMAGES) {
           const serialized = [];
@@ -360,50 +392,41 @@ async function exportIndexedDBData({ skipStores = [] } = {}) {
 
 // ── IndexedDB restore helper (for import) ─────────────────────────────
 async function restoreIndexedDBData(indexedData) {
-  if (!indexedDBService.constructor.isAvailable()) {
-    return 0;
-  }
-
   if (!indexedData || typeof indexedData !== "object") {
     return 0;
   }
 
-  const keyPaths = {
-    [STORES.OCR]: "key",
-    [STORES.SEARCH_INDEX]: "key",
-    [STORES.CLIPS]: "id",
-    [STORES.REFS]: "id",
-    [STORES.CONCEPTS]: "id",
-    [STORES.EVIDENCE]: "id",
-    [STORES.SCAN]: "id",
-    [STORES.WB_IMAGES]: "id",
-    [STORES.WB_BOARDS]: "id",
-    [STORES.NOTE_IMAGES]: "id",
-  };
+  const stores = Object.values(STORES);
+  const hasRecords = Object.values(indexedData).some((items) => Array.isArray(items) && items.length > 0);
+  if (!indexedDBService.constructor.isAvailable()) {
+    if (hasRecords || Object.keys(indexedData).length > 0) {
+      throw new Error("IndexedDB không khả dụng; không thể khôi phục đầy đủ dữ liệu.");
+    }
+    return 0;
+  }
 
   let count = 0;
 
   for (const [store, items] of Object.entries(indexedData)) {
-    if (!Object.values(STORES).includes(store)) {
-      continue;
-    }
-
+    if (!stores.includes(store)) throw new Error(`Kho IndexedDB không được hỗ trợ: ${store}.`);
     if (!Array.isArray(items)) {
-      continue;
+      throw new Error(`Dữ liệu khôi phục trong ${store} phải là mảng.`);
     }
 
-    const keyPath = keyPaths[store];
+    const keyPath = INDEXED_DB_KEY_PATHS[store];
 
     for (const record of items) {
-      if (!record) {
-        continue;
+      if (!record || typeof record !== "object" || Array.isArray(record)) {
+        throw new Error(`Bản ghi không hợp lệ trong ${store}.`);
       }
 
       const key = record[keyPath];
 
       if (key === undefined || key === null) {
-        console.warn(`Skipping invalid record in ${store}: missing ${keyPath}`);
-        continue;
+        throw new Error(`Bản ghi trong ${store} thiếu khóa ${keyPath}.`);
+      }
+      if (keyPath === "key" && !Object.prototype.hasOwnProperty.call(record, "value")) {
+        throw new Error(`Bản ghi trong ${store} thiếu trường value.`);
       }
 
       try {
@@ -415,8 +438,17 @@ async function restoreIndexedDBData(indexedData) {
           value = record;
         }
         // TASK #6: deserialize WB_IMAGES Blob (+ NOTE_IMAGES — cùng định dạng blob)
+        if (store === STORES.WB_IMAGES && !isValidSerializedBlob(value.blob)) {
+          throw new Error("Dữ liệu ảnh Blob không hợp lệ.");
+        }
+        if (store === STORES.NOTE_IMAGES && value.blob && !isValidSerializedBlob(value.blob)) {
+          throw new Error("Dữ liệu ảnh ghi chú không hợp lệ.");
+        }
+        if (store === STORES.NOTE_IMAGES && !value.blob && typeof value.dataUrl !== "string") {
+          throw new Error("Ảnh ghi chú thiếu Blob hoặc data URL.");
+        }
         if (store === STORES.WB_IMAGES || store === STORES.NOTE_IMAGES) {
-          value = deserializeWBRecord(value);
+          if (value.blob) value = deserializeWBRecord(value);
         }
 
         const ok = await indexedDBService.set(store, key, value);
@@ -428,11 +460,33 @@ async function restoreIndexedDBData(indexedData) {
         count++;
       } catch (err) {
         console.error(`Failed to restore item in ${store}:`, err);
+        throw new Error(`Không thể khôi phục ${store}/${String(key)}: ${err.message}`);
       }
     }
   }
 
   return count;
+}
+
+async function verifyIndexedDBData(indexedData) {
+  for (const [store, expectedRecords] of Object.entries(indexedData || {})) {
+    const keyPath = INDEXED_DB_KEY_PATHS[store];
+    const actualRecords = await indexedDBService.getAllRecords(store, { strict: true });
+    if (actualRecords.length !== expectedRecords.length) {
+      throw new Error(`${store} count mismatch: expected ${expectedRecords.length}, got ${actualRecords.length}.`);
+    }
+    const actualByKey = new Map(actualRecords.map((record) => [record[keyPath], record]));
+    for (const expected of expectedRecords) {
+      const actual = actualByKey.get(expected[keyPath]);
+      if (!actual) throw new Error(`${store} thiếu bản ghi ${String(expected[keyPath])}.`);
+      const serialized = store === STORES.WB_IMAGES || store === STORES.NOTE_IMAGES
+        ? await serializeWBRecord(actual)
+        : actual;
+      if (stableStringify(serialized) !== stableStringify(expected)) {
+        throw new Error(`${store} dữ liệu không khớp ở bản ghi ${String(expected[keyPath])}.`);
+      }
+    }
+  }
 }
 
 // ── Hybrid LS->IDB migration (TASK #4) — idempotent, verify before cleanup ──
@@ -1110,6 +1164,7 @@ export async function buildBackupPayload({
 } = {}) {
   const data = collectLocalBackupData();
   const indexedData = includeIndexed ? await exportIndexedDBData({ skipStores }) : {};
+  const indexedDataAvailable = indexedDBService.constructor.isAvailable();
 
   return {
     app: "hanhtrang-tieu-hoc",
@@ -1121,6 +1176,9 @@ export async function buildBackupPayload({
     label: label || "",
     data,
     indexedData,
+    indexedDataAvailable,
+    indexedDataComplete: includeIndexed && indexedDataAvailable && skipStores.length === 0,
+    indexedDataSkippedStores: [...skipStores],
   };
 }
 
@@ -1149,6 +1207,8 @@ export async function exportBackup(customLabel = "") {
     localCount,
     indexedCount,
     total: localCount + indexedCount,
+    indexedDataAvailable: payload.indexedDataAvailable,
+    indexedDataComplete: payload.indexedDataComplete,
   };
 }
 
@@ -1164,6 +1224,8 @@ export function parseBackupPreview(text) {
     !payload ||
     typeof payload !== "object" ||
     !payload.data ||
+    typeof payload.data !== "object" ||
+    Array.isArray(payload.data) ||
     payload.app !== "hanhtrang-tieu-hoc"
   ) {
     return {
@@ -1178,7 +1240,18 @@ export function parseBackupPreview(text) {
       error: `Phiên bản sao lưu không hỗ trợ (v${version}).`,
     };
   }
+  if ((payload.indexedDataAvailable !== undefined && typeof payload.indexedDataAvailable !== "boolean") ||
+      (payload.indexedDataComplete !== undefined && typeof payload.indexedDataComplete !== "boolean") ||
+      (payload.indexedDataSkippedStores !== undefined &&
+        (!Array.isArray(payload.indexedDataSkippedStores) || payload.indexedDataSkippedStores.some((store) => typeof store !== "string")))) {
+    return { valid: false, error: "Thông tin phạm vi sao lưu IndexedDB không hợp lệ." };
+  }
   const localKeys = Object.keys(payload.data || {});
+  for (const [key, value] of Object.entries(payload.data)) {
+    if (value !== null && typeof value !== "string") {
+      return { valid: false, error: `Dữ liệu ${key} không hợp lệ (phải là chuỗi hoặc null).` };
+    }
+  }
   // Deep validation: ensure data values are strings and critical keys contain valid JSON
   const criticalKeys = ['sgk_lessonplans', 'khbd_v2_plans', 'sgk_questions', 'sgk_worksheets', 'sgk_vocab', 'sgk_clips', 'sgk_collections'];
   for (const k of criticalKeys) {
@@ -1198,10 +1271,37 @@ export function parseBackupPreview(text) {
     }
   }
   // Validate indexedData stores if present
+  if (payload.indexedData !== undefined && (
+    !payload.indexedData || typeof payload.indexedData !== "object" || Array.isArray(payload.indexedData)
+  )) {
+    return { valid: false, error: "IndexedData phải là một đối tượng các kho dữ liệu." };
+  }
   if (payload.indexedData && typeof payload.indexedData === "object") {
     for (const [store, arr] of Object.entries(payload.indexedData)) {
-      if (arr !== null && !Array.isArray(arr)) {
+      if (!Object.prototype.hasOwnProperty.call(INDEXED_DB_KEY_PATHS, store)) {
+        return { valid: false, error: `Kho IndexedDB không được hỗ trợ: ${store}.` };
+      }
+      if (!Array.isArray(arr)) {
         return { valid: false, error: `IndexedData ${store} phải là mảng.` };
+      }
+      for (const record of arr) {
+        if (!record || typeof record !== "object" || Array.isArray(record) ||
+            record[INDEXED_DB_KEY_PATHS[store]] === undefined || record[INDEXED_DB_KEY_PATHS[store]] === null) {
+          return { valid: false, error: `IndexedData ${store} có bản ghi thiếu khóa ${INDEXED_DB_KEY_PATHS[store]}.` };
+        }
+        if (INDEXED_DB_KEY_PATHS[store] === "key" &&
+            !Object.prototype.hasOwnProperty.call(record, "value")) {
+          return { valid: false, error: `IndexedData ${store} có bản ghi thiếu value.` };
+        }
+        if ((store === STORES.WB_IMAGES || store === STORES.NOTE_IMAGES) && record.blob) {
+          const blob = record.blob;
+          if (!isValidSerializedBlob(blob)) {
+            return { valid: false, error: `IndexedData ${store} có ảnh Blob không hợp lệ.` };
+          }
+        } else if (store === STORES.WB_IMAGES ||
+            (store === STORES.NOTE_IMAGES && typeof record.dataUrl !== "string")) {
+          return { valid: false, error: `IndexedData ${store} thiếu dữ liệu ảnh.` };
+        }
       }
     }
   }
@@ -1217,6 +1317,12 @@ export function parseBackupPreview(text) {
     hasMoreKeys: localKeys.length > 20,
     indexedCounts: {},
     indexedTotal: 0,
+    indexedDataAvailable: payload.indexedDataAvailable !== false,
+    indexedDataComplete: payload.indexedDataComplete !== false &&
+      payload.indexedDataAvailable !== false &&
+      payload.indexedData !== undefined &&
+      !(payload.indexedDataComplete === undefined && String(payload.label || "").startsWith("auto:")),
+    indexedDataSkippedStores: Array.isArray(payload.indexedDataSkippedStores) ? payload.indexedDataSkippedStores : [],
   };
   if (payload.indexedData && typeof payload.indexedData === "object") {
     for (const [store, arr] of Object.entries(payload.indexedData)) {
@@ -1247,6 +1353,10 @@ export async function importBackup(text) {
   if (ver !== 1 && ver !== 2) {
     throw new Error(`Phiên bản sao lưu không hỗ trợ (v${ver}).`);
   }
+  if (payload.indexedData && Object.keys(payload.indexedData).length > 0 &&
+      !indexedDBService.constructor.isAvailable()) {
+    throw new Error("IndexedDB không khả dụng; không thể khôi phục đầy đủ dữ liệu. Hãy bật IndexedDB rồi thử lại.");
+  }
 
   // 1) Prepare snapshot for atomicity (save originals for rollback)
   const snapshotOriginals = {};
@@ -1258,11 +1368,29 @@ export async function importBackup(text) {
       snapshotOriginals[k] = localStorage.getItem(k);
     }
   }
-  // Also capture IndexedDB snapshot for rollback (best-effort)
+  // Capture an IndexedDB rollback snapshot before changing either storage layer.
   let indexedSnapshot = null;
-  try {
-    if (payload.indexedData) indexedSnapshot = await exportIndexedDBData();
-  } catch {}
+  const indexedStoresToReplace = Object.keys(payload.indexedData || {});
+  if (indexedStoresToReplace.length > 0) {
+    indexedSnapshot = await exportIndexedDBData();
+  }
+  const rollbackLocalStorage = () => {
+    const rollback = {};
+    for (const key of keysToClear) rollback[key] = snapshotOriginals[key] ?? null;
+    for (const key of Object.keys(payload.data)) {
+      if (isBackupKey(key) && !Object.prototype.hasOwnProperty.call(rollback, key)) rollback[key] = null;
+    }
+    saveBatch(rollback);
+  };
+  const rollbackIndexedDB = async () => {
+    if (!indexedStoresToReplace.length) return;
+    for (const store of indexedStoresToReplace) {
+      if (!await indexedDBService.clear(store)) {
+        throw new Error(`Không thể hoàn tác kho ${store}.`);
+      }
+    }
+    if (indexedSnapshot) await restoreIndexedDBData(indexedSnapshot);
+  };
   // P0 fix: auto-save recovery snapshot before destructive restore (so old newer data not permanently lost)
   // Even though snapshot semantics requires clearing, we keep a recovery copy for 7 days
   try {
@@ -1303,12 +1431,9 @@ export async function importBackup(text) {
   try {
     saveBatch(updates);
   } catch (e) {
-    // Rollback on failure
-    try {
-      const rollback = {};
-      for (const [k,v] of Object.entries(snapshotOriginals)) rollback[k] = v;
-      saveBatch(rollback);
-    } catch {}
+    try { rollbackLocalStorage(); } catch (rollbackError) {
+      console.error("[storage] localStorage rollback failed after restore error:", rollbackError);
+    }
     throw new Error(`Khôi phục thất bại, đã hoàn tác: ${e.message}`);
   }
 
@@ -1319,21 +1444,23 @@ export async function importBackup(text) {
     try {
       for (const store of Object.keys(payload.indexedData)) {
         if (Object.values(STORES).includes(store)) {
-          await indexedDBService.clear(store);
+          const cleared = await indexedDBService.clear(store);
+          if (!cleared) throw new Error(`Không thể làm sạch kho ${store} trước khi khôi phục.`);
+        } else {
+          throw new Error(`Kho IndexedDB không được hỗ trợ: ${store}.`);
         }
       }
       // If backup has empty indexedData (no scans etc), ensure orphan stores are cleared
       // For version 2, clear all snapshot stores that are not in backup but may contain orphans?
       // We clear only stores present in backup to keep non-snapshot caches (search index can be rebuilt)
       indexedCount = await restoreIndexedDBData(payload.indexedData);
+      await verifyIndexedDBData(payload.indexedData);
     } catch (e) {
       // Rollback localStorage on IndexedDB failure
-      try {
-        const rollback = {};
-        for (const [k,v] of Object.entries(snapshotOriginals)) rollback[k] = v;
-        saveBatch(rollback);
-        if (indexedSnapshot) await restoreIndexedDBData(indexedSnapshot);
-      } catch {}
+      let rollbackError = null;
+      try { rollbackLocalStorage(); } catch (err) { rollbackError = err; }
+      try { await rollbackIndexedDB(); } catch (err) { rollbackError ||= err; }
+      if (rollbackError) console.error("[storage] rollback failed after IndexedDB restore error:", rollbackError);
       throw new Error(`Khôi phục IndexedDB thất bại: ${e.message}`);
     }
   }
@@ -1381,12 +1508,10 @@ export async function importBackup(text) {
     }
   } catch (e) {
     // Rollback on verify fail
-    try {
-      const rollback = {};
-      for (const [k,v] of Object.entries(snapshotOriginals)) rollback[k] = v;
-      saveBatch(rollback);
-      if (indexedSnapshot) await restoreIndexedDBData(indexedSnapshot);
-    } catch {}
+    let rollbackError = null;
+    try { rollbackLocalStorage(); } catch (err) { rollbackError = err; }
+    try { await rollbackIndexedDB(); } catch (err) { rollbackError ||= err; }
+    if (rollbackError) console.error("[storage] rollback failed after backup verification error:", rollbackError);
     throw new Error(`Verify WB boards/images failed: ${e.message}`);
   }
   // 5b) Validate restored state
@@ -1412,6 +1537,8 @@ export async function importBackup(text) {
     count,
     total: Object.keys(payload.data).length,
     indexedCount,
+    indexedDataAvailable: payload.indexedDataAvailable !== false,
+    indexedDataComplete: preview.preview.indexedDataComplete,
   };
 }
 
