@@ -90,8 +90,9 @@ export default function SearchView({ books, onOpenBook }) {
   }, {});
   const [indexQuery, setIndexQuery] = useState("");
   const [indexFilter, setIndexFilter] = useState("all");
-  const indexedCount = books.filter((book) => statuses[book.filename]).length;
+  const indexedCount = books.filter((book) => !book.isLinkedBook && statuses[book.filename]).length;
   const filteredIndexBooks = books.filter((book) => {
+    if (book.isLinkedBook) return false;
     const meta = statuses[book.filename];
     const matchesStatus = indexFilter === "all" || (indexFilter === "indexed" ? Boolean(meta) : !meta);
     const matchesQuery = normalizeSearch(`${book.title || ""} ${book.filename || ""}`)

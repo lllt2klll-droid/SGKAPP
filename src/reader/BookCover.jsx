@@ -41,7 +41,7 @@ export default function BookCover({ book, lastPage = 0, height = 0, numPages = 0
 
   const filename = book?.filename || "";
   const ext = getExt(filename);
-  const isPdf = ext === ".pdf";
+  const isPdf = ext === ".pdf" && !book?.isLinkedBook;
   const isImg = IMG_EXTS.has(ext);
 
   const { page: bookPg, pct: progressPct } = progressFromPages(lastPage, numPages);

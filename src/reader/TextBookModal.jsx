@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import { getApiBase, writeHeaders } from "../services/apiConfig.js";
 import { PRIMARY_SUBJECTS } from "../data/subjectCatalog.js";
 import { loadSettings, updateSettings } from "../services/settingsStore.js";
@@ -102,7 +102,11 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
   const [term, setTerm] = useState(1);
   const [format, setFormat] = useState("html"); // html default, keep txt/md compat
   const [html, setHtml] = useState("");
+  const [paginationHtml, setPaginationHtml] = useState("");
+  const [dirty, setDirty] = useState(false);
   const editorPagesRef = useRef([]);
+  const paginationTimerRef = useRef(null);
+  const pendingCaretRef = useRef(null);
   const pageRefs = useRef([]);
   const pagesAreaRef = useRef(null);
   const [pageAreaWidth, setPageAreaWidth] = useState(794);
@@ -114,6 +118,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
   const [fieldErrors, setFieldErrors] = useState({});
   const [draftRestored, setDraftRestored] = useState(false);
   const titleRef = useRef(null);
+  const dialogRef = useRef(null);
   const editorRef = useRef(null);
   // word-like controls — đồng bộ với Setting (editor)
   const [isMaximized, setIsMaximized] = useState(false);
@@ -137,6 +142,11 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
   const [activeFmt, setActiveFmt] = useState({ bold:false, italic:false, underline:false, strike:false, ul:false, ol:false, justify:"left" });
   const fileImgRef = useRef(null);
   const lastRangeRef = useRef(null);
+
+  const setDocumentHtml = useCallback((value) => {
+    setHtml(value);
+    setPaginationHtml(value);
+  }, []);
 
   // Đồng bộ Setting — persist editor prefs toàn app
   const persistEditor = useCallback((patch)=>{
@@ -179,10 +189,103 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
 
   // sync editor innerHTML -> state
   const syncHtml = useCallback(()=>{
+    clearTimeout(paginationTimerRef.current);
+    pendingCaretRef.current=null;
     const editors=editorPagesRef.current.filter(Boolean);
     if(!editors.length) return;
-    setHtml(editors.map((editor)=>editor.innerHTML).join(""));
+    const next=editors.map((editor)=>editor.innerHTML).join("");
+    setHtml(next);
+    setPaginationHtml(next);
+    if(next!==html) setDirty(true);
+  },[html]);
+  const handleEditorInput = useCallback((event)=>{
+    const editors=editorPagesRef.current.filter(Boolean);
+    if(!editors.length) return;
+    const next=editors.map((editor)=>editor.innerHTML).join("");
+    setHtml(next);
+    setDirty(true);
+    const activeEditor=event.currentTarget;
+    const needsPagination=activeEditor.scrollHeight>activeEditor.clientHeight+1
+      || event.nativeEvent?.inputType?.startsWith("delete");
+    if(!needsPagination && !paginationTimerRef.current){
+      pendingCaretRef.current=null;
+      return;
+    }
+    const activeIndex=editors.indexOf(activeEditor);
+    const selection=window.getSelection();
+    if(activeIndex>=0){
+      let localOffset=(activeEditor.textContent||"").length;
+      if(selection?.anchorNode && activeEditor.contains(selection.anchorNode)){
+        const walker=document.createTreeWalker(activeEditor,NodeFilter.SHOW_TEXT);
+        let textNode;
+        let textOffset=0;
+        let found=false;
+        while((textNode=walker.nextNode())){
+          if(textNode===selection.anchorNode){
+            localOffset=textOffset+Math.min(selection.anchorOffset,textNode.length);
+            found=true;
+            break;
+          }
+          textOffset+=textNode.length;
+        }
+        if(!found){
+          const range=document.createRange();
+          range.selectNodeContents(activeEditor);
+          range.setEnd(selection.anchorNode,selection.anchorOffset);
+          localOffset=range.cloneContents().textContent.length;
+        }
+      }
+      pendingCaretRef.current={
+        offset:editors.slice(0,activeIndex).reduce((length,editor)=>length+(editor.textContent||"").length,0)+localOffset,
+      };
+    }else{
+      pendingCaretRef.current=null;
+    }
+    if(!needsPagination) return;
+    clearTimeout(paginationTimerRef.current);
+    paginationTimerRef.current=setTimeout(()=>{
+      paginationTimerRef.current=null;
+      const currentEditors=editorPagesRef.current.filter(Boolean);
+      setPaginationHtml(currentEditors.map((editor)=>editor.innerHTML).join(""));
+    },120);
   },[]);
+  const handleRequestClose = useCallback(()=>{
+    if(loading) return;
+    if(dirty && !window.confirm("Bạn có thay đổi chưa lưu. Đóng trình soạn thảo và bỏ các thay đổi này?")) return;
+    if(dirty && !isEdit){
+      try{
+        localStorage.removeItem(DRAFT_KEY);
+        localStorage.removeItem("sgk_textbook_draft_v1");
+      }catch(e){
+        setError(`Không thể xóa bản nháp chưa lưu: ${e.message || "lỗi bộ nhớ trình duyệt"}`);
+        return;
+      }
+    }
+    onClose();
+  },[dirty,isEdit,loading,onClose]);
+  useEffect(()=>{
+    if(!open) return;
+    const trapFocus=(event)=>{
+      if(event.key!=="Tab") return;
+      const root=dialogRef.current;
+      if(!root) return;
+      const items=Array.from(root.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
+      )).filter((element)=>!element.closest("[hidden]") && element.getClientRects().length>0);
+      if(!items.length){ event.preventDefault(); return; }
+      const first=items[0];
+      const last=items[items.length-1];
+      if(event.shiftKey && (document.activeElement===first || !root.contains(document.activeElement))){
+        event.preventDefault();
+        last.focus();
+      }else if(!event.shiftKey && (document.activeElement===last || !root.contains(document.activeElement))){
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown",trapFocus,true);
+    return ()=>document.removeEventListener("keydown",trapFocus,true);
+  },[open]);
 
   // exec
   const saveSelection = useCallback(()=>{
@@ -369,7 +472,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
     let h='<table style="width:100%; border-collapse:collapse; margin:12px 0;"><tbody>';
     for(let r=0;r<rows;r++){
       h+='<tr>';
-      for(let c=0;c<cols;c++) h+=`<td style="border:1px solid #cbd5e1; padding:8px; min-width:60px;">${r===0?`<strong>O ${c+1}</strong>`:""}</td>`;
+      for(let c=0;c<cols;c++) h+=`<td style="border:1px solid #cbd5e1; padding:8px; min-width:60px;">${r===0?`<strong>Ô ${c+1}</strong>`:""}</td>`;
       h+='</tr>';
     }
     h+='</tbody></table><p><br></p>';
@@ -383,33 +486,64 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
   const handleRedo=()=> exec("redo");
   const handleClearFormat=()=>{ exec("removeFormat"); exec("unlink"); };
 
+  const findInEditors = (needle)=>{
+    const query=needle.toLocaleLowerCase();
+    for(let pageIndex=0;pageIndex<editorPagesRef.current.length;pageIndex++){
+      const editor=editorPagesRef.current[pageIndex];
+      if(!editor) continue;
+      const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+      let node;
+      while((node=walker.nextNode())){
+        const index=node.textContent.toLocaleLowerCase().indexOf(query);
+        if(index<0) continue;
+        const range=document.createRange();
+        range.setStart(node,index);
+        range.setEnd(node,index+needle.length);
+        const selection=window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        editorRef.current=editor;
+        editor.focus();
+        setActivePageIndex(pageIndex);
+        pageRefs.current[pageIndex]?.scrollIntoView({behavior:"smooth",block:"center"});
+        saveSelection();
+        return {node,index};
+      }
+    }
+    return null;
+  };
   const doFind = ()=>{
     if(!findText) return;
-    const sel=window.getSelection();
-    const content=editorRef.current?.innerText||"";
-    // simple: highlight via search inside editor using window.find if available
-    try{
-      const found=window.find(findText,false,false,true,false,false,false);
-      if(!found) alert("Không tìm thấy: "+findText);
-    }catch{
-      // fallback
-      const idx=content.indexOf(findText);
-      if(idx<0) alert("Không tìm thấy: "+findText);
-    }
+    setError(findInEditors(findText) ? "" : `Không tìm thấy: ${findText}`);
   };
   const doReplace = ()=>{
-    if(!html || !findText) return;
-    const next=html.split(findText).join(replaceText);
-    if(next!==html){
-      if(editorRef.current) editorRef.current.innerHTML=next;
-      setHtml(next);
-    }
+    if(!findText) return;
+    const match=findInEditors(findText);
+    if(!match){ setError(`Không tìm thấy: ${findText}`); return; }
+    match.node.replaceData(match.index,findText.length,replaceText);
+    syncHtml();
+    setError("");
   };
   const doReplaceAll = ()=>{
-    if(!html || !findText) return;
-    const next=html.split(findText).join(replaceText);
-    if(editorRef.current) editorRef.current.innerHTML=next;
-    setHtml(next);
+    if(!findText) return;
+    let replaced=0;
+    editorPagesRef.current.filter(Boolean).forEach((editor)=>{
+      const walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT);
+      const nodes=[];
+      while(walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach((node)=>{
+        const original=node.textContent;
+        const matches=original.split(findText).length-1;
+        if(matches){
+          node.textContent=original.split(findText).join(replaceText);
+          replaced+=matches;
+        }
+      });
+    });
+    if(!replaced){ setError(`Không tìm thấy: ${findText}`); return; }
+    syncHtml();
+    setError("");
+    setDocxNotice(`Đã thay ${replaced} vị trí.`);
   };
 
   // selection listeners
@@ -437,6 +571,8 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
   // Load editing data
   useEffect(() => {
     if (!open) return;
+    let focusTimer=null;
+    setDirty(false);
     setError("");
     setDocxNotice("");
     setFieldErrors({});
@@ -450,7 +586,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
           const rawContent=data.content || "";
           const ext=(data.ext||".html").toLowerCase();
           const converted=mdLikeToHtmlIfNeeded(rawContent, ext.replace(".",""));
-          setHtml(converted || "<p><br></p>");
+          setDocumentHtml(converted || "<p><br></p>");
           setGrade(data.grade || editingBook.grade || 1);
           setSubject(data.subject || editingBook.subject || "Khác");
           setTerm(data.term || editingBook.term || 1);
@@ -467,22 +603,27 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
             setTitle(d.title || "");
             const h=d.html || d.content || "";
             const conv=h.startsWith("<")?h: plainToHtml(h);
-            setHtml(conv || "<p><br></p>");
+            setDocumentHtml(conv || "<p><br></p>");
             setGrade(d.grade || 1);
             setSubject(d.subject || "Tiếng Việt");
             setTerm(d.term || 1);
             setFormat(d.format || "html");
             setDraftRestored(true);
           } else {
-            setTitle(""); setHtml("<p><br></p>");
+            setTitle(""); setDocumentHtml("<p><br></p>");
             setGrade(1); setSubject("Tiếng Việt"); setTerm(1); setFormat("html");
           }
       } catch {
-        setTitle(""); setHtml("<p><br></p>");
+        setTitle(""); setDocumentHtml("<p><br></p>");
       }
-      setTimeout(() => titleRef.current?.focus(), 100);
+      focusTimer=setTimeout(()=>{
+        if(!dialogRef.current?.contains(document.activeElement)){
+          titleRef.current?.focus();
+        }
+      },100);
     }
-  }, [open, isEdit, editingBook]);
+    return ()=>clearTimeout(focusTimer);
+  }, [open, isEdit, editingBook, setDocumentHtml]);
 
   // Auto-save draft (only for create) — tôn trọng Setting editor.autoSaveWordDraft
   // Giới hạn: bỏ qua nháp >300KB (thường do ảnh base64 khi nhập Word) vì
@@ -496,7 +637,9 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
     const t = setTimeout(() => {
       try {
         saveJSON(DRAFT_KEY, { title, html, grade, subject, term, format, at: Date.now() });
-      } catch {}
+      } catch (e) {
+        setError(`Không thể tự lưu bản nháp: ${e.message || "bộ nhớ trình duyệt không khả dụng"}`);
+      }
     }, 650);
     return () => clearTimeout(t);
   }, [title, html, grade, subject, term, format, open, isEdit]);
@@ -516,7 +659,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        onClose(); return;
+        handleRequestClose(); return;
       }
       if (isMod && k==="s"){ e.preventDefault(); handleSubmit(); return; }
       if (isMod && e.key==="Enter" && !e.target?.closest?.(".word-editable")){ e.preventDefault(); handleSubmit(); return; }
@@ -568,7 +711,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [open, title, html, grade, subject, term, format, showTablePick, showColorPick, showFind, fontSize]);
+  }, [open, title, html, grade, subject, term, format, showTablePick, showColorPick, showFind, fontSize, handleRequestClose]);
 
   const stats = useMemo(() => {
     const text=htmlToPlainText(html);
@@ -588,7 +731,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
     if (title.trim().length > 160) errs.title = "Tiêu đề tối đa 160 ký tự.";
     const plain=htmlToPlainText(contentHtml);
     if (!plain) errs.content = "Nội dung không được để trống.";
-    if (contentHtml.length > 5000000) errs.content = "Noi dung vuot qua 5.000.000 ky tu (HTML, kể cả ảnh nhúng).";
+    if (contentHtml.length > 5000000) errs.content = "Nội dung vượt quá 5.000.000 ký tự (HTML, kể cả ảnh nhúng).";
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -604,7 +747,10 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
     try {
       const { sanitizeRichHtml } = await import("../services/wordDocx.js");
       contentToSend = sanitizeRichHtml(rawToSend);
-    } catch { contentToSend = rawToSend; }
+    } catch (e) {
+      setError(`Không thể làm sạch nội dung an toàn để lưu: ${e.message || "lỗi không xác định"}`);
+      return;
+    }
     if(!validateContent(contentToSend)) return;
     setLoading(true);
     setError("");
@@ -643,15 +789,17 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
   };
 
   const handleClearDraft = () => {
+    if((title.trim() || htmlToPlainText(html)) && !window.confirm("Xóa bản nháp và toàn bộ nội dung đang soạn?")) return;
     try { removeKey(DRAFT_KEY); removeKey("sgk_textbook_draft_v1"); } catch {}
     setTitle("");
-    setHtml("<p><br></p>");
+    setDocumentHtml("<p><br></p>");
     if(editorRef.current) editorRef.current.innerHTML="<p><br></p>";
     setGrade(1);
     setSubject("Tiếng Việt");
     setTerm(1);
     setFormat("html");
     setDraftRestored(false);
+    setDirty(false);
   };
 
   const handlePasteClipboard = async () => {
@@ -670,22 +818,22 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
   const handleTemplate = (id) => {
     const tpl = WORD_TEMPLATES.find((x) => x.id === id);
     if (!tpl) return;
-    if (tpl.html === "") {
-      if(editorRef.current) editorRef.current.innerHTML="<p><br></p>";
-      setHtml("<p><br></p>");
+    const curPlain=htmlToPlainText(editorPagesRef.current.filter(Boolean).map((editor)=>editor.innerHTML).join("")||html);
+    if (curPlain.trim() && !window.confirm("Thay thế toàn bộ nội dung hiện tại bằng mẫu?")) {
       return;
     }
-    const curPlain=htmlToPlainText(editorRef.current?.innerHTML||html);
-    if (curPlain.trim()) {
-      if (!confirm("Thay thế nội dung hiện tại bằng mẫu?")) return;
+    if (tpl.html === "") {
+      setDocumentHtml("<p><br></p>");
+      setDirty(true);
+      return;
     }
-    if(editorRef.current) editorRef.current.innerHTML=tpl.html;
-    setHtml(tpl.html);
+    setDocumentHtml(tpl.html);
+    setDirty(true);
   };
 
   const handleCopyHtml = async ()=>{
     const cur=editorPagesRef.current.filter(Boolean).map((editor)=>editor.innerHTML).join("") || html;
-    try{ await navigator.clipboard.writeText(cur); setError(""); }catch{}
+    try{ await navigator.clipboard.writeText(cur); setError("");}catch(e){ setError(`Không thể sao chép HTML: ${e.message || "hãy cấp quyền clipboard"}`); }
   };
   // ── Nhập file Word (.docx) vào trình soạn — giữ nguyên định dạng ──
   const handleImportDocxFile = async (file)=>{
@@ -700,7 +848,8 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       if (curPlain.trim()) {
         if (!confirm("Chép nội dung Word vào sẽ THAY THẾ nội dung hiện tại. Tiếp tục?")) return;
       }
-      setHtml(imported);
+      setDocumentHtml(imported);
+      setDirty(true);
       if(!title.trim() || title.trim().length < 3){
         const base=String(file.name||"").replace(/\.[a-z0-9]+$/i,"").replace(/[-_]+/g," ").trim();
         if(base.length>=3) setTitle(base.slice(0,160));
@@ -731,19 +880,28 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       setDocxBusy(false);
     }
   };
-  const handlePrint = ()=>{
+  const handlePrint = async ()=>{
     const cur=editorPagesRef.current.filter(Boolean).map((editor)=>editor.innerHTML).join("") || html;
     const w=window.open("","_blank");
-    if(!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:'Times New Roman',serif; max-width:720px; margin:40px auto; line-height:1.7; color:#1e293b;} h1,h2,h3{color:#1e293b;} blockquote{border-left:3px solid #3b82f6; margin:12px 0; padding:8px 14px; background:#f1f5f9;} table{border-collapse:collapse; width:100%;} td,th{border:1px solid #cbd5e1; padding:8px;}</style></head><body>${cur}</body></html>`);
-    w.document.close();
-    w.focus();
-    setTimeout(()=> w.print(), 400);
+    if(!w){ setError("Trình duyệt đã chặn cửa sổ in. Hãy cho phép cửa sổ bật lên rồi thử lại."); return; }
+    try{
+      const { sanitizeRichHtml } = await import("../services/wordDocx.js");
+      const safeHtml=sanitizeRichHtml(cur);
+      const safeTitle=title.replace(/[&<>"']/g,(char)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title><style>body{font-family:'Times New Roman',serif; max-width:720px; margin:40px auto; line-height:1.7; color:#1e293b;} h1,h2,h3{color:#1e293b;} blockquote{border-left:3px solid #3b82f6; margin:12px 0; padding:8px 14px; background:#f1f5f9;} table{border-collapse:collapse; width:100%;} td,th{border:1px solid #cbd5e1; padding:8px;}</style></head><body>${safeHtml}</body></html>`);
+      w.document.close();
+      w.focus();
+      setTimeout(()=> w.print(), 400);
+      setError("");
+    }catch(e){
+      w.close();
+      setError(`Không thể chuẩn bị tài liệu để in an toàn: ${e.message || "lỗi không xác định"}`);
+    }
   };
 
   // Paginate the editor conservatively so content stays inside each fixed A4 page.
   const previewPages = useMemo(()=>{
-    const raw = html || "";
+    const raw = paginationHtml || "";
     if(!open || !raw || raw==="<p><br></p>") return [raw || "<p><br></p>"];
     let measurementPage=null;
     try{
@@ -966,7 +1124,63 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       measurementPage?.remove();
       return [raw];
     }
-  },[html,open,pageAreaWidth,fontFamily,fontSize,lineHeight]);
+  },[paginationHtml,open,pageAreaWidth,fontFamily,fontSize,lineHeight]);
+
+  useLayoutEffect(()=>{
+    const pending=pendingCaretRef.current;
+    if(!pending || showPreview) return;
+    const editors=editorPagesRef.current;
+    editors.forEach((editor,index)=>{
+      if(!editor) return;
+      const pageHtml=previewPages[index] || "";
+      if(editor.innerHTML!==pageHtml) editor.innerHTML=pageHtml;
+    });
+
+    let remaining=pending.offset;
+    let targetIndex=previewPages.length-1;
+    for(let index=0;index<previewPages.length;index++){
+      const page=document.createElement("div");
+      page.innerHTML=previewPages[index] || "";
+      const pageLength=(page.textContent||"").length;
+      if(remaining<pageLength || index===previewPages.length-1){
+        targetIndex=index;
+        break;
+      }
+      remaining-=pageLength;
+    }
+
+    const target=editors[targetIndex];
+    if(target){
+      target.focus({preventScroll:true});
+      const walker=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);
+      let node;
+      let caretNode=null;
+      let caretOffset=0;
+      while((node=walker.nextNode())){
+        if(remaining<=node.length){
+          caretNode=node;
+          caretOffset=remaining;
+          break;
+        }
+        remaining-=node.length;
+      }
+      const range=document.createRange();
+      if(caretNode){
+        range.setStart(caretNode,caretOffset);
+      }else{
+        range.selectNodeContents(target);
+        range.collapse(false);
+      }
+      const selection=window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      editorRef.current=target;
+      setActivePageIndex(targetIndex);
+    }
+    pendingCaretRef.current=null;
+  },[previewPages,showPreview]);
+
+  useEffect(()=>()=>clearTimeout(paginationTimerRef.current),[]);
 
   // keep editor content in sync when html state changes externally
   useEffect(()=>{
@@ -985,6 +1199,9 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
     [previewPages],
   );
   const pageCount=previewPages.length;
+  useEffect(()=>{
+    setActivePageIndex((index)=>Math.min(index,pageCount-1));
+  },[pageCount]);
 
   if (!open) return null;
 
@@ -994,8 +1211,8 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       onImage={(f) => insertImageFromFile(f)}
       onError={(m) => setError(m)}
     >
-    <div className={`word-modal-overlay ${isMaximized ? "is-maximized" : ""}`} onClick={onClose} role="dialog" aria-modal="true" aria-label={isEdit ? "Sửa sách Word" : "Tạo sách Word"}>
-      <div className={`word-modal ${isMaximized ? "is-maximized" : ""}`} onClick={(e) => e.stopPropagation()}>
+    <div className={`word-modal-overlay ${isMaximized ? "is-maximized" : ""}`} onClick={(e)=>{if(e.target===e.currentTarget) handleRequestClose();}} role="dialog" aria-modal="true" aria-label={isEdit ? "Sửa sách Word" : "Tạo sách Word"}>
+      <div ref={dialogRef} className={`word-modal ${isMaximized ? "is-maximized" : ""}`} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="word-modal-header">
           <div className="word-header-left">
@@ -1013,7 +1230,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
             <button type="button" className="btn btn-ghost btn-sm" onClick={()=> setShowPreview(v=>!v)} title="Xem trước dạng sách"><Eye size={14} /> {showPreview? "Sửa":"Xem"}</button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={handlePrint} title="In"><Printer size={14} /></button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={()=> setIsMaximized(v=>!v)} title={isMaximized ? "Thu nhỏ" : "Phóng to toàn màn hình"} aria-label={isMaximized ? "Thu nhỏ" : "Phóng to"}>{isMaximized ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}</button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Đóng"><X size={16} /></button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={handleRequestClose} aria-label="Đóng"><X size={16} /></button>
           </div>
         </div>
 
@@ -1041,12 +1258,13 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
             {/* Meta bar */}
             <div className="word-meta-bar">
               <div className="word-meta-field word-meta-field--title">
-                <label className="word-meta-label">Tiêu đề <span className="req">*</span></label>
+                <label className="word-meta-label" htmlFor="word-title">Tiêu đề <span className="req">*</span></label>
                 <input
                   ref={titleRef}
+                  id="word-title"
                   className={`form-control word-title-input ${fieldErrors.title ? "input-error" : ""}`}
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {setTitle(e.target.value); setDirty(true);}}
                   placeholder="VD: Tiếng Việt Lớp 3 - Bài 1: Ngày gặp lại"
                   maxLength={160}
                   aria-invalid={!!fieldErrors.title}
@@ -1054,27 +1272,27 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
                 <span className={fieldErrors.title ? "field-error" : "word-meta-hint"}>{fieldErrors.title || `${title.length}/160`}</span>
               </div>
               <div className="word-meta-field">
-                <label className="word-meta-label">Lớp</label>
-                <select className="sort-select" value={String(grade)} onChange={(e) => setGrade(Number(e.target.value))}>
+                <label className="word-meta-label" htmlFor="word-grade">Lớp</label>
+                <select id="word-grade" className="sort-select" value={String(grade)} onChange={(e) => {setGrade(Number(e.target.value)); setDirty(true);}}>
                   {[1,2,3,4,5].map((g) => <option key={g} value={String(g)}>Lớp {g}</option>)}
                 </select>
               </div>
               <div className="word-meta-field">
-                <label className="word-meta-label">Môn học</label>
-                <select className="sort-select" value={subject} onChange={(e) => setSubject(e.target.value)}>
+                <label className="word-meta-label" htmlFor="word-subject">Môn học</label>
+                <select id="word-subject" className="sort-select" value={subject} onChange={(e) => {setSubject(e.target.value); setDirty(true);}}>
                   {VALID_SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="word-meta-field">
-                <label className="word-meta-label">Tập</label>
-                <div className="seg-tabs">
-                  <button type="button" className={`seg-tab ${term === 1 ? "active" : ""}`} onClick={() => setTerm(1)}>Tập 1</button>
-                  <button type="button" className={`seg-tab ${term === 2 ? "active" : ""}`} onClick={() => setTerm(2)}>Tập 2</button>
+                <span className="word-meta-label" id="word-term-label">Tập</span>
+                <div className="seg-tabs" role="group" aria-labelledby="word-term-label">
+                  <button type="button" className={`seg-tab ${term === 1 ? "active" : ""}`} aria-pressed={term===1} onClick={() => {setTerm(1); setDirty(true);}}>Tập 1</button>
+                  <button type="button" className={`seg-tab ${term === 2 ? "active" : ""}`} aria-pressed={term===2} onClick={() => {setTerm(2); setDirty(true);}}>Tập 2</button>
                 </div>
               </div>
               <div className="word-meta-field" style={{ minWidth:140 }}>
-                <label className="word-meta-label">Mẫu nhanh</label>
-                <select className="sort-select" defaultValue="" onChange={(e)=>{ const v=e.target.value; if(v) handleTemplate(v); e.target.selectedIndex=0; }}>
+                <label className="word-meta-label" htmlFor="word-template">Mẫu nhanh</label>
+                <select id="word-template" className="sort-select" defaultValue="" onChange={(e)=>{ const v=e.target.value; if(v) handleTemplate(v); e.target.selectedIndex=0; }}>
                   <option value="" disabled>Chọn mẫu...</option>
                   {WORD_TEMPLATES.map(t=> <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
@@ -1306,7 +1524,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
                     ))}
                     {previewPages.length>1 && (
                       <div className="word-page-count-badge">
-                        <Layers size={12}/> {previewPages.length} trang A4 — hien thi phan trang that (khi in)
+                        <Layers size={12}/> {previewPages.length} trang A4 — hiển thị phân trang thật (khi in)
                       </div>
                     )}
                   </div>
@@ -1341,9 +1559,11 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
                             setActivePageIndex(pageIndex);
                           }}
                           onBlur={syncHtml}
+                          onInput={handleEditorInput}
                           onKeyUp={updateActiveStates}
                           onMouseUp={()=>{ saveSelection(); updateActiveStates(); }}
                           data-placeholder={pageIndex===0 ? "Bắt đầu soạn nội dung ở đây... (Ctrl+B đậm, Ctrl+I nghiêng, bullet/numbered ở thanh công cụ)" : undefined}
+                          data-empty={htmlToPlainText(pageIndex===activePageIndex ? (editorPagesRef.current[pageIndex]?.innerHTML || pageHtml) : pageHtml).trim() ? undefined : "true"}
                           style={{ minHeight: 0, outline:"none" }}
                         />
                         <div className="word-page-footer word-page-footer-edit">
@@ -1390,7 +1610,7 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
             </div>
 
             <div className="word-modal-footer">
-              <button type="button" className="btn btn-ghost" onClick={onClose} disabled={loading}>Hủy (Esc)</button>
+              <button type="button" className="btn btn-ghost" onClick={handleRequestClose} disabled={loading}>Hủy (Esc)</button>
               {!isEdit && <button type="button" className="btn btn-secondary" onClick={handleClearDraft} disabled={loading || (!title && !htmlToPlainText(html))}><Trash2 size={14} /> Xóa nháp</button>}
               <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={loading || fetching}>
                 {loading ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Đang lưu...</> : isEdit ? <><Save size={14} /> Lưu thay đổi (Ctrl+S)</> : <><Save size={14} /> Tạo sách</>}

@@ -3,7 +3,7 @@
 // → "Ctrl+K" không bao giờ khớp Cmd+K trên macOS.
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { matchesShortcut, DEFAULT_SHORTCUTS, SHORTCUT_META, getShortcuts, getShortcut, comboToString, splitCombo } from "./services/keyboardShortcuts.js";
+import { matchesShortcut, isTypingTarget, DEFAULT_SHORTCUTS, SHORTCUT_META, getShortcuts, getShortcut, comboToString, splitCombo } from "./services/keyboardShortcuts.js";
 
 globalThis.__SGK_TEST__ = true;
 
@@ -17,6 +17,16 @@ const ev = (key, mods = {}) => ({
 });
 
 describe("keyboardShortcuts — matchesShortcut", () => {
+  it("recognizes text-entry targets so single-key shortcuts do not interrupt typing", () => {
+    assert.equal(isTypingTarget({ tagName: "INPUT" }), true);
+    assert.equal(isTypingTarget({ tagName: "TEXTAREA" }), true);
+    assert.equal(isTypingTarget({ tagName: "SELECT" }), true);
+    assert.equal(isTypingTarget({ isContentEditable: true }), true);
+    assert.equal(isTypingTarget({ tagName: "DIV", isContentEditable: false }), false);
+    assert.equal(isTypingTarget(null), false);
+    assert.equal(matchesShortcut(ev("j"), "J"), true, "regression setup: J is a valid single-key shortcut");
+  });
+
   it("Cmd+K (macOS) khớp combo Ctrl+K", () => {
     assert.equal(matchesShortcut(ev("k", { metaKey: true }), "Ctrl+K"), true);
     assert.equal(matchesShortcut(ev("K", { metaKey: true }), "Ctrl+K"), true);

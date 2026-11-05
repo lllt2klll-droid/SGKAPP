@@ -14,7 +14,7 @@ import aiService, { getFriendlyErrorMessage, AIError } from "../ai/aiService.js"
 import MarkdownText from "./MarkdownText.jsx";
 import PageRangePicker from "./PageRangePicker.jsx";
 import { loadSettings, updateSettings } from "../services/settingsStore.js";
-import { getShortcut, matchesShortcut } from "../services/keyboardShortcuts.js";
+import { getShortcut, isTypingTarget, matchesShortcut } from "../services/keyboardShortcuts.js";
 import { uiMessage } from "../core/errors.js";
 import DOMPurify from "dompurify";
 import { calcRenderScale } from "./pdfRenderer.js";
@@ -204,6 +204,7 @@ export default function BookReader({
   // ── PDF state ──────────────────────────────────────────────────
   const [pdfDoc, setPdfDoc] = useState(null);
   const [pdfError, setPdfError] = useState("");
+  const [linkedPreviewPage, setLinkedPreviewPage] = useState(null);
   const [pageNum, setPageNum] = useState(() => {
     // PDF pages: initialPage (from bookmarks/vocab jump, PDF numbering)
     if (
@@ -240,6 +241,7 @@ export default function BookReader({
   const pendingPageFlipRenderRef = useRef(null);
   const lastRenderedPageRef = useRef(null);
   const lastRenderedBookRef = useRef(book.filename);
+  const lastRenderedZoomRef = useRef(null);
   const [zoomPillVisible, setZoomPillVisible] = useState(false);
   const zoomPillTimerRef = useRef(null);
   const [pageText, setPageText] = useState("");
@@ -656,6 +658,12 @@ export default function BookReader({
   const canvas2Ref = useRef(null);
   const renderTaskRef = useRef(null);
   const renderTask2Ref = useRef(null);
+  const isZoomPreview =
+    lastRenderedBookRef.current === book.filename &&
+    lastRenderedPageRef.current === pageNum &&
+    lastRenderedZoomRef.current !== null &&
+    lastRenderedZoomRef.current !== zoom &&
+    Boolean(canvasRef.current?.width && canvasRef.current?.height);
   const viewportContainerRef = useRef(null);
   const panStartRef = useRef(null);
   const activeTouchGestureRef = useRef(false);
@@ -741,6 +749,7 @@ export default function BookReader({
       setPageText("");
       setPageIsImage(false);
       setPageImageBase64("");
+      setLinkedPreviewPage(null);
       setQuizQuestions([]);
       setQuizAnswers({});
       setQuizSubmitted(false);
@@ -788,7 +797,7 @@ export default function BookReader({
 
       const ext = String(b.filename || "").toLowerCase().match(/(\.[a-z0-9]+)$/)?.[1] || "";
       const isPdfExt = ext === ".pdf";
-      if (!isPdfExt) {
+      if (b.isLinkedBook || !isPdfExt) {
         // Non-PDF: không dùng pdf.js, hiển thị viewer thay thế (xử lý ở phần render)
         setNumPages(1);
         setPdfError("");
@@ -1297,6 +1306,12 @@ export default function BookReader({
     if (!pdfDoc) return;
     const token = ++renderGenRef.current;
     pendingPageFlipRenderRef.current = null;
+    const zoomOnlyRender =
+      lastRenderedBookRef.current === book.filename &&
+      lastRenderedPageRef.current === pageNum &&
+      lastRenderedZoomRef.current !== null &&
+      lastRenderedZoomRef.current !== zoom &&
+      Boolean(canvasRef.current?.width && canvasRef.current?.height);
     const previousPage =
       lastRenderedBookRef.current === book.filename
         ? lastRenderedPageRef.current
@@ -1392,8 +1407,9 @@ export default function BookReader({
           }
         }
         if (token !== renderGenRef.current) return;
-        const targetCanvas = pageFlipCandidate ? document.createElement("canvas") : canvasRef.current;
-        const targetCanvas2 = pageFlipCandidate && twoPageMode
+        const renderToStagingCanvas = pageFlipCandidate || zoomOnlyRender;
+        const targetCanvas = renderToStagingCanvas ? document.createElement("canvas") : canvasRef.current;
+        const targetCanvas2 = renderToStagingCanvas && twoPageMode
           ? document.createElement("canvas")
           : canvas2Ref.current;
         const res = await renderOne(pageNum, targetCanvas, renderTaskRef);
@@ -1473,6 +1489,7 @@ export default function BookReader({
               right: rightRes?.canvasEl || null,
               bookFilename: book.filename,
               pageNum,
+              zoom,
             };
             setPageFlipSnapshot((current) => current?.id === token
               ? { ...current, backSrc, ready: true }
@@ -1502,9 +1519,15 @@ export default function BookReader({
           );
         }
 
+        if (zoomOnlyRender) {
+          copyCanvasContents(res?.canvasEl, canvasRef.current);
+          copyCanvasContents(rightRes?.canvasEl, canvas2Ref.current);
+        }
+
         if (!pageFlipCandidate) {
           lastRenderedBookRef.current = book.filename;
           lastRenderedPageRef.current = pageNum;
+          if (res) lastRenderedZoomRef.current = zoom;
         }
 
         if (token === renderGenRef.current) {
@@ -1543,6 +1566,7 @@ export default function BookReader({
       copyCanvasContents(pending.right, canvas2Ref.current);
       lastRenderedBookRef.current = pending.bookFilename;
       lastRenderedPageRef.current = pending.pageNum;
+      lastRenderedZoomRef.current = pending.zoom;
       pendingPageFlipRenderRef.current = null;
     }
     setPageFlipSnapshot((current) => current?.id === id ? null : current);
@@ -1760,13 +1784,8 @@ export default function BookReader({
       setShowAdvancedDrawer(false);
       return;
     }
-    const t = document.activeElement;
-    const typing =
-      t &&
-      (t.tagName === "INPUT" ||
-        t.tagName === "TEXTAREA" ||
-        t.tagName === "SELECT" ||
-        t.isContentEditable);
+    const typing = isTypingTarget(document.activeElement);
+    if (typing) return;
     // Bảng lệnh của Reader dùng phím riêng (reader.commandPalette — Alt+K).
     // Ctrl+K thuộc GlobalSearch: nếu vẫn bắt chung, Ctrl+K mở 2 overlay chồng nhau.
     if (matchesShortcut(e, getShortcut("reader.commandPalette"))) {
@@ -1776,7 +1795,7 @@ export default function BookReader({
       setSelectedCommandIndex(0);
       return;
     }
-    if (typing || !pdfDoc || isRendering) return;
+    if (!pdfDoc || isRendering) return;
     // — Điều hướng trang —
     if (matchesShortcut(e, getShortcut("reader.prevPage"))) { e.preventDefault(); goToPage(pageNum - (twoPageMode ? 2 : 1)); return; }
     if (matchesShortcut(e, getShortcut("reader.nextPage"))) { e.preventDefault(); goToPage(pageNum + (twoPageMode ? 2 : 1)); return; }
@@ -2201,6 +2220,18 @@ export default function BookReader({
 
   // ── TOC cột: load per-file — ưu tiên cache per-file, rồi TOC riêng file, rồi static chung
   useEffect(() => {
+    if (book.isLinkedBook) {
+      const linkedToc = findTocBook(book);
+      setTocItems(
+        linkedToc?.items?.map((item) => ({
+          ...item,
+          pdfPage: item.pdfPage || item.page,
+          page: item.page || item.pdfPage,
+          depth: item.depth ?? 0,
+        })) || [],
+      );
+      return;
+    }
     if (!pdfDoc) {
       setTocItems([]);
       return;
@@ -2402,7 +2433,7 @@ export default function BookReader({
       if (!imageParts.length) {
         throw new Error("Không đọc được ảnh nào — hãy chọn ảnh JPG/PNG rõ nét trang mục lục.");
       }
-      const totalPages = isWordFile ? (htmlBookPages.length || 0) : (numPages || 0);
+      const totalPages = book.isLinkedBook ? 0 : isWordFile ? (htmlBookPages.length || 0) : (numPages || 0);
       const { userText, systemInstruction, generationConfig } = buildTocAiPrompt({
         bookTitle: book.title,
         subject: book.subject,
@@ -2447,14 +2478,14 @@ export default function BookReader({
   const saveEditTocPage = useCallback((origIdx) => {
     const raw = String(editingTocVal).trim();
     const n = parseInt(raw, 10);
-    const total = isWordFile ? (htmlBookPages.length || 1) : (numPages ? Math.max(1, numPages - 1) : 9999);
+    const total = isWordFile ? (htmlBookPages.length || 1) : (book.isLinkedBook ? 9999 : numPages ? Math.max(1, numPages - 1) : 9999);
     if (!Number.isFinite(n) || n < 1 || n > total) {
       notify(`Số trang phải từ 1 đến ${total}.`, "error");
       return;
     }
     // pdfPage = bookPage + 1 (Word file không cộng offset)
     const newPdfPage = isWordFile ? n : n + 1;
-    const clampPdf = Math.max(1, Math.min(numPages || 9999, newPdfPage));
+    const clampPdf = Math.max(1, Math.min(book.isLinkedBook ? 9999 : numPages || 9999, newPdfPage));
     setTocItems((prev) => {
       const next = prev.map((it, i) => i === origIdx ? { ...it, page: clampPdf, pdfPage: clampPdf } : it);
       // cache per-file
@@ -2526,7 +2557,7 @@ export default function BookReader({
   const handleBulkAdjust = useCallback((delta) => {
     if (!tocItems.length) { notify("Chưa có mục lục để chỉnh.", "warning"); return; }
     if (!Number.isFinite(delta) || delta === 0) { notify("Nhập số khác 0.", "error"); return; }
-    const maxPdf = isWordFile ? (htmlBookPages.length || 1) : (numPages || 9999);
+    const maxPdf = isWordFile ? (htmlBookPages.length || 1) : (book.isLinkedBook ? 9999 : numPages || 9999);
     const minPdf = 1;
     let clampedCount = 0;
     setTocItems((prev) => {
@@ -2545,7 +2576,7 @@ export default function BookReader({
       const msg = delta > 0 ? `Đã tăng ${delta} trang cho toàn bộ (${tocItems.length} mục).` : `Đã giảm ${Math.abs(delta)} trang cho toàn bộ (${tocItems.length} mục).`;
       notify(clampedCount ? `${msg} (${clampedCount} mục bị chặn biên)` : msg, "success");
     }, 0);
-  }, [tocItems, isWordFile, htmlBookPages.length, numPages, persistTocItems, notify]);
+  }, [tocItems, isWordFile, htmlBookPages.length, numPages, book.isLinkedBook, persistTocItems, notify]);
 
   const handleBulkDeltaApply = useCallback(() => {
     const raw = String(bulkDelta).trim();
@@ -4477,17 +4508,6 @@ export default function BookReader({
   // ── Keyboard handler — uses flattened displayed list + shortcuts cực chi tiết ──
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (matchesShortcut(e, getShortcut("reader.commandPalette"))) {
-        // Đã xử lý ở keyHandlerRef (tránh double toggle) — chỉ xử lý khi handler kia chưa bắt (fallback khi typing)
-        const t = document.activeElement;
-        const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
-        if (!typing) return; // đã toggle ở trên
-        e.preventDefault();
-        setShowCommandPalette((prev) => !prev);
-        setCommandPaletteSearch("");
-        setSelectedCommandIndex(0);
-        return;
-      }
       if (e.key === "Escape" && showCommandPalette) {
         e.preventDefault();
         setShowCommandPalette(false);
@@ -4500,12 +4520,7 @@ export default function BookReader({
         // reader ẩn (vd "Đi đến trang...") — hai lớp cùng phản ứng một phím.
         const act = document.activeElement;
         const inPalette = !!(act && act.closest && act.closest(".command-palette"));
-        const typing =
-          act &&
-          (act.tagName === "INPUT" ||
-            act.tagName === "TEXTAREA" ||
-            act.tagName === "SELECT" ||
-            act.isContentEditable);
+        const typing = isTypingTarget(act);
         if (typing && !inPalette) return;
         const displayed = getDisplayedCommands();
         if (e.key === "ArrowDown") {
@@ -4993,6 +5008,258 @@ export default function BookReader({
       .finally(()=>{ if(!cancelled) setHtmlBookLoading(false); });
     return ()=>{ cancelled=true; };
   },[book.filename, contentVersion]);
+
+  if (book.isLinkedBook) {
+    const previewUrl = new URL(book.previewUrl);
+    if (linkedPreviewPage) previewUrl.searchParams.set("page", String(linkedPreviewPage));
+    return (
+      <div className={`reader-root ${fullscreen ? "fullscreen" : ""}`}>
+        <div className="viewer-toolbar viewer-toolbar--compact">
+          <div className="rtb-left">
+            <button className="rtb-back" onClick={onBack} title="Quay lại thư viện">
+              <ArrowLeft size={16} /> <span className="rtb-back-text">Thư viện</span>
+            </button>
+            <button
+              className={`btn-icon rtb-icon-btn ${tocCollapsed ? "" : "on"}`}
+              onClick={() => setTocCollapsed((collapsed) => !collapsed)}
+              title={tocCollapsed ? "Mục lục" : "Ẩn mục lục"}
+              aria-label={tocCollapsed ? "Mục lục" : "Ẩn mục lục"}
+              aria-pressed={!tocCollapsed}
+            >
+              <BookOpen size={16} />
+            </button>
+            <span className="rtb-title" title={book.title}>{book.title}</span>
+            <span className="tag-pill" style={{ marginLeft: 8, fontSize: "0.7rem" }}>
+              {book.format === "word" ? "WORD" : "PDF"} · {book.sourceLabel || "GOOGLE DRIVE"}
+            </span>
+          </div>
+          <div className="rtb-center">
+            <a className="btn btn-secondary btn-sm" href={book.sourceUrl} target="_blank" rel="noopener noreferrer">
+              Mở link gốc ↗
+            </a>
+          </div>
+        </div>
+        <div className="reader-main">
+          {!tocCollapsed && (
+            <button
+              type="button"
+              className="reader-sheet-scrim reader-toc-scrim"
+              onClick={() => setTocCollapsed(true)}
+              aria-label="Đóng mục lục"
+              tabIndex={-1}
+            />
+          )}
+          {!tocCollapsed && (
+            <aside
+              className="reader-toc-panel"
+              style={{ width: `${tocWidth}px`, flex: `0 0 ${tocWidth}px` }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                try { if (event.dataTransfer) event.dataTransfer.dropEffect = "copy"; } catch {}
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const dropped = [...(event.dataTransfer?.files || [])];
+                const images = dropped.filter((file) => String(file.type || "").toLowerCase().startsWith("image/"));
+                const excel = dropped.find((file) => /\.(xlsx|xls)$/i.test(file.name || ""));
+                if (images.length) handleTocAiFiles(images);
+                else if (excel) handleUploadToc(excel);
+                else if (dropped.length) notify("Chỉ nhận file Excel (.xlsx/.xls) hoặc ảnh mục lục (JPG/PNG/WebP).", "warning");
+              }}
+              title="Mẹo: kéo thả file Excel hoặc ảnh mục lục vào đây"
+            >
+              <div className="reader-toc-header">
+                <h3 className="reader-toc-title">MỤC LỤC</h3>
+                <span className="toc-count">
+                  {tocItems.filter((item) => {
+                    const query = tocQuery.trim().toLowerCase();
+                    return !query || (item.title || "").toLowerCase().includes(query) || (item.sub || "").toLowerCase().includes(query);
+                  }).length}/{tocItems.length}
+                </span>
+                <input
+                  ref={tocFileRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  style={{ display: "none" }}
+                  onChange={(event) => {
+                    if (event.target.files?.[0]) handleUploadToc(event.target.files[0]);
+                    event.target.value = "";
+                  }}
+                />
+                <input
+                  ref={tocAiFileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(event) => {
+                    if (event.target.files?.length) handleTocAiFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => tocAiFileRef.current?.click()}
+                  title={
+                    tocAiBusy
+                      ? "Đang AI đọc ảnh mục lục…"
+                      : geminiKey
+                        ? `Tạo mục lục bằng AI từ ảnh — chọn nhiều ảnh (tối đa ${TOC_AI_MAX_IMAGES})`
+                        : "Cần cấu hình Gemini API Key trong Cài đặt AI"
+                  }
+                  aria-label="Tạo mục lục bằng AI từ ảnh"
+                  disabled={tocAiBusy || !geminiKey}
+                  style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}
+                >
+                  {tocAiBusy ? <Loader2 size={14} className="spinner" /> : <Sparkles size={14} />}
+                </button>
+                <button
+                  className="btn btn-primary btn-xs"
+                  onClick={() => tocFileRef.current?.click()}
+                  title="Tải lên hoặc kéo thả file Excel — gồm cột Tên và Trang"
+                  aria-label="Tải lên mục lục"
+                >
+                  <Upload size={14} /> Tải lên
+                </button>
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={handleDownloadToc}
+                  title="Tải xuống — 2 cột Tên/Trang (Excel)"
+                  aria-label="Tải xuống mục lục"
+                  disabled={!tocItems.length}
+                >
+                  <Download size={14} />
+                </button>
+              </div>
+              <div className="reader-toc-search">
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm..."
+                  aria-label="Tìm kiếm mục lục"
+                  value={tocQuery}
+                  onChange={(event) => setTocQuery(event.target.value)}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 6, padding: "6px 8px", alignItems: "center", borderBottom: "1px solid var(--border-color, #e2e8f0)", background: "var(--bg-subtle, #f8fafc)", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>Chỉnh toàn bộ:</span>
+                <button className="btn btn-ghost btn-xs" onClick={() => handleBulkAdjust(-1)} disabled={!tocItems.length} title="Giảm 1 trang cho tất cả mục" aria-label="Giảm 1 trang toàn bộ" style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                  <Minus size={12} />1
+                </button>
+                <button className="btn btn-ghost btn-xs" onClick={() => handleBulkAdjust(1)} disabled={!tocItems.length} title="Tăng 1 trang cho tất cả mục" aria-label="Tăng 1 trang toàn bộ" style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                  <Plus size={12} />1
+                </button>
+                <input
+                  type="number"
+                  placeholder="+/-"
+                  value={bulkDelta}
+                  onChange={(event) => setBulkDelta(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") handleBulkDeltaApply(); }}
+                  style={{ width: 56, padding: "2px 6px", border: "1px solid var(--border-color, #cbd5e1)", borderRadius: 6, fontSize: "0.8rem", textAlign: "center" }}
+                  title="Nhập số tăng/giảm (vd: 2 hoặc -3)"
+                  aria-label="Nhập số tăng giảm toàn bộ"
+                />
+                <button className="btn btn-primary btn-xs" onClick={handleBulkDeltaApply} disabled={!tocItems.length || !String(bulkDelta).trim()} title="Áp dụng tăng/giảm nhập ở ô bên cạnh" aria-label="Áp dụng chỉnh toàn bộ">
+                  Áp dụng
+                </button>
+              </div>
+              <div className="reader-toc-content">
+                {tocItems.filter((item) => {
+                  const query = tocQuery.trim().toLowerCase();
+                  return !query || (item.title || "").toLowerCase().includes(query) || (item.sub || "").toLowerCase().includes(query);
+                }).length ? (
+                  tocItems
+                    .filter((item) => {
+                      const query = tocQuery.trim().toLowerCase();
+                      return !query || (item.title || "").toLowerCase().includes(query) || (item.sub || "").toLowerCase().includes(query);
+                    })
+                    .map((item, index) => {
+                      const pdfPage = Number(item.pdfPage || item.page);
+                      const bookPageNum = Math.max(1, (item.page || pdfPage) - 1);
+                      const origIdx = tocItems.indexOf(item);
+                      const isEditing = editingTocIdx === origIdx;
+                      return (
+                      <div
+                        key={item.id || `${item.page}-${origIdx}`}
+                        className={`toc-item ${linkedPreviewPage === pdfPage ? "active" : ""}`}
+                        onClick={() => {
+                          if (isEditing || !Number.isInteger(pdfPage) || pdfPage < 1) return;
+                          setLinkedPreviewPage(pdfPage);
+                          try {
+                            if (window.matchMedia("(max-width: 767.98px)").matches) setTocCollapsed(true);
+                          } catch {}
+                        }}
+                        title={isEditing ? "Đang sửa trang" : `Nhảy tới trang ${bookPageNum} — ${item.title} (bấm số trang để sửa)`}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (!isEditing && (event.key === "Enter" || event.key === " ")) {
+                            event.preventDefault();
+                            if (!Number.isInteger(pdfPage) || pdfPage < 1) return;
+                            setLinkedPreviewPage(pdfPage);
+                            try {
+                              if (window.matchMedia("(max-width: 767.98px)").matches) setTocCollapsed(true);
+                            } catch {}
+                          }
+                        }}
+                        style={{ paddingLeft: `${0.5 + (item.depth || 0) * 0.6}rem` }}
+                      >
+                        <span className="toc-item-lesson">{index + 1}</span>
+                        <span className="toc-item-name">{item.title}{item.sub ? ` — ${item.sub}` : ""}</span>
+                        {isEditing ? (
+                        <input
+                          type="number"
+                          value={editingTocVal}
+                          autoFocus
+                          onFocus={(event) => event.target.select()}
+                          onChange={(event) => setEditingTocVal(event.target.value)}
+                          onBlur={() => saveEditTocPage(origIdx)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") { event.preventDefault(); saveEditTocPage(origIdx); }
+                            else if (event.key === "Escape") { event.preventDefault(); cancelEditTocPage(); }
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                          style={{ width: 56, textAlign: "right", fontWeight: 700, border: "1px solid var(--primary, #3b82f6)", borderRadius: 4, padding: "1px 4px", fontSize: "0.85em", background: "var(--input-bg)" }}
+                          min={1}
+                          max={9999}
+                        />
+                        ) : (
+                        <span
+                          className="toc-item-page"
+                          onClick={(event) => { event.stopPropagation(); startEditTocPage(origIdx, bookPageNum); }}
+                          title="Bấm để sửa số trang"
+                          style={{ cursor: "pointer", borderBottom: "1px dashed var(--border-color, #cbd5e1)", paddingBottom: 1 }}
+                        >
+                          {bookPageNum}
+                        </span>
+                        )}
+                      </div>
+                      );
+                    })
+                ) : (
+                  <div className="toc-empty">
+                    {tocItems.length ? "Không tìm thấy mục nào khớp." : "Chưa có mục lục. Tải lên Excel hoặc dùng AI đọc ảnh mục lục."}
+                  </div>
+                )}
+              </div>
+            </aside>
+          )}
+          <div className="linked-book-reader">
+            <iframe
+              className="linked-book-preview"
+              src={previewUrl.href}
+              title={`Bản xem trước: ${book.title}`}
+              allow="autoplay"
+              allowFullScreen
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Non-PDF viewer — chỉ ảnh / định dạng lạ giữ layout riêng, còn Word (html/txt/md) sẽ dùng layout chuẩn với TOC + AI y hệt PDF ──
   if (!isPdfFile) {
@@ -5711,7 +5978,9 @@ export default function BookReader({
                     transform: `translate(${panX}px, ${panY}px)`,
                     transformOrigin: "center center",
                     willChange: "transform",
-                    transition: isDraggingPan || isTouchGesturing ? "none" : "transform 0.12s ease",
+                    transition: isDraggingPan || isTouchGesturing || isZoomPreview
+                      ? "none"
+                      : "transform 0.12s ease",
                     display: "flex",
                     gap: 0,
                     alignItems: "flex-start",
@@ -5750,7 +6019,7 @@ export default function BookReader({
                     )}
                     {notesOverlay(0)}
 
-                    {isRendering && !pageFlipSnapshot && (
+                    {isRendering && !isZoomPreview && !pageFlipSnapshot && (
                       <div className="overlay-veil">
                         <div className="spinner" />
                       </div>

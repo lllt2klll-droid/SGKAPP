@@ -148,7 +148,7 @@ const MODULES = [
     steps: [
       { id: "lib1", t: "Tìm, lọc & sắp xếp", d: "Ô tìm kiếm → gõ tên sách. Dùng chip Lớp / Môn / Tập, “Yêu thích”, và menu sắp xếp (lớp, tên, dung lượng, gần đây, tiến độ). Bấm “Xóa lọc” để trở lại." },
       { id: "lib2", t: "Yêu thích & tiến độ", d: "Bấm ⭐ trên bìa để ghim. Vòng % trên bìa = % đã đọc (tự lưu khi bạn lật trang)." },
-      { id: "lib3", t: "Thêm sách mới", d: "Header → “Thêm sách” (kéo thả PDF/DOCX/PPTX/XLSX/TXT/MD/EPUB/ảnh), “🔗” thêm từ link, “📝” tạo từ văn bản. Thông báo có nút Hoàn tác 6 giây." },
+      { id: "lib3", t: "Thêm sách mới", d: "Header → “Thêm sách” để tải tệp; nút “🔗” để thêm một hoặc nhiều sách bằng link chia sẻ Google Drive/Docs (PDF hoặc Word). Hãy bật quyền “Bất kỳ ai có liên kết”. Mỗi thẻ nhập link, tên sách, lớp, môn và tập; sách mở trong trình đọc của thư viện. Nút “📝” tạo sách từ văn bản." },
       { id: "lib4", t: "Sửa thông tin / Xóa an toàn", d: "Bấm ✏️ để sửa tiêu đề, lớp, môn, tập; thông tin mới cập nhật bộ lọc thư viện. Khi đổi tên tệp, tiến độ đọc, ghi chú và đánh dấu được chuyển theo sách. Bấm 🗑️ để đưa sách vào Thùng rác và khôi phục ở Sao lưu & Khôi phục." },
     ],
     tip: "Mẹo người mới: Gõ “Toán 2” hoặc “Tiếng Việt 1” vào ô tìm kiếm — lọc tức thì.",

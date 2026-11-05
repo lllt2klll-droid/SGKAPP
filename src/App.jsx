@@ -450,8 +450,8 @@ export default function App() {
     return v || "system";
   });
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsSection, setSettingsSection] = useState("general");
-  const openSettings = (section = "general") => {
+  const [settingsSection, setSettingsSection] = useState("overview");
+  const openSettings = (section = "overview") => {
     setSettingsSection(section);
     setShowSettings(true);
   };
@@ -486,8 +486,7 @@ export default function App() {
   const [renameSaving, setRenameSaving] = useState(false);
   const [renameError, setRenameError] = useState("");
   const [showUrlModal, setShowUrlModal] = useState(false);
-  const [urlInput, setUrlInput] = useState("");
-  const [urlTitle, setUrlTitle] = useState("");
+  const [urlBooks, setUrlBooks] = useState([]);
   // Bẫy focus cho 3 modal (Tab xoay vòng, Escape đóng, trả focus)
   const deleteTrapRef = useFocusTrap(!!deleteTarget, () => setDeleteTarget(null));
   const renameTrapRef = useFocusTrap(!!renameTarget, () => { if (!renameSaving) setRenameTarget(null); });
@@ -897,6 +896,7 @@ export default function App() {
   // Tôn trọng Cài đặt: Riêng tư → Ghi nhớ lịch sử (tắt = không lưu) + Hành vi → Rung
   const handleOpenBook = useCallback((book, initialPage = null, returnTarget = null) => {
     setReaderReturnTarget(returnTarget);
+    setView("library");
     const at = Date.now();
     setOpenRequestId((id) => id + 1);
     setOpenInitialPage(initialPage);
@@ -1288,6 +1288,7 @@ export default function App() {
     let cancelled = false;
     const pending = books.filter((book) => {
       if (!book?.filename) return false;
+      if (book.isLinkedBook) return false;
       if (autoIndexedBooksRef.current.has(book.filename)) return false;
       const meta = getIndexMeta(book.filename);
       if (!meta) return true;
@@ -1536,7 +1537,7 @@ export default function App() {
 
       if (nextBooks.length === 0) {
         setError(
-          "Backend đã kết nối nhưng chưa có file PDF trong thư mục sách.",
+            "Backend đã kết nối nhưng thư viện chưa có sách.",
         );
       }
     } catch (err) {
@@ -1827,30 +1828,61 @@ export default function App() {
   };
 
   const handleAddByUrl = () => {
-    setUrlInput("");
-    setUrlTitle("");
+    setUrlBooks([{
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      url: "",
+      title: "",
+      subject: "Khác",
+      grade: 1,
+      term: 1,
+      format: "pdf",
+    }]);
+    setUploadError("");
+    setUploadNotice("");
     setShowUrlModal(true);
   };
   const confirmAddByUrl = async () => {
-    if (!urlInput.trim()) { setUploadError("Vui lòng nhập URL."); return; }
-    try { new URL(urlInput.trim()); } catch { setUploadError("URL không hợp lệ."); return; }
-    setShowUrlModal(false);
+    if (!urlBooks.length) { setUploadError("Hãy thêm ít nhất một sách."); return; }
+    for (const [index, item] of urlBooks.entries()) {
+      if (!item.url.trim()) { setUploadError(`Sách ${index + 1}: vui lòng nhập link Google Drive.`); return; }
+      if (item.title.trim().length < 3) { setUploadError(`Sách ${index + 1}: tiêu đề cần ít nhất 3 ký tự.`); return; }
+      try {
+        const url = new URL(item.url.trim());
+        if (url.protocol !== "https:" || !["drive.google.com", "docs.google.com"].includes(url.hostname)) throw new Error();
+      } catch {
+        setUploadError(`Sách ${index + 1}: hãy dùng link chia sẻ https://drive.google.com hoặc https://docs.google.com.`);
+        return;
+      }
+    }
     setUploadingBook(true);
     setUploadError("");
     setUploadNotice("");
     try {
-      const res = await fetch(`${API_BASE}/api/books/upload-url`, {
+      const res = await fetch(`${API_BASE}/api/books/link`, {
         method: "POST",
         headers: writeHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ url: urlInput.trim(), title: urlTitle.trim() }),
+        body: JSON.stringify({
+          books: urlBooks.map(({ url, title, subject, grade, term, format }) => ({
+            url: url.trim(),
+            title: title.trim(),
+            subject,
+            grade: Number(grade),
+            term: Number(term),
+            format,
+          })),
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Không thể tải từ URL.");
-      setUploadNotice(data.message || "Đã thêm sách từ URL.");
+      if (!res.ok) throw new Error(data?.error || "Không thể thêm sách từ link.");
+      setShowUrlModal(false);
+      setUrlBooks([]);
+      setUploadNotice(data.message || "Đã thêm sách từ Google Drive.");
       await fetchBooks();
+      try { appEventsCore.emit(AppEventsCore.DATA_UPDATED, { domain: "books", action: "linked" }); }
+      catch (e) { console.warn("[App] Could not publish linked book update:", e); }
       setDataVersion((v) => v + 1);
     } catch (err) {
-      setUploadError(err.message || "Không thể tải từ URL.");
+      setUploadError(err.message || "Không thể thêm sách từ link.");
     } finally {
       setUploadingBook(false);
     }
@@ -1955,7 +1987,7 @@ export default function App() {
     const base = getFooterNav(); // [{id:"settings",...},{id:"datatools",...},{id:"help",...}]
     const items = base.map(item => {
       const iconEl = item.icon ? React.createElement(item.icon, { size: 16 }) : null;
-      if (item.id === "settings") return { id: item.id, icon: iconEl, label: item.label, action: () => openSettings("general") };
+      if (item.id === "settings") return { id: item.id, icon: iconEl, label: item.label, action: () => openSettings() };
       return { id: item.id, icon: iconEl, label: item.label };
     });
     items.push({
@@ -2538,7 +2570,7 @@ export default function App() {
                     <div className="header-more-menu">
                       <button
                         className="header-action-btn"
-                        onClick={() => openSettings("general")}
+                        onClick={() => openSettings()}
                         aria-label="Cài đặt"
                         title="Cài đặt"
                       >
@@ -2561,8 +2593,8 @@ export default function App() {
                           className="btn btn-secondary btn-sm header-add-btn-mini"
                           onClick={handleAddByUrl}
                           disabled={uploadingBook}
-                          title="Thêm sách từ URL (dán link https://…)"
-                          aria-label="Thêm từ URL"
+                          title="Thêm một hoặc nhiều sách từ link Google Drive"
+                          aria-label="Thêm sách từ Google Drive"
                         >
                           🔗
                         </button>
@@ -2879,20 +2911,99 @@ export default function App() {
         {/* Modal thêm từ URL • thay 2 prompt */}
         {showUrlModal && (
           <div className="modal-overlay" onClick={()=>setShowUrlModal(false)} role="dialog" aria-modal="true" aria-labelledby="url-title">
-            <div ref={urlTrapRef} className="modal-content" onClick={(e)=>e.stopPropagation()} style={{maxWidth:"min(480px, calc(100vw - 20px))"}}>
-              <div className="modal-header"><h2 id="url-title">Thêm sách từ URL</h2><button className="btn btn-ghost btn-xs" onClick={()=>setShowUrlModal(false)} aria-label="Đóng"><X size={16}/></button></div>
-              <div style={{padding:"1rem 1.1rem",display:"flex",flexDirection:"column",gap:"0.7rem"}}>
+            <div ref={urlTrapRef} className="modal-content link-books-modal" onClick={(e)=>e.stopPropagation()}>
+              <div className="modal-header">
                 <div>
-                  <label className="form-label" htmlFor="url-input">URL file</label>
-                  <input id="url-input" className="form-control" value={urlInput} onChange={(e)=>setUrlInput(e.target.value)} placeholder="https://... .pdf / .docx / .epub / .png" autoFocus />
+                  <h2 id="url-title">Thêm sách bằng link</h2>
+                  <p className="link-books-intro">Dán link chia sẻ Google Drive/Docs và bật quyền “Bất kỳ ai có liên kết”. Mỗi thẻ là một sách; không cần tải tệp lên.</p>
                 </div>
-                <div>
-                  <label className="form-label" htmlFor="url-title-input">Tiêu đề (tùy chọn)</label>
-                  <input id="url-title-input" className="form-control" value={urlTitle} onChange={(e)=>setUrlTitle(e.target.value)} placeholder="Để trống sẽ tự nhận diện" />
+                <button className="btn btn-ghost btn-xs" onClick={()=>setShowUrlModal(false)} aria-label="Đóng"><X size={16}/></button>
+              </div>
+              <div className="link-books-content">
+                <div className="link-book-drafts">
+                  {urlBooks.map((item, index) => {
+                    const update = (key, value) => setUrlBooks((prev) => prev.map((book) => book.id === item.id ? { ...book, [key]: value } : book));
+                    return (
+                      <section className="link-book-draft" key={item.id} aria-label={`Thông tin sách ${index + 1}`}>
+                        <div className="link-book-draft-heading">
+                          <span className="link-book-number">{String(index + 1).padStart(2, "0")}</span>
+                          <strong>Sách {index + 1}</strong>
+                          {urlBooks.length > 1 && (
+                            <button
+                              className="btn btn-ghost btn-xs"
+                              type="button"
+                              onClick={() => setUrlBooks((prev) => prev.filter((book) => book.id !== item.id))}
+                              aria-label={`Xóa thẻ sách ${index + 1}`}
+                              title="Xóa thẻ sách"
+                            ><X size={14}/></button>
+                          )}
+                        </div>
+                        <label className="form-label" htmlFor={`link-url-${item.id}`}>Link chia sẻ Google Drive / Docs</label>
+                        <input
+                          id={`link-url-${item.id}`}
+                          className="form-control"
+                          type="url"
+                          value={item.url}
+                          onChange={(e)=>update("url", e.target.value)}
+                          placeholder="https://drive.google.com/file/d/..."
+                          autoFocus={index === 0}
+                        />
+                        <label className="form-label" htmlFor={`link-title-${item.id}`}>Tên sách</label>
+                        <input
+                          id={`link-title-${item.id}`}
+                          className="form-control"
+                          value={item.title}
+                          maxLength={160}
+                          onChange={(e)=>update("title", e.target.value)}
+                          placeholder="Ví dụ: Toán lớp 1 - Tập 1"
+                        />
+                        <div className="link-book-details">
+                          <div>
+                            <label className="form-label" htmlFor={`link-subject-${item.id}`}>Môn học</label>
+                            <select id={`link-subject-${item.id}`} className="form-control" value={item.subject} onChange={(e)=>update("subject", e.target.value)}>
+                              {BOOK_INFO_SUBJECTS.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" htmlFor={`link-grade-${item.id}`}>Lớp</label>
+                            <select id={`link-grade-${item.id}`} className="form-control" value={item.grade} onChange={(e)=>update("grade", e.target.value)}>
+                              {[1,2,3,4,5].map((grade) => <option key={grade} value={grade}>Lớp {grade}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" htmlFor={`link-term-${item.id}`}>Tập</label>
+                            <select id={`link-term-${item.id}`} className="form-control" value={item.term} onChange={(e)=>update("term", e.target.value)}>
+                              <option value={1}>Tập 1</option>
+                              <option value={2}>Tập 2</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="form-label" htmlFor={`link-format-${item.id}`}>Định dạng</label>
+                            <select id={`link-format-${item.id}`} className="form-control" value={item.format} onChange={(e)=>update("format", e.target.value)}>
+                              <option value="pdf">PDF</option>
+                              <option value="word">Word / DOC</option>
+                            </select>
+                          </div>
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
-                <div style={{display:"flex",gap:"0.5rem",justifyContent:"flex-end"}}>
-                  <button className="btn btn-ghost" onClick={()=>setShowUrlModal(false)}>Hủy</button>
-                  <button className="btn btn-primary" onClick={confirmAddByUrl}>Thêm</button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm link-book-add"
+                  onClick={() => setUrlBooks((prev) => prev.length >= 30 ? prev : [...prev, {
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                    url: "", title: "", subject: "Khác", grade: 1, term: 1, format: "pdf",
+                  }])}
+                  disabled={urlBooks.length >= 30 || uploadingBook}
+                ><Plus size={14}/> Thêm thẻ sách</button>
+                {uploadError && <p className="form-error" role="alert">{uploadError}</p>}
+                <div className="link-book-actions">
+                  <button className="btn btn-ghost" onClick={()=>setShowUrlModal(false)} disabled={uploadingBook}>Hủy</button>
+                  <button className="btn btn-primary" onClick={confirmAddByUrl} disabled={uploadingBook}>
+                    {uploadingBook ? "Đang lưu..." : `Thêm ${urlBooks.length} sách vào thư viện`}
+                  </button>
                 </div>
               </div>
             </div>
@@ -3794,6 +3905,17 @@ function LibraryView({
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span className="libx-cont-t" title={row.title}>{row.title}</span><br />
                       <span className="libx-cont-m">Lớp {row.grade} • {row.subject} • Tập {row.term}</span>
+                      {row.isLinkedBook && (
+                        <a
+                          className="libx-drive-link"
+                          href={row.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={row.sourceUrl}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >Mở link sách ↗</a>
+                      )}
                       {page > 0 && total > 0
                         ? <span className="libx-bar" style={{ maxWidth: 220 }}><i style={{ width: pct + "%" }} /></span>
                         : <span className="libx-cont-m">Chưa đọc</span>}
@@ -3961,8 +4083,21 @@ function BookCard({
         <div className="libx-meta">
           <span>Tập {book.term}</span>
           <span>—</span>
-          <span>{(book.size / (1024 * 1024)).toFixed(1)} MB</span>
+          <span>{book.isLinkedBook ? (book.sourceLabel || "Google Drive") : `${(book.size / (1024 * 1024)).toFixed(1)} MB`}</span>
         </div>
+        {book.isLinkedBook && (
+          <a
+            className="libx-drive-link"
+            href={book.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={book.sourceUrl}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            Mở link sách ↗
+          </a>
+        )}
         {page > 0 && numPages > 0 ? (
           <>
             <div className="libx-bar" aria-label={`Tiến để ${pct}%`}>

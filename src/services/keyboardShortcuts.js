@@ -145,6 +145,15 @@ export function getShortcut(id) {
   return map[id] || DEFAULT_SHORTCUTS[id] || "";
 }
 
+export function isTypingTarget(target) {
+  return !!target && (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable
+  );
+}
+
 // Tách combo "Ctrl+Shift+K" → ["Ctrl","Shift","K"] — dùng cho <kbd> hint (#13)
 // và cho matchesShortcut. Tách riêng để unit test được (coverage #17).
 export function splitCombo(combo) {

@@ -1,7 +1,7 @@
 // ─── Whiteboard storage — boards CRUD + autosave (localStorage, namespaced) ───
 // Không đụng tới keys của module khác. Mọi key bắt đầu bằng "sgk_wb_".
 
-import { readJSON, saveJSON } from "../data/storage.js";
+import { readJSON, saveJSON, saveBatch } from "../data/storage.js";
 import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove, listKeys } from "../safeStorage.js";
 import { appEvents, AppEvents, DataDomains } from "../core/appEvents.js";
 import { __crossTabSenderId as WB_TAB_ID } from "../core/crossTab.js";
@@ -54,7 +54,7 @@ export async function migrateWhiteboardToIDB() {
       if (!raw || !validateBoard(raw)) continue;
       boards.push(normalizeBoard(raw));
     }
-    if (boards.length === 0) { safeSetString(WB_MIGRATION_KEY, "1"); return { migrated: false, reason: "no valid boards" }; }
+    if (boards.length === 0) return { migrated: false, reason: "no valid boards" };
     for (const b of boards) {
       const ok = await idbPutBoard(b);
       if (!ok) throw new Error(`put ${b.id} failed`);
@@ -509,16 +509,13 @@ export async function persistBoardAsync(board) {
   }
   // Fallback LS only when not migrated or IDB unavailable before migration
   if (!isMigrated) {
-    try { saveJSON(WB_BOARD_KEY(board.id), next); } catch {}
-    try {
-      const idx = readJSON(WB_INDEX_KEY, []);
-      const arr = Array.isArray(idx) ? idx : [];
-      const i = arr.findIndex((e) => e.id === board.id);
-      const entry = { id: board.id, name: board.name, createdAt: board.createdAt, updatedAt: next.updatedAt };
-      if (i >= 0) arr[i] = entry;
-      else arr.unshift(entry);
-      saveJSON(WB_INDEX_KEY, arr);
-    } catch {}
+    const idx = readJSON(WB_INDEX_KEY, []);
+    const arr = Array.isArray(idx) ? idx : [];
+    const i = arr.findIndex((e) => e.id === board.id);
+    const entry = { id: board.id, name: board.name, createdAt: board.createdAt, updatedAt: next.updatedAt };
+    if (i >= 0) arr[i] = entry;
+    else arr.unshift(entry);
+    saveBatch({ [WB_BOARD_KEY(board.id)]: next, [WB_INDEX_KEY]: arr });
     _emitWB("updated", board.id);
     return { ...board, updatedAt: next.updatedAt, ok: true };
   }
@@ -678,13 +675,10 @@ export async function createBoardAsync(name) {
   }
   if (isMigrated) throw new Error("IDB unavailable after migration");
   // Fallback LS before migration
-  saveJSON(WB_BOARD_KEY(b.id), b);
-  try {
-    const idx = readJSON(WB_INDEX_KEY, []);
-    const arr = Array.isArray(idx) ? idx : [];
-    arr.unshift({ id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt });
-    saveJSON(WB_INDEX_KEY, arr);
-  } catch {}
+  const idx = readJSON(WB_INDEX_KEY, []);
+  const arr = Array.isArray(idx) ? idx : [];
+  arr.unshift({ id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt });
+  saveBatch({ [WB_BOARD_KEY(b.id)]: b, [WB_INDEX_KEY]: arr });
   _updateCache(b);
   _emitWB("created", b.id);
   return b;

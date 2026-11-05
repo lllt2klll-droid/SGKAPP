@@ -21,6 +21,7 @@ SGK Teacher Workspace là ứng dụng React chạy trên trình duyệt, có ba
 | Giao diện | React 19, Vite 8, Lucide React |
 | Đọc PDF và PWA | PDF.js, vite-plugin-pwa/Workbox |
 | Backend | Node.js, Express, multer, CORS |
+| Bản desktop Windows | Electron, electron-builder |
 | Lưu trữ trình duyệt | localStorage và IndexedDB |
 | Tài liệu | `docx`, `mammoth`, `jszip`, `xlsx` |
 | Chất lượng | oxlint, `node:test`, Playwright Core |
@@ -29,6 +30,7 @@ SGK Teacher Workspace là ứng dụng React chạy trên trình duyệt, có ba
 
 - Node.js tương thích với Vite 8 (khuyến nghị Node.js 20.19+ hoặc 22.12+).
 - npm đi kèm Node.js.
+- Đóng gói `.exe`: Windows x64, Node.js và npm.
 - Trình duyệt hiện đại. Các bài e2e có thể cần trình duyệt tương thích Playwright.
 
 ## Bắt đầu
@@ -53,6 +55,29 @@ npm run dev:frontend
 
 Tải file sách được giới hạn tối đa 80 MB mỗi file. Tên file được dùng để suy ra một phần metadata như lớp, môn và tập; có thể chỉnh lại thông tin trong ứng dụng.
 
+## Đóng gói ứng dụng Windows
+
+Trên Windows, từ thư mục `sgk-app`, tạo bộ cài bằng:
+
+```bash
+npm ci
+npm run dist:win
+```
+
+Nếu npm 12 báo đã chặn install script của Electron, cho phép script và cài runtime trước khi đóng gói:
+
+```bash
+npm install-scripts approve electron
+npm rebuild electron
+npm run dist:win
+```
+
+File cài đặt nằm trong `release/` với tên `SGK Teacher Workspace Setup.exe`. Nhấn đúp file này, hoàn tất trình cài đặt để tạo shortcut trên Desktop/Start Menu; ứng dụng sẽ tự mở sau cài đặt. Máy cài ứng dụng không cần cài riêng Node.js. Muốn tạo thêm bản portable, chạy `npm run dist:portable`. Lệnh `npm run desktop` build giao diện rồi chạy thử bản desktop trên máy phát triển.
+
+Thư viện sách và ảnh giáo án **không nằm bên trong file `.exe`**. Chúng được lưu riêng tại `%APPDATA%\SGK Teacher Workspace\books` và `%APPDATA%\SGK Teacher Workspace\lesson-images`, nên có thể sao lưu hoặc cập nhật ứng dụng mà không chép đè dữ liệu. Dữ liệu trình duyệt như tiến độ đọc, cài đặt và IndexedDB được lưu riêng trong hồ sơ Electron tại `%APPDATA%\SGK Teacher Workspace`. Khi chuyển sang máy khác, hãy sao chép thư mục dữ liệu này nếu muốn giữ cả thư viện lẫn dữ liệu ứng dụng.
+
+Muốn bản cài có sẵn thư viện hiện tại, hãy sao chép nội dung thư mục `books/` của dự án vào thư mục `books` trong đường dẫn dữ liệu trên máy đích; không đưa PDF vào gói `.exe`.
+
 ## Lệnh thường dùng
 
 | Lệnh | Tác dụng |
@@ -61,6 +86,9 @@ Tải file sách được giới hạn tối đa 80 MB mỗi file. Tên file đ�
 | `npm run dev:frontend` | Chạy riêng frontend Vite |
 | `npm run dev:backend` | Chạy riêng backend Express |
 | `npm run build` | Build frontend vào `dist/` |
+| `npm run desktop` | Build và chạy ứng dụng desktop Electron |
+| `npm run dist:win` | Tạo bộ cài Windows trong `release/` |
+| `npm run dist:portable` | Tạo bản portable Windows trong `release/` |
 | `npm run preview` | Xem thử bản build bằng Vite Preview |
 | `npm start` | Chạy `server.js` |
 | `npm run start:bg` | Khởi chạy backend nền trên Windows |

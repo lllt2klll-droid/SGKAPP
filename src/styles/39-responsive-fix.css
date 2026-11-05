@@ -419,3 +419,7 @@
     display: none;
   }
 }
+
+body:has(.word-modal-overlay) .aia-fab {
+  display: none;
+}

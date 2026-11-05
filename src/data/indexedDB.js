@@ -228,8 +228,20 @@ class IndexedDBService {
       const request = store.put(record);
 
       return new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(true);
-        request.onerror = () => reject(request.error);
+        let settled = false;
+        const fail = () => {
+          if (settled) return;
+          settled = true;
+          reject(transaction.error || request.error || new Error(`IndexedDB write aborted for ${storeName}/${key}`));
+        };
+        transaction.oncomplete = () => {
+          if (settled) return;
+          settled = true;
+          resolve(true);
+        };
+        transaction.onerror = fail;
+        transaction.onabort = fail;
+        request.onerror = fail;
       });
     } catch (err) {
       if (err?.code !== "IDB_UNAVAILABLE" && !__isTestSilence()) {
@@ -253,8 +265,20 @@ class IndexedDBService {
       const request = store.delete(key);
 
       return new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(true);
-        request.onerror = () => reject(request.error);
+        let settled = false;
+        const fail = () => {
+          if (settled) return;
+          settled = true;
+          reject(transaction.error || request.error || new Error(`IndexedDB delete aborted for ${storeName}/${key}`));
+        };
+        transaction.oncomplete = () => {
+          if (settled) return;
+          settled = true;
+          resolve(true);
+        };
+        transaction.onerror = fail;
+        transaction.onabort = fail;
+        request.onerror = fail;
       });
     } catch (err) {
       if (err?.code !== "IDB_UNAVAILABLE" && !__isTestSilence()) {

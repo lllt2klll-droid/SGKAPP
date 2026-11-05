@@ -14,6 +14,7 @@ import {
   ssrfLog,
   MAX_REMOTE_FILE_SIZE,
 } from "./server/security/ssrfGuard.js";
+import { parseGoogleBookLink } from "./server/bookLinks.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -102,7 +103,7 @@ const CSP_APP = [
   // fonts.googleapis.com); script-src vẫn 'self' nên XSS không mở thêm.
   "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com",
   "worker-src 'self' blob:",
-  "frame-src 'self' blob: data:",
+  "frame-src 'self' blob: data: https://drive.google.com https://docs.google.com https://*.googleusercontent.com",
   "manifest-src 'self'",
 ].join("; ");
 app.use((_req, res, next) => {
@@ -255,6 +256,18 @@ function resolveBooksDir() {
   return path.resolve(path.join(__dirname, "..", "books"));
 }
 const BOOKS_DIR = resolveBooksDir();
+const BOOK_LINKS_FILE = path.join(path.dirname(BOOKS_DIR), ".sgk-book-links.json");
+
+function readLinkedBooks() {
+  if (!fs.existsSync(BOOK_LINKS_FILE)) return [];
+  const parsed = JSON.parse(fs.readFileSync(BOOK_LINKS_FILE, "utf8"));
+  if (!Array.isArray(parsed)) throw new Error("Danh sách sách liên kết không hợp lệ.");
+  return parsed;
+}
+
+function writeLinkedBooks(books) {
+  fs.writeFileSync(BOOK_LINKS_FILE, `${JSON.stringify(books, null, 2)}\n`, "utf8");
+}
 
 if (!fs.existsSync(BOOKS_DIR)) {
   fs.mkdirSync(BOOKS_DIR, { recursive: true });
@@ -1109,13 +1122,6 @@ app.patch("/api/books/:filename/metadata", writeRateLimit, requireWriteAuth, (re
     try { filename = decodeURIComponent(filename); } catch {}
     if (filename.includes("\0")) return res.status(403).json({ error: "Yêu cầu không hợp lệ." });
 
-    const filePath = findPdfPath(filename);
-    const relative = path.relative(BOOKS_DIR, filePath);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) return res.status(403).json({ error: "Yêu cầu không hợp lệ." });
-    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return res.status(404).json({ error: "Không tìm thấy sách." });
-
-    const ext = getExt(filePath);
-    if (!SUPPORTED_EXTS.includes(ext)) return res.status(400).json({ error: "Định dạng sách chưa được hỗ trợ." });
     const title = String(req.body?.title || "").trim();
     const grade = Number(req.body?.grade);
     const term = Number(req.body?.term);
@@ -1124,6 +1130,23 @@ app.patch("/api/books/:filename/metadata", writeRateLimit, requireWriteAuth, (re
     if (!Number.isInteger(grade) || grade < 1 || grade > 5) return res.status(400).json({ error: "Lớp phải từ 1 đến 5." });
     if (!Number.isInteger(term) || (term !== 1 && term !== 2)) return res.status(400).json({ error: "Tập phải là 1 hoặc 2." });
     if (!VALID_BOOK_SUBJECTS.has(subject)) return res.status(400).json({ error: "Môn học không hợp lệ." });
+
+    const linkedBooks = readLinkedBooks();
+    const linkedIndex = linkedBooks.findIndex((book) => book.filename === filename);
+    if (linkedIndex >= 0) {
+      const book = { ...linkedBooks[linkedIndex], title, grade, subject, term };
+      linkedBooks[linkedIndex] = book;
+      writeLinkedBooks(linkedBooks);
+      return res.json({ ok: true, book, oldFilename: filename });
+    }
+
+    const filePath = findPdfPath(filename);
+    const relative = path.relative(BOOKS_DIR, filePath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return res.status(403).json({ error: "Yêu cầu không hợp lệ." });
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return res.status(404).json({ error: "Không tìm thấy sách." });
+
+    const ext = getExt(filePath);
+    if (!SUPPORTED_EXTS.includes(ext)) return res.status(400).json({ error: "Định dạng sách chưa được hỗ trợ." });
 
     const preferredName = buildBookMetadataFilename(title, grade, subject, term, ext);
     const directory = path.dirname(filePath);
@@ -1208,6 +1231,7 @@ app.get("/api/books", (req, res) => {
         console.error(`Skipping unreadable PDF "${rel}":`, err.message);
       }
     }
+    books.push(...readLinkedBooks());
 
     // Sort books by grade, then subject, then term
     books.sort((a, b) => {
@@ -1220,6 +1244,60 @@ app.get("/api/books", (req, res) => {
   } catch (error) {
     console.error("Error reading books directory:", error);
     res.status(500).json({ error: "Không thể đọc danh sách sách giáo khoa" });
+  }
+});
+
+app.post("/api/books/link", writeRateLimit, requireWriteAuth, (req, res) => {
+  const entries = req.body?.books;
+  if (!Array.isArray(entries) || entries.length < 1 || entries.length > 30) {
+    return res.status(400).json({ error: "Hãy thêm từ 1 đến 30 sách liên kết." });
+  }
+
+  let prepared;
+  try {
+    prepared = entries.map((entry) => {
+      const link = parseGoogleBookLink(entry?.url);
+      const title = String(entry?.title || "").trim();
+      const grade = Number(entry?.grade);
+      const term = Number(entry?.term);
+      const subject = String(entry?.subject || "").trim();
+      const format = entry?.format === "word" ? "word" : entry?.format === "pdf" ? "pdf" : "";
+      if (title.length < 3 || title.length > 160) throw new Error("Tiêu đề cần từ 3 đến 160 ký tự.");
+      if (!Number.isInteger(grade) || grade < 1 || grade > 5) throw new Error("Lớp phải từ 1 đến 5.");
+      if (!Number.isInteger(term) || (term !== 1 && term !== 2)) throw new Error("Tập phải là 1 hoặc 2.");
+      if (!VALID_BOOK_SUBJECTS.has(subject)) throw new Error("Môn học không hợp lệ.");
+      if (!format) throw new Error("Định dạng sách không hợp lệ.");
+      return {
+        ...link,
+        id: link.id,
+        filename: `drive-${link.id}.${format === "word" ? "docx" : "pdf"}`,
+        title,
+        grade,
+        subject,
+        term,
+        size: 0,
+        isLinkedBook: true,
+        format,
+      };
+    });
+  } catch (error) {
+    return res.status(400).json({ error: error.message || "Thông tin sách liên kết không hợp lệ." });
+  }
+
+  try {
+    const linkedBooks = readLinkedBooks();
+    const byId = new Map(linkedBooks.map((book) => [book.id, book]));
+    for (const book of prepared) byId.set(book.id, book);
+    const nextBooks = [...byId.values()];
+    writeLinkedBooks(nextBooks);
+    return res.status(201).json({
+      ok: true,
+      message: `Đã thêm ${prepared.length} sách liên kết vào thư viện.`,
+      books: prepared,
+    });
+  } catch (error) {
+    console.error("Save linked books error:", error);
+    return res.status(500).json({ error: "Không thể lưu sách liên kết. Vui lòng thử lại." });
   }
 });
 
@@ -1996,8 +2074,10 @@ app.use((err, _req, res, _next) => {
 
 const HOST = process.env.HOST || "127.0.0.1";
 const _server = app.listen(PORT, HOST, () => {
-  console.log(`Server is running on http://${HOST}:${PORT}`);
-  console.log(`Server is listening on ${HOST}:${PORT} (LOCAL-ONLY; set HOST=0.0.0.0 to expose LAN)`);
+  const address = _server.address();
+  const listeningPort = address && typeof address !== "string" ? address.port : PORT;
+  console.log(`Server is running on http://${HOST}:${listeningPort}`);
+  console.log(`Server is listening on ${HOST}:${listeningPort} (LOCAL-ONLY; set HOST=0.0.0.0 to expose LAN)`);
   console.log(`Scanning PDFs in: ${BOOKS_DIR}`);
   if (!WRITE_TOKEN) {
     console.warn("[bao mat] WRITE_TOKEN chưa đặt — mọi client vào được server đều có thể upload/xóa sách. Mở LAN hãy đặt env WRITE_TOKEN.");
@@ -2007,6 +2087,7 @@ const _server = app.listen(PORT, HOST, () => {
   // Ghi PID để Run_App.bat bg có thể kiểm tra (optional)
   try { fs.writeFileSync(path.join(__dirname, "server.pid"), String(process.pid), "utf8"); } catch {}
 });
+export { _server as server };
 _server.on("error", (err) => {
   if (err && err.code === "EADDRINUSE") {
     console.error(`[LOI] Port ${PORT} da bi chiem. Chay "Run_App.bat stop" hoac dong tien trinh PID dang giu port.`);

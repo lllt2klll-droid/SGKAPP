@@ -7,6 +7,7 @@ import {
   Check, Sparkles, SlidersHorizontal, Library as LibraryIcon, Timer,
   LayoutDashboard, Blocks, Trash2, MessageSquareHeart, ChevronDown, Send,
   Copy, Star, Lightbulb, Bug, Gauge, PenLine, ThumbsUp, ExternalLink,
+  ArrowRight, Home, GraduationCap, ShieldCheck,
 } from "lucide-react";
 import {
   loadSettings, saveSettings, updateSettings, resetSection, resetAllSettings,
@@ -36,12 +37,14 @@ import { ACCENT_PALETTES, generateAccentScale } from "../designTokens.js";
 
 /* ── Điều hướng nhóm ─────────────────────────────── */
 const NAV_GROUPS = [
-  { title: "Chung", items: ["general", "dashboard", "appearance"] },
-  { title: "Học tập & Đọc", items: ["reading", "editor", "library", "whiteboard", "missions"] },
-  { title: "AI & Dữ liệu", items: ["ai", "search", "export", "backup"] },
-  { title: "Hệ thống", items: ["behavior", "notifications", "keyboard", "features", "accessibility", "privacy", "advanced", "about"] },
+  { title: "Cá nhân hóa", items: ["general", "appearance", "dashboard"] },
+  { title: "Dạy & đọc", items: ["reading", "editor", "library", "whiteboard", "missions"] },
+  { title: "Công cụ", items: ["ai", "search", "keyboard", "features"] },
+  { title: "Dữ liệu & bảo vệ", items: ["backup", "export", "privacy", "behavior", "notifications"] },
+  { title: "Trợ năng & ứng dụng", items: ["accessibility", "advanced", "about"] },
 ];
 const SECTIONS = [
+  { id: "overview", label: "Tổng quan cài đặt", icon: <Home size={16} />, hint: "Lối tắt và các nhóm cài đặt" },
   { id: "general", label: "Tổng quan", icon: <Settings size={16} />, hint: "Tên hiển thị, trang mở, tuần" },
   { id: "dashboard", label: "Bảng điều khiển", icon: <LayoutDashboard size={16} />, hint: "Khối hiển thị trang Tổng quan" },
   { id: "appearance", label: "Giao diện", icon: <Palette size={16} />, hint: "Sáng/tối, màu, chữ", subs: [{ id: "st-theme", label: "Sáng / Tối" }, { id: "st-accent", label: "Màu sắc" }, { id: "st-type", label: "Chữ & Mật độ" }] },
@@ -95,7 +98,7 @@ const FEATURE_DESCS = {
 
 export default function SettingsCenter({ onClose, initialSection = "general" }) {
   const [settings, setSettings] = useState(() => loadSettings());
-  const [active, setActive] = useState(() => (SECTIONS.some((s) => s.id === initialSection) ? initialSection : "general"));
+  const [active, setActive] = useState(() => (SECTIONS.some((s) => s.id === initialSection) ? initialSection : "overview"));
   const [query, setQuery] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
@@ -252,6 +255,10 @@ export default function SettingsCenter({ onClose, initialSection = "general" }) 
         {saveErr && <div className="st-alert st-alert-warn">{saveErr}</div>}
         <div className="st-body">
           <nav className="st-side">
+            <button className={`st-nav st-nav-home ${active === "overview" ? "active" : ""}`} onClick={() => setActive("overview")}>
+              <span className="st-nav-ic"><Home size={16} /></span>
+              <span className="st-nav-tx"><b>Tổng quan</b><small>Bắt đầu từ đây</small></span>
+            </button>
             {NAV_GROUPS.map((g) => (
               <div key={g.title} className="st-group">
                 <div className="st-group-title">{g.title}</div>
@@ -268,7 +275,8 @@ export default function SettingsCenter({ onClose, initialSection = "general" }) 
             ))}
           </nav>
           <div className="st-main" ref={mainRef}>
-            <div className="st-crumb">{activeMeta?.label} <span>· {activeMeta?.hint}</span></div>
+            {active !== "overview" && <div className="st-crumb">{activeMeta?.label} <span>· {activeMeta?.hint}</span></div>}
+            {active === "overview" && <SettingsOverview onNavigate={setActive} />}
             {active === "general" && <GeneralSection settings={settings} onChange={handleChange} />}
             {active === "dashboard" && <DashboardSection settings={settings} onPatch={handleSectionPatch} />}
             {active === "appearance" && <AppearanceSection settings={settings} onChange={handleChange} onPatch={handleAppearancePatch} />}
@@ -347,6 +355,94 @@ function Seg({ options, value, onPick }) {
 }
 const sel = "st-select";
 const inp = "st-input";
+
+/* ── Trang vào Cài đặt ─────────────────────────────── */
+function SettingsOverview({ onNavigate }) {
+  const shortcuts = [
+    { id: "appearance", title: "Đổi giao diện", hint: "Sáng, tối, màu sắc và cỡ chữ", icon: <Palette size={17} /> },
+    { id: "reading", title: "Chỉnh cách đọc", hint: "Bố cục và zoom sách mặc định", icon: <BookOpen size={17} /> },
+    { id: "dashboard", title: "Sắp xếp trang chủ", hint: "Chọn thông tin muốn nhìn thấy", icon: <LayoutDashboard size={17} /> },
+    { id: "backup", title: "Sao lưu dữ liệu", hint: "Tạo bản sao hoặc khôi phục", icon: <Database size={17} /> },
+  ];
+  const groups = [
+    {
+      id: "general", title: "Cá nhân hóa", icon: <Palette size={17} />,
+      description: "Đưa không gian làm việc về đúng cách bạn muốn.",
+      items: ["Tên hiển thị", "Giao diện & chữ", "Trang Tổng quan"],
+    },
+    {
+      id: "reading", title: "Dạy & đọc", icon: <GraduationCap size={18} />,
+      description: "Thiết lập trải nghiệm đọc sách và chuẩn bị bài.",
+      items: ["Trình đọc sách", "Soạn thảo Word", "Thư viện & bảng trắng"],
+    },
+    {
+      id: "ai", title: "AI & công cụ", icon: <Cpu size={17} />,
+      description: "Kết nối trợ lý, tìm kiếm và chọn tính năng cần dùng.",
+      items: ["Gemini", "Tìm kiếm", "Phím tắt & tính năng"],
+    },
+    {
+      id: "backup", title: "Dữ liệu & bảo vệ", icon: <ShieldCheck size={17} />,
+      description: "Sao lưu, xuất dữ liệu và kiểm soát lịch sử cá nhân.",
+      items: ["Sao lưu & khôi phục", "Xuất dữ liệu", "Riêng tư & thông báo"],
+    },
+    {
+      id: "accessibility", title: "Trợ năng & ứng dụng", icon: <Accessibility size={17} />,
+      description: "Làm ứng dụng dễ tiếp cận hơn và xem thông tin hệ thống.",
+      items: ["Trợ năng", "Hành vi ứng dụng", "Nâng cao & giới thiệu"],
+    },
+  ];
+
+  return (
+    <div className="st-overview">
+      <section className="st-welcome">
+        <div className="st-welcome-copy">
+          <span className="st-eyebrow"><Sparkles size={13} /> KHÔNG GIAN CỦA BẠN</span>
+          <h1>Cài đặt theo cách bạn làm việc</h1>
+          <p>Chọn một việc bạn muốn điều chỉnh. Thay đổi được lưu tự động và áp dụng ngay.</p>
+        </div>
+        <button className="st-welcome-cta" onClick={() => onNavigate("appearance")}>
+          Cá nhân hóa ngay <ArrowRight size={15} />
+        </button>
+        <div className="st-welcome-mark" aria-hidden="true"><Settings size={84} /></div>
+      </section>
+
+      <section className="st-overview-section" aria-labelledby="st-shortcuts-title">
+        <div className="st-overview-heading">
+          <div><h2 id="st-shortcuts-title">Bắt đầu nhanh</h2><p>Những thiết lập thường cần chỉnh nhất</p></div>
+        </div>
+        <div className="st-shortcuts">
+          {shortcuts.map((item) => (
+            <button key={item.id} className="st-shortcut" onClick={() => onNavigate(item.id)}>
+              <span className="st-shortcut-icon">{item.icon}</span>
+              <span className="st-shortcut-copy"><b>{item.title}</b><small>{item.hint}</small></span>
+              <ArrowRight className="st-shortcut-arrow" size={15} />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="st-overview-section" aria-labelledby="st-groups-title">
+        <div className="st-overview-heading">
+          <div><h2 id="st-groups-title">Khám phá cài đặt</h2><p>Các lựa chọn được sắp theo nhu cầu sử dụng</p></div>
+        </div>
+        <div className="st-category-grid">
+          {groups.map((group) => (
+            <button key={group.id} className="st-category" onClick={() => onNavigate(group.id)}>
+              <span className="st-category-icon">{group.icon}</span>
+              <span className="st-category-main">
+                <b>{group.title}</b>
+                <small>{group.description}</small>
+                <span className="st-category-items">{group.items.join(" · ")}</span>
+              </span>
+              <ArrowRight className="st-category-arrow" size={16} />
+            </button>
+          ))}
+        </div>
+      </section>
+      <p className="st-overview-note"><Check size={14} /> Không cần bấm lưu — mọi thay đổi đều được lưu tự động.</p>
+    </div>
+  );
+}
 
 /* ── Tổng quan ─────────────────────────────── */
 function GeneralSection({ settings, onChange }) {
