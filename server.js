@@ -2085,7 +2085,9 @@ const _server = app.listen(PORT, HOST, () => {
     console.log("[bao mat] WRITE_TOKEN đã bật cho route ghi/xóa.");
   }
   // Ghi PID để Run_App.bat bg có thể kiểm tra (optional)
-  try { fs.writeFileSync(path.join(__dirname, "server.pid"), String(process.pid), "utf8"); } catch {}
+  if (process.env.SGK_DESKTOP_MODE !== "1") {
+    try { fs.writeFileSync(path.join(__dirname, "server.pid"), String(process.pid), "utf8"); } catch {}
+  }
 });
 export { _server as server };
 _server.on("error", (err) => {
@@ -2100,7 +2102,9 @@ _server.on("error", (err) => {
 // code = exit code: 0 cho tat co y (Ctrl+C/kill), 1 cho crash (uncaughtException)
 function _gracefulShutdown(signal, code = 0) {
   console.log(`\n[i] Nhan ${signal} — dang tat server...`);
-  try { fs.unlinkSync(path.join(__dirname, "server.pid")); } catch {}
+  if (process.env.SGK_DESKTOP_MODE !== "1") {
+    try { fs.unlinkSync(path.join(__dirname, "server.pid")); } catch {}
+  }
   _server.close(() => {
     console.log("[OK] Server da dung, port da giai phong.");
     process.exit(code);

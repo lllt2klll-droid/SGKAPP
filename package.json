@@ -2,7 +2,7 @@
   "name": "sgk-app",
   "description": "Ứng dụng thư viện và công cụ làm việc dành cho giáo viên tiểu học",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "author": "Nguyễn Tuấn",
   "copyright": "© 2026 Nguyễn Tuấn. All rights reserved.",
   "license": "UNLICENSED",
@@ -51,19 +51,27 @@
     "vite": "^8.2.0",
     "vite-plugin-pwa": "^1.3.0"
   },
-  "main": "electron/main.mjs",
+  "main": "electron/main.cjs",
   "build": {
     "appId": "vn.nguyentuan.sgkteacherworkspace",
     "productName": "SGK Teacher Workspace",
     "directories": {
-      "output": "release"
+      "output": "release/windows"
     },
     "files": [
       "electron/**/*",
       "server.js",
       "server/**/*",
       "dist/**/*",
+      "public/icons/icon-512.png",
       "package.json",
+      "!books/**",
+      "!lesson-images/**",
+      "!docs/**",
+      "!tests/**",
+      "!KHBD-test/**",
+      "!*.log",
+      "!server.pid",
       "!node_modules/canvas",
       "!node_modules/canvas/**/*"
     ],
@@ -92,7 +100,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true,
-      "artifactName": "${productName} Setup.${ext}"
+      "artifactName": "${productName} Setup 1.0.0.${ext}"
     }
   },
   "allowScripts": {

@@ -72,11 +72,11 @@ npm rebuild electron
 npm run dist:win
 ```
 
-File cài đặt nằm trong `release/` với tên `SGK Teacher Workspace Setup.exe`. Nhấn đúp file này, hoàn tất trình cài đặt để tạo shortcut trên Desktop/Start Menu; ứng dụng sẽ tự mở sau cài đặt. Máy cài ứng dụng không cần cài riêng Node.js. Muốn tạo thêm bản portable, chạy `npm run dist:portable`. Lệnh `npm run desktop` build giao diện rồi chạy thử bản desktop trên máy phát triển.
+File cài đặt nằm trong `release/windows/` với tên `SGK Teacher Workspace Setup 1.0.0.exe`. Nhấn đúp file này, hoàn tất trình cài đặt để tạo shortcut trên Desktop/Start Menu; ứng dụng sẽ tự mở sau cài đặt. Máy cài ứng dụng không cần cài riêng Node.js. Muốn tạo thêm bản portable, chạy `npm run dist:portable`. Lệnh `npm run desktop` build giao diện rồi chạy thử bản desktop trên máy phát triển.
 
-Thư viện sách và ảnh giáo án **không nằm bên trong file `.exe`**. Chúng được lưu riêng tại `%APPDATA%\SGK Teacher Workspace\books` và `%APPDATA%\SGK Teacher Workspace\lesson-images`, nên có thể sao lưu hoặc cập nhật ứng dụng mà không chép đè dữ liệu. Dữ liệu trình duyệt như tiến độ đọc, cài đặt và IndexedDB được lưu riêng trong hồ sơ Electron tại `%APPDATA%\SGK Teacher Workspace`. Khi chuyển sang máy khác, hãy sao chép thư mục dữ liệu này nếu muốn giữ cả thư viện lẫn dữ liệu ứng dụng.
+Bản cài đặt bắt đầu với thư viện trống; sách và ảnh trên máy phát triển **không được đóng gói vào file `.exe`**. Thư viện sách và ảnh giáo án do người dùng thêm được lưu riêng tại `%APPDATA%\SGK Teacher Workspace\books` và `%APPDATA%\SGK Teacher Workspace\lesson-images`. Dữ liệu trình duyệt như tiến độ đọc, cài đặt và IndexedDB được lưu riêng trong hồ sơ Electron tại `%APPDATA%\SGK Teacher Workspace`. Dữ liệu được giữ lại khi gỡ ứng dụng để tránh mất nội dung; khi chuyển sang máy khác, hãy sao chép thư mục dữ liệu này nếu muốn giữ cả thư viện lẫn dữ liệu ứng dụng.
 
-Muốn bản cài có sẵn thư viện hiện tại, hãy sao chép nội dung thư mục `books/` của dự án vào thư mục `books` trong đường dẫn dữ liệu trên máy đích; không đưa PDF vào gói `.exe`.
+Người dùng có thể thêm sách riêng sau khi cài bằng chức năng nhập trong ứng dụng.
 
 ## Lệnh thường dùng
 
@@ -87,8 +87,8 @@ Muốn bản cài có sẵn thư viện hiện tại, hãy sao chép nội dung 
 | `npm run dev:backend` | Chạy riêng backend Express |
 | `npm run build` | Build frontend vào `dist/` |
 | `npm run desktop` | Build và chạy ứng dụng desktop Electron |
-| `npm run dist:win` | Tạo bộ cài Windows trong `release/` |
-| `npm run dist:portable` | Tạo bản portable Windows trong `release/` |
+| `npm run dist:win` | Tạo bộ cài Windows trong `release/windows/` |
+| `npm run dist:portable` | Tạo bản portable Windows trong `release/windows/` |
 | `npm run preview` | Xem thử bản build bằng Vite Preview |
 | `npm start` | Chạy `server.js` |
 | `npm run start:bg` | Khởi chạy backend nền trên Windows |
