@@ -4,6 +4,17 @@ import { toCanvasPixels, pickCanvasForSelection } from "./scanCoordinates.js";
 const MAX_CROP_DIM = 3000; // increased for better OCR quality
 const MIN_CROP_DIM = 200; // ensure minimum quality
 
+export function getCropOutputSize(width, height) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  const maxDim = Math.max(width, height);
+  const minDim = Math.min(width, height);
+  const scale = Math.min(MAX_CROP_DIM / maxDim, Math.max(1, MIN_CROP_DIM / minDim));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
 /**
  * Crop a selection from a PDF canvas with high quality for OCR.
  * @param {HTMLCanvasElement} canvas
@@ -24,24 +35,10 @@ export async function cropFromCanvas(canvas, canvasRect, containerRect, sel) {
   // create offscreen canvas
   const out = document.createElement("canvas");
   
-  // Calculate output dimensions - maintain aspect ratio
-  let dw = sw;
-  let dh = sh;
-  
-  // Only downscale if significantly larger than MAX_CROP_DIM
-  const maxDim = Math.max(dw, dh);
-  if (maxDim > MAX_CROP_DIM) {
-    const scale = MAX_CROP_DIM / maxDim;
-    dw = Math.round(dw * scale);
-    dh = Math.round(dh * scale);
-  }
-  
-  // Ensure minimum dimensions
-  dw = Math.max(dw, MIN_CROP_DIM);
-  dh = Math.max(dh, MIN_CROP_DIM);
-  
-  out.width = dw;
-  out.height = dh;
+  const outputSize = getCropOutputSize(sw, sh);
+  if (!outputSize) return null;
+  out.width = outputSize.width;
+  out.height = outputSize.height;
   const ctx = out.getContext("2d");
   if (!ctx) return null;
 
@@ -50,14 +47,14 @@ export async function cropFromCanvas(canvas, canvasRect, containerRect, sel) {
   ctx.imageSmoothingQuality = "high";
 
   // draw cropped area scaled to out size
-  ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, dw, dh);
+  ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, outputSize.width, outputSize.height);
 
   // Use PNG for better text quality in OCR, or high-quality JPEG
   // PNG is lossless and better for text extraction
   const blob = await new Promise((resolve) => out.toBlob((b) => resolve(b), "image/png"));
   const dataUrl = out.toDataURL("image/png");
   
-  return { blob, dataUrl, width: dw, height: dh, srcRect: src };
+  return { blob, dataUrl, width: outputSize.width, height: outputSize.height, srcRect: src };
 }
 
 /**
@@ -101,4 +98,10 @@ export async function cropFromCanvases({ canvasLeft, canvasRight, leftRect, righ
 export function dataUrlToBase64(dataUrl) {
   const comma = dataUrl.indexOf(",");
   return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+}
+
+export function getImageMimeType(dataUrl) {
+  const match = String(dataUrl || "").match(/^data:(image\/(?:png|jpeg|webp));base64,/i);
+  if (!match) throw new Error("Ảnh vùng quét không hợp lệ. Hãy crop lại ảnh rồi thử lại.");
+  return match[1].toLowerCase();
 }

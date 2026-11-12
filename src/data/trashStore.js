@@ -102,6 +102,36 @@ export function removeFromTrash(id) {
   return takeFromTrash(id);
 }
 
+/**
+ * Xóa khỏi thùng rác mọi mục SÁCH trùng tên file.
+ * Dùng khi người dùng thêm lại một sách từng bị xóa: nếu không xóa entry cũ,
+ * fetchBooks sẽ tiếp tục ẩn sách vừa thêm (file có trong thư viện nhưng không hiện).
+ * @param {string|string[]} filenames
+ * @returns {number} số mục đã xóa khỏi thùng rác
+ */
+export function removeBooksFromTrashByFilename(filenames) {
+  const names = new Set(
+    (Array.isArray(filenames) ? filenames : [filenames])
+      .map((name) => String(name || "").trim())
+      .filter(Boolean),
+  );
+  if (!names.size) return 0;
+
+  const list = listTrash();
+  const keep = list.filter((item) => {
+    if (!item || item.type !== TRASH_TYPE.BOOK) return true;
+    const metaName = item.meta && item.meta.filename;
+    const payloadName = item.payload && item.payload.filename;
+    return !(names.has(metaName) || names.has(payloadName));
+  });
+  const removed = list.length - keep.length;
+  if (!removed) return 0;
+  const res = safeSetJSON(STORAGE_KEYS.TRASH, keep);
+  if (!res.ok) return 0;
+  notify(TRASH_TYPE.BOOK);
+  return removed;
+}
+
 export function emptyTrash() {
   const n = listTrash().length;
   safeSetJSON(STORAGE_KEYS.TRASH, []);

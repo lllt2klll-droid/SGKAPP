@@ -116,6 +116,26 @@ describe("Gemini image generation API route", () => {
     assert.match((await response.json()).error, /Gemini API Key/);
   });
 
+  it("identifies the SGK backend in its health response", async () => {
+    const response = await fetch(`${baseUrl}/api/health`);
+    const health = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(health.status, "healthy");
+    assert.equal(health.service, "sgk-teacher-workspace");
+  });
+
+  it("returns the bundled release manifest when online update metadata is unavailable", async () => {
+    const response = await fetch(`${baseUrl}/api/update/check`);
+    const update = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(update.currentVersion, "1.0.3");
+    assert.equal(update.latestVersion, "1.0.3");
+    assert.equal(update.hasUpdate, false);
+    assert.equal(update.downloadUrl, "https://github.com/lllt2klll-droid/book-update/releases");
+  });
+
   it("validates prompt, source image, image format and supported dimensions", async () => {
     const validFormat = { type: "image", mime_type: "image/jpeg", aspect_ratio: "1:1", image_size: "1K" };
     const invalidRequests = [

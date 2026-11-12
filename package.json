@@ -2,7 +2,7 @@
   "name": "sgk-app",
   "description": "Ứng dụng thư viện và công cụ làm việc dành cho giáo viên tiểu học",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.3",
   "author": "Nguyễn Tuấn",
   "copyright": "© 2026 Nguyễn Tuấn. All rights reserved.",
   "license": "UNLICENSED",
@@ -13,6 +13,7 @@
     "desktop": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win nsis",
     "dist:portable": "npm run build && electron-builder --win portable",
+    "dist:local": "node scripts/build-desktop-folder.mjs",
     "lint": "oxlint",
     "test": "node --no-warnings --loader ./test-loader.mjs --test src/**/*.test.js src/**/*.test.jsx src/**/*.spec.js src/**/*.spec.jsx tests/*.test.js tests/*.spec.js server/**/*.test.js server/**/*.spec.js",
     "test:e2e": "node --test --test-concurrency=1 tests/e2e/**/*.spec.js",
@@ -28,6 +29,7 @@
     "cors": "^2.8.5",
     "docx": "^9.7.1",
     "dompurify": "^3.4.16",
+    "electron-updater": "^6.8.11",
     "express": "^4.19.2",
     "jszip": "^3.10.2",
     "lucide-react": "^0.428.0",
@@ -62,7 +64,9 @@
       "electron/**/*",
       "server.js",
       "server/**/*",
+      "src/services/docxFaithful.js",
       "dist/**/*",
+      "version.json",
       "public/icons/icon-512.png",
       "package.json",
       "!books/**",
@@ -79,6 +83,9 @@
     "npmRebuild": false,
     "win": {
       "icon": "public/icons/icon-512.png",
+      "signAndEditExecutable": true,
+      "requestedExecutionLevel": "asInvoker",
+      "legalTrademarks": "SGK Teacher Workspace",
       "target": [
         {
           "target": "nsis",
@@ -96,12 +103,29 @@
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "packElevateHelper": false,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
+      "shortcutName": "SGK Teacher Workspace",
+      "uninstallDisplayName": "SGK Teacher Workspace ${version}",
+      "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
-      "artifactName": "${productName} Setup 1.0.0.${ext}"
-    }
+      "artifactName": "SGK-Teacher-Workspace-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName} Portable ${version}.${ext}",
+      "requestExecutionLevel": "user"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "lllt2klll-droid",
+        "repo": "book-update"
+      }
+    ]
   },
   "allowScripts": {
     "electron@39.8.10": true

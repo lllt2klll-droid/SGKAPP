@@ -3,7 +3,14 @@ import { getApiBase, writeHeaders } from "../services/apiConfig.js";
 import { PRIMARY_SUBJECTS } from "../data/subjectCatalog.js";
 import { loadSettings, updateSettings } from "../services/settingsStore.js";
 import { readJSON, saveJSON, removeKey } from "../data/storage.js";
-import { useFileDrag } from "../components/fileDropzoneUtils.js";
+import WordModalDropLayer from "../components/WordModalDropLayer.jsx";
+import {
+  countWordsFromHtml,
+  estimatePages,
+  htmlToPlainText,
+  mdLikeToHtmlIfNeeded,
+  plainToHtml,
+} from "./textBookUtils.js";
 import {
   X, Save, Eye, Trash2, Copy, Check, FileText, AlertCircle,
   Bold, Italic, Underline, Strikethrough, Palette, Highlighter,
@@ -57,42 +64,6 @@ const WORD_TEMPLATES = [
     html: `<h1>Ghi chú: ...</h1><ul><li><strong>Ý chính 1:</strong> ...</li><li><strong>Ý chính 2:</strong> ...</li><li><strong>Ý chính 3:</strong> ...</li></ul><h2>Từ khóa</h2><p><code style="background:#f1f5f9; padding:2px 6px; border-radius:6px;">...</code> <code style="background:#f1f5f9; padding:2px 6px; border-radius:6px;">...</code></p><h2>Câu hỏi ôn tập</h2><ol><li>...</li><li>...</li><li>...</li></ol>`,
   },
 ];
-
-// helpers
-function htmlToPlainText(html) {
-  try { const d=document.createElement("div"); d.innerHTML=html||""; return (d.textContent||d.innerText||"").trim(); } catch { return (html||"").replace(/<[^>]*>/g," ").trim(); }
-}
-function countWordsFromHtml(html){
-  const t=htmlToPlainText(html); if(!t) return 0; return t.split(/\s+/).filter(Boolean).length;
-}
-function estimatePages(html){
-  const text=htmlToPlainText(html); const chars=text.length; if(!chars) return 1; return Math.max(1, Math.ceil(chars/1800));
-}
-function plainToHtml(text){
-  if(!text) return "";
-  // escape
-  const esc=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  const paragraphs=esc.split(/\n\s*\n/).map(p=>{
-    const inner=p.split("\n").join("<br>");
-    if(/^\s*#{1,6}\s/.test(p)) return p; // keep markdown headings as is will be converted below
-    return `<p>${inner}</p>`;
-  }).join("");
-  return paragraphs;
-}
-function mdLikeToHtmlIfNeeded(content, ext){
-  if(ext==="html") return content;
-  if(ext==="md" && content.includes("#")){
-    // quick md heading/bold -> html
-    let h=content.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    h=h.replace(/^###\s+(.*)$/gm,'<h3>$1</h3>').replace(/^##\s+(.*)$/gm,'<h2>$1</h2>').replace(/^#\s+(.*)$/gm,'<h1>$1</h1>');
-    h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,'<code style="background:#f1f5f9;padding:1px 6px;border-radius:6px;">$1</code>');
-    h=h.replace(/^\s*[-*]\s+(.*)$/gm,'<li>$1</li>').replace(/^\s*\d+\.\s+(.*)$/gm,'<li>$1</li>');
-    // wrap stray li in ul (simple)
-    h=h.split("\n").map(line=> line.trim().startsWith("<li>")?line:`<p>${line}</p>`).join("\n");
-    return h;
-  }
-  return plainToHtml(content);
-}
 
 export default function TextBookModal({ open, onClose, onSuccess, editingBook }) {
   const isEdit = !!editingBook;
@@ -1621,30 +1592,5 @@ export default function TextBookModal({ open, onClose, onSuccess, editingBook })
       </div>
     </div>
     </WordModalDropLayer>
-  );
-}
-
-// ── Lớp bọc kéo-thả cho modal Word: .docx → nhập Word, ảnh → chèn vào bài ──
-function WordModalDropLayer({ children, onDocx, onImage, onError }) {
-  const { dragActive, bind } = useFileDrag({
-    accept: ".docx,image/*,.png,.jpg,.jpeg,.gif,.webp",
-    multiple: false,
-    onFiles: (f) => {
-      const file = Array.isArray(f) ? f[0] : f;
-      if (!file) return;
-      const n = (file.name || "").toLowerCase();
-      if (n.endsWith(".docx")) onDocx?.(file);
-      else if ((file.type || "").startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/.test(n)) onImage?.(file);
-      else onError?.(`Kéo thả hỗ trợ .docx và ảnh. File "${file.name}" chưa hỗ trợ ở đây.`);
-    },
-    onError,
-  });
-  return (
-    <div {...bind} style={{ position: "relative" }} title="Mẹo: kéo thả file .docx hoặc ảnh vào đây để nhập nhanh">
-      {dragActive && (
-        <div className="global-drag-overlay" aria-hidden="true"><span>Thả .docx để nhập Word • Thả ảnh để chèn</span></div>
-      )}
-      {children}
-    </div>
   );
 }

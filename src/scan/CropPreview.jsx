@@ -3,7 +3,8 @@
 // Nâng cấp bên trong: layout desktop 2 pane, zoom hiển thị, xoay ảnh xuất,
 // khóa tỉ lệ, phím mũi tên, reset, xem trước ảnh xuất, thông tin chất lượng.
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { ZoomIn, ZoomOut, RotateCw, Check, X, Maximize2, Lock, Unlock, RefreshCcw, Eye } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCw, Check, X, Maximize2, Lock, Unlock, RefreshCcw, Eye, Crop } from "lucide-react";
+import { getInitialCropRect } from "./scanCoordinates.js";
 
 const MIN_CROP_SIZE = 40;
 const HANDLE_SIZE = 12;
@@ -52,35 +53,9 @@ export default function CropPreview({
     img.onload = () => {
       setImageSize({ width: img.width, height: img.height });
 
-      // Calculate initial crop if not provided
-      if (!initialCrop) {
-        const padding = Math.min(img.width, img.height) * 0.1;
-        const c = {
-          x: padding,
-          y: padding,
-          w: img.width - padding * 2,
-          h: img.height - padding * 2
-        };
-        setCrop(c);
-        initialCropRef.current = { ...c };
-      } else {
-        // Convert container coordinates to image coordinates if needed
-        // If the crop is already in image coordinates (has srcRect property), use it directly
-        // Otherwise, assume it's in container coordinates and needs conversion
-        let c;
-        if (initialCrop.srcRect) {
-          c = {
-            x: initialCrop.srcRect.sx,
-            y: initialCrop.srcRect.sy,
-            w: initialCrop.srcRect.sw,
-            h: initialCrop.srcRect.sh
-          };
-        } else {
-          c = { ...initialCrop };
-        }
-        setCrop(c);
-        initialCropRef.current = { ...c };
-      }
+      const c = getInitialCropRect(img.width, img.height, initialCrop);
+      setCrop(c);
+      initialCropRef.current = { ...c };
     };
     img.src = dataUrl;
   }, [dataUrl, initialCrop]);
@@ -90,7 +65,7 @@ export default function CropPreview({
     const updateDisplaySize = () => {
       if (!containerRef.current || imageSize.width === 0) return;
 
-      const containerWidth = Math.max(280, containerRef.current.clientWidth - 32);
+      const containerWidth = Math.max(1, containerRef.current.clientWidth - 24);
       // Desktop: tận dụng chiều cao lớn; mobile: gọn
       const isDesktop = window.innerWidth >= 900;
       const containerHeight = Math.min(isDesktop ? 620 : 420, window.innerHeight * (isDesktop ? 0.62 : 0.5));
@@ -374,45 +349,92 @@ export default function CropPreview({
   return (
     <div className="cropd-root">
       <style>{`
-        .cropd-root { display:flex; flex-direction:column; gap:12px; padding:16px; max-height:88vh; }
-        .cropd-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
-        .cropd-title { margin:0; font-size:1rem; font-weight:700; color:var(--text-dark); display:flex; align-items:center; gap:8px; }
-        .cropd-badge { font-size: 0.6563rem; font-weight:700; color:var(--color-action-strong, var(--color-action)); background:var(--color-action-soft, var(--primary-light)); border:1px solid var(--border-color); padding:2px 8px; border-radius:999px; }
-        .cropd-toolbar { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-        .cropd-tbtn { display:inline-flex; align-items:center; gap:5px; font-size: 0.7188rem; font-weight:600; padding:6px 10px; border-radius:8px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-mid); cursor:pointer; }
-        .cropd-tbtn:hover { border-color:var(--color-action, var(--primary)); color:var(--color-action, var(--primary)); }
-        .cropd-tbtn.on { background:var(--color-action-soft, #eff6ff); border-color:var(--color-action, #2d73ff); color:var(--color-action-strong, #1d4ed8); }
-        .cropd-tbtn.primary { background:var(--color-action, var(--primary)); border-color:var(--color-action, var(--primary)); color:#fff; }
+        .cropd-root { display:flex; flex-direction:column; gap:14px; padding:20px; max-height:92dvh; color:var(--text-dark); }
+        .cropd-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid var(--border-color); }
+        .cropd-title { min-width:0; margin:0; font-size:1rem; font-weight:750; color:var(--text-dark); display:flex; align-items:center; gap:9px; }
+        .cropd-title-icon { display:grid; place-items:center; width:32px; height:32px; flex:none; color:var(--color-action, var(--primary)); background:color-mix(in srgb, var(--color-action, var(--primary)) 12%, var(--surface)); border-radius:10px; }
+        .cropd-title-copy { display:grid; gap:2px; }
+        .cropd-subtitle { color:var(--text-muted, var(--text-mid)); font-size:.72rem; font-weight:500; }
+        .cropd-badge { flex:none; font-size:.68rem; font-weight:650; color:var(--text-mid); background:var(--surface-soft); border:1px solid var(--border-color); padding:5px 9px; border-radius:8px; }
+        .cropd-toolbar { display:flex; gap:5px; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
+        .cropd-tbtn { min-height:34px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font:inherit; font-size:.72rem; font-weight:650; padding:6px 9px; border-radius:8px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-mid); cursor:pointer; transition:background .15s ease, border-color .15s ease, color .15s ease; }
+        .cropd-tbtn:hover:not(:disabled) { border-color:var(--color-action, var(--primary)); color:var(--color-action, var(--primary)); }
+        .cropd-tbtn:disabled { opacity:.55; cursor:wait; }
+        .cropd-tbtn.on { background:color-mix(in srgb, var(--color-action, var(--primary)) 12%, var(--surface)); border-color:var(--color-action, var(--primary)); color:var(--color-action, var(--primary)); }
         .cropd-main { display:flex; flex-direction:column; gap:12px; min-height:0; }
-        @media (min-width: 900px) {
-          .cropd-main { flex-direction:row; align-items:stretch; }
-          .cropd-canvas-wrap { flex:1; min-width:0; }
-          .cropd-side { width:300px; flex-shrink:0; max-height:64vh; overflow:auto; }
-        }
-        .cropd-canvas-wrap { background:#0f172a; border-radius:12px; padding:12px; overflow:auto; min-height:320px; max-height:64vh; position:relative; }
-        .cropd-side { display:flex; flex-direction:column; gap:10px; }
-        .cropd-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; }
-        .cropd-card h5 { margin:0 0 6px; font-size: 0.75rem; color:#0f172a; }
+        .cropd-canvas-wrap { display:flex; align-items:center; justify-content:center; background-color:#101827; background-image:radial-gradient(rgba(255,255,255,.075) .7px, transparent .7px); background-size:16px 16px; border:1px solid rgba(148,163,184,.18); border-radius:12px; padding:12px; overflow:auto; min-height:260px; max-height:58dvh; position:relative; }
+        .cropd-stage { position:relative; flex:none; margin:auto; user-select:none; outline:none; }
+        .cropd-stage:focus-visible { box-shadow:0 0 0 3px color-mix(in srgb, var(--color-action, var(--primary)) 55%, transparent); }
+        .cropd-image { width:100%; height:100%; object-fit:contain; display:block; border-radius:4px; }
+        .cropd-selection { position:absolute; border:2px solid var(--color-action, #2d73ff); background:rgba(45,115,255,.1); box-shadow:0 0 0 9999px rgba(0,0,0,.52); pointer-events:none; border-radius:4px; }
+        .cropd-handle { position:absolute; width:${HANDLE_SIZE}px; height:${HANDLE_SIZE}px; background:#fff; border:2px solid var(--color-action, #2d73ff); border-radius:4px; pointer-events:auto; }
+        .cropd-handle--tl { left:-${HANDLE_SIZE / 2}px; top:-${HANDLE_SIZE / 2}px; cursor:nwse-resize; }
+        .cropd-handle--tr { right:-${HANDLE_SIZE / 2}px; top:-${HANDLE_SIZE / 2}px; cursor:nesw-resize; }
+        .cropd-handle--bl { left:-${HANDLE_SIZE / 2}px; bottom:-${HANDLE_SIZE / 2}px; cursor:nesw-resize; }
+        .cropd-handle--br { right:-${HANDLE_SIZE / 2}px; bottom:-${HANDLE_SIZE / 2}px; cursor:nwse-resize; }
+        .cropd-selection-label { position:absolute; left:50%; top:-25px; transform:translateX(-50%); background:#101827; color:#fff; font-size:.65rem; font-weight:700; padding:4px 8px; border:1px solid rgba(255,255,255,.16); border-radius:7px; white-space:nowrap; }
+        .cropd-side { display:flex; flex-direction:column; gap:10px; min-width:0; }
+        .cropd-card { background:var(--surface-soft); border:1px solid var(--border-color); border-radius:10px; padding:12px; }
+        .cropd-card h5 { margin:0 0 8px; font-size:.75rem; font-weight:700; color:var(--text-dark); display:flex; align-items:center; gap:6px; }
         .cropd-row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-        .cropd-chip { font-size: 0.6875rem; padding:4px 9px; border-radius:999px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; font-weight:700; color:#475569; }
+        .cropd-chip { min-height:30px; font:inherit; font-size:.68rem; padding:4px 9px; border-radius:7px; border:1px solid var(--border-color); background:var(--surface); cursor:pointer; font-weight:650; color:var(--text-mid); transition:all .15s ease; }
+        .cropd-chip:hover { border-color:var(--color-action, var(--primary)); }
         .cropd-chip.on { background:var(--color-action, #2d73ff); border-color:var(--color-action, #2d73ff); color:#fff; }
-        .cropd-meta { font-size: 0.7188rem; color:#475569; line-height:1.6; }
-        .cropd-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; font-size: 0.75rem; color:#64748b; }
-        .cropd-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
-        .cropd-btn { display:inline-flex; align-items:center; gap:6px; font-size: 0.8125rem; font-weight:800; padding:9px 16px; border-radius:10px; border:1px solid #e2e8f0; background:#fff; cursor:pointer; }
-        .cropd-btn.primary { background:var(--color-action, #2d73ff); border-color:var(--color-action, #2d73ff); color:#fff; }
+        .cropd-meta { font-size:.7rem; color:var(--text-muted, var(--text-mid)); line-height:1.55; }
+        .cropd-quality { display:flex; align-items:center; gap:7px; margin-top:8px; padding:7px 9px; color:var(--quality-color); background:color-mix(in srgb, var(--quality-color) 9%, var(--surface)); border-radius:7px; font-size:.68rem; font-weight:700; }
+        .cropd-quality-dot { width:7px; height:7px; flex:none; border-radius:50%; background:currentColor; }
+        .cropd-export-preview { margin-top:9px; border:1px solid var(--border-color); border-radius:8px; overflow:hidden; background:#101827; }
+        .cropd-export-preview img { width:100%; display:block; max-height:180px; object-fit:contain; }
+        .cropd-export-preview p { margin:0; padding:7px 9px; }
+        .cropd-foot { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:12px; border-top:1px solid var(--border-color); }
+        .cropd-foot-note { display:grid; gap:3px; font-size:.72rem; color:var(--text-mid); }
+        .cropd-foot-note small { color:var(--text-muted, var(--text-mid)); font-size:.67rem; }
+        .cropd-actions { display:flex; gap:8px; justify-content:flex-end; flex:none; }
+        .cropd-btn { min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:7px; font:inherit; font-size:.75rem; font-weight:700; padding:8px 13px; border-radius:9px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-mid); cursor:pointer; transition:all .15s ease; }
+        .cropd-btn:hover { border-color:var(--text-muted, var(--text-mid)); color:var(--text-dark); }
+        .cropd-btn.primary { background:var(--color-action, #2d73ff); border-color:var(--color-action, #2d73ff); color:#fff; box-shadow:0 3px 10px color-mix(in srgb, var(--color-action, #2d73ff) 22%, transparent); }
+        .cropd-btn.primary:hover { filter:brightness(1.06); }
+        @media (min-width: 900px) {
+          .cropd-main { flex:1; flex-direction:row; align-items:stretch; overflow:hidden; }
+          .cropd-canvas-wrap { flex:1; min-width:0; min-height:320px; max-height:62dvh; }
+          .cropd-side { width:260px; flex:none; max-height:62dvh; overflow:auto; }
+        }
+        @media (max-width: 899px) {
+          .cropd-root { overflow:auto; }
+          .cropd-head { align-items:flex-start; flex-direction:column; }
+          .cropd-toolbar { justify-content:flex-start; }
+          .cropd-canvas-wrap { min-height:240px; max-height:46dvh; }
+          .cropd-side { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+        }
+        @media (max-width: 520px) {
+          .cropd-root { gap:10px; padding:14px; }
+          .cropd-badge { display:none; }
+          .cropd-tbtn { min-height:32px; padding:5px 7px; }
+          .cropd-foot { align-items:stretch; flex-direction:column; }
+          .cropd-actions { display:grid; grid-template-columns:1fr 1.35fr; }
+          .cropd-btn { padding-inline:8px; }
+        }
+        @media (max-height: 700px) and (min-width: 900px) {
+          .cropd-canvas-wrap, .cropd-side { max-height:52dvh; }
+          .cropd-canvas-wrap { min-height:220px; }
+        }
       `}</style>
 
       <div className="cropd-head">
         <h4 className="cropd-title">
-          Điều chỉnh vùng crop
-          <span className="cropd-badge">Desktop · {Math.round(displaySize.width)}×{Math.round(displaySize.height)} hiển thị</span>
+          <span className="cropd-title-icon"><Crop size={17} /></span>
+          <span className="cropd-title-copy">
+            Chỉnh vùng ảnh
+            <span className="cropd-subtitle">Kéo khung chọn để lấy đúng nội dung cần dùng</span>
+          </span>
+          <span className="cropd-badge">Ảnh gốc · {imageSize.width} × {imageSize.height}px</span>
         </h4>
         <div className="cropd-toolbar" role="toolbar" aria-label="Công cụ crop">
-          <button className="cropd-tbtn" onClick={() => setZoom((z) => clamp(Math.round((z - 0.25) * 100) / 100, 0.5, 3))} title="Thu nhỏ hiển thị"><ZoomOut size={14} /> {Math.round(zoom * 100)}%</button>
-          <button className="cropd-tbtn" onClick={() => setZoom((z) => clamp(Math.round((z + 0.25) * 100) / 100, 0.5, 3))} title="Phóng to hiển thị"><ZoomIn size={14} /></button>
+          <button className="cropd-tbtn" onClick={() => setZoom((z) => clamp(Math.round((z - 0.25) * 100) / 100, 0.5, 3))} title="Thu nhỏ hiển thị" aria-label="Thu nhỏ"><ZoomOut size={14} /></button>
+          <span className="cropd-badge">{Math.round(zoom * 100)}%</span>
+          <button className="cropd-tbtn" onClick={() => setZoom((z) => clamp(Math.round((z + 0.25) * 100) / 100, 0.5, 3))} title="Phóng to hiển thị" aria-label="Phóng to"><ZoomIn size={14} /></button>
           <button className="cropd-tbtn" onClick={() => setZoom(1)} title="Vừa khung"><Maximize2 size={14} /> Vừa khung</button>
-          <button className="cropd-tbtn" onClick={() => setRotation((r) => (r + 90) % 360)} title="Xoay ảnh xuất 90° (áp lúc xác nhận)"><RotateCw size={14} /> Xoay {rotation}°</button>
+          <button className={`cropd-tbtn ${rotation ? "on" : ""}`} onClick={() => setRotation((r) => (r + 90) % 360)} title="Xoay ảnh xuất 90° (áp lúc xác nhận)"><RotateCw size={14} /> {rotation}°</button>
           <button className="cropd-tbtn" onClick={handleReset} title="Hoàn tác về vùng ban đầu"><RefreshCcw size={14} /> Đặt lại</button>
         </div>
       </div>
@@ -424,15 +446,12 @@ export default function CropPreview({
         >
           <div
             ref={imageContainerRef}
+            className="cropd-stage"
             style={{
-              position: "relative",
               width: displaySize.width,
               height: displaySize.height,
-              margin: "0 auto",
               cursor: mode === "move" ? "move" : mode && mode.startsWith("resize") ?
                 (mode.includes("tl") || mode.includes("br") ? "nwse-resize" : "nesw-resize") : "default",
-              userSelect: "none",
-              outline: "none",
             }}
             tabIndex={0}
             role="application"
@@ -446,49 +465,23 @@ export default function CropPreview({
               ref={imageRef}
               src={dataUrl}
               alt="Preview"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                display: "block",
-                borderRadius: 6,
-              }}
+              className="cropd-image"
               draggable={false}
             />
 
             {/* Crop overlay — giữ nguyên cơ chế */}
             <div
-              style={{
-                position: "absolute",
-                ...cropStyle,
-                border: "2px solid #2d73ff",
-                background: "rgba(45,115,255,0.1)",
-                boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
-                pointerEvents: "none",
-                borderRadius: 4,
-              }}
+              className="cropd-selection"
+              style={{ ...cropStyle }}
             >
               {/* Corner handles */}
               {["tl","tr","bl","br"].map((k) => (
                 <div
                   key={k}
-                  style={{
-                    position: "absolute",
-                    width: HANDLE_SIZE,
-                    height: HANDLE_SIZE,
-                    background: "#fff",
-                    border: "2px solid #2d73ff",
-                    borderRadius: 3,
-                    left: k.includes("l") ? -HANDLE_SIZE/2 : undefined,
-                    right: k.includes("r") ? -HANDLE_SIZE/2 : undefined,
-                    top: k.includes("t") ? -HANDLE_SIZE/2 : undefined,
-                    bottom: k.includes("b") ? -HANDLE_SIZE/2 : undefined,
-                    cursor: k === "tl" || k === "br" ? "nwse-resize" : "nesw-resize",
-                    pointerEvents: "auto"
-                  }}
+                  className={`cropd-handle cropd-handle--${k}`}
                 />
               ))}
-              <span style={{ position:"absolute", left:"50%", top:-24, transform:"translateX(-50%)", background:"#0f172a", color:"#fff", fontSize: "0.6563rem", fontWeight:800, padding:"3px 8px", borderRadius:999, whiteSpace:"nowrap" }}>
+              <span className="cropd-selection-label">
                 {quality.w}×{quality.h} · {pct}% ảnh
               </span>
             </div>
@@ -497,7 +490,7 @@ export default function CropPreview({
 
         <aside className="cropd-side" aria-label="Tùy chọn crop">
           <div className="cropd-card">
-            <h5><Lock size={12} style={{ display:"inline", verticalAlign:-1 }} /> Khóa tỉ lệ</h5>
+            <h5><Lock size={13} /> Tỉ lệ khung</h5>
             <div className="cropd-row" role="radiogroup" aria-label="Tỉ lệ khung">
               {RATIOS.map((r) => (
                 <button
@@ -511,8 +504,8 @@ export default function CropPreview({
                 >{r.label}</button>
               ))}
             </div>
-            <div className="cropd-meta" style={{ marginTop: 6 }}>
-              {activeRatio ? "Đang khóa tỉ lệ — kéo góc để giữ đúng khung." : "Tự do — kéo 4 góc thoải mái."} Phím ←↑↓→ tinh chỉnh 1px (Shift = 10px).
+            <div className="cropd-meta" style={{ marginTop: 7 }}>
+              {activeRatio ? "Đã khóa tỉ lệ khung hình." : "Tự do điều chỉnh theo nội dung."} Dùng phím mũi tên để tinh chỉnh.
             </div>
           </div>
 
@@ -522,38 +515,43 @@ export default function CropPreview({
               Kích thước xuất: <strong>{quality.w} × {quality.h} px</strong> (~{quality.mp} MP)<br />
               Độ phủ: <strong>{pct}%</strong> ảnh gốc ({imageSize.width}×{imageSize.height})<br />
               Xoay lúc xuất: <strong>{rotation}°</strong><br />
-              <span style={{ color: quality.color, fontWeight: 800 }}>● {quality.label}</span>
+              <div className="cropd-quality" style={{ "--quality-color": quality.color }}>
+                <span className="cropd-quality-dot" />
+                {quality.label}
+              </div>
             </div>
-            <div className="cropd-row" style={{ marginTop: 8 }}>
+            <div className="cropd-row" style={{ marginTop: 9 }}>
               <button className="cropd-tbtn" onClick={handleFitWidth} title="Mở rộng full chiều ngang"><Maximize2 size={13} /> Full ngang</button>
               <button className={`cropd-tbtn ${showExportPreview ? "on" : ""}`} onClick={handlePreviewExport} disabled={exporting} title="Xem trước ảnh sẽ xuất">
                 <Eye size={13} /> {exporting ? "Đang dựng…" : "Xem ảnh xuất"}
               </button>
             </div>
             {showExportPreview && exportUrl && (
-              <div style={{ marginTop: 8, border:"1px solid #e2e8f0", borderRadius: 8, overflow:"hidden", background:"#fff" }}>
-                <img src={exportUrl} alt="Ảnh xuất xem trước" style={{ width:"100%", display:"block", maxHeight:220, objectFit:"contain", background:"#0f172a" }} />
-                <div className="cropd-meta" style={{ padding:"6px 8px" }}>Xem trước đúng ảnh AI sẽ đọc{rotation ? ` (đã xoay ${rotation}°)` : ""} — giữ nguyên câu hỏi/bài tập trong vùng.</div>
+              <div className="cropd-export-preview">
+                <img src={exportUrl} alt="Ảnh xuất xem trước" />
+                <p className="cropd-meta">Ảnh AI sẽ đọc{rotation ? ` · đã xoay ${rotation}°` : ""}.</p>
               </div>
             )}
           </div>
 
           <div className="cropd-card">
-            <h5><Unlock size={12} style={{ display:"inline", verticalAlign:-1 }} /> Cách dùng</h5>
+            <h5><Unlock size={13} /> Thao tác nhanh</h5>
             <div className="cropd-meta">
-              • Kéo góc để chỉnh · kéo giữa để di chuyển<br />
-              • Double-check: vùng phải ôm trọn câu hỏi/bài tập cần giữ nguyên<br />
-              • ESC để hủy · Enter để xác nhận
+              Kéo góc để đổi kích thước · kéo giữa để di chuyển<br />
+              Phím mũi tên tinh chỉnh vị trí · Shift để di chuyển nhanh hơn
             </div>
           </div>
         </aside>
       </div>
 
       <div className="cropd-foot">
-        <span>Kích thước: {Math.round(crop.w)} × {Math.round(crop.h)} px · Zoom hiển thị {Math.round(zoom * 100)}% · Kéo góc để chỉnh · Kéo giữa để di chuyển · ESC để hủy</span>
+        <div className="cropd-foot-note">
+          <span><strong>{quality.w} × {quality.h}px</strong> · {quality.mp} MP · {pct}% ảnh gốc</span>
+          <small>Kéo khung để di chuyển, kéo góc để thay đổi kích thước · Esc để hủy</small>
+        </div>
         <div className="cropd-actions">
           <button className="cropd-btn" onClick={onCancel}><X size={16} /> Hủy</button>
-          <button className="cropd-btn primary" onClick={handleConfirm}><Check size={16} /> Xác nhận vùng này</button>
+          <button className="cropd-btn primary" onClick={handleConfirm}><Check size={16} /> Dùng vùng này</button>
         </div>
       </div>
     </div>

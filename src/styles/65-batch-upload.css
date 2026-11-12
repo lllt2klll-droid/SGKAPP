@@ -1,0 +1,316 @@
+/* ============================================================
+   Batch upload dialog — thêm nhiều sách cùng lúc
+   ============================================================ */
+.batch-upload-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.batch-upload-modal {
+  width: min(780px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.batch-upload-header {
+  align-items: flex-start;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.75rem;
+}
+
+.batch-upload-heading h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.batch-upload-heading p {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.batch-upload-body {
+  padding: 0.65rem 0.1rem 0.4rem;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.batch-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.batch-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  text-align: left;
+  padding: 0.55rem 0.6rem;
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-dark);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.batch-mode-option svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--primary);
+}
+
+.batch-mode-option strong {
+  display: block;
+  font-size: 0.78rem;
+}
+
+.batch-mode-option small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.batch-mode-option.active {
+  border-color: var(--primary);
+  background: var(--primary-light, #eff6ff);
+}
+
+.batch-mode-option:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.batch-upload-note {
+  margin: 0 0 0.55rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: var(--warning-soft, #fef3c7);
+  color: var(--warning-deep, #92400e);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.batch-upload-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.batch-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+.batch-upload-row.status-done {
+  border-color: var(--success, #16a34a);
+  background: var(--success-soft, #dcfce7);
+}
+
+.batch-upload-row.status-error,
+.batch-upload-row.status-invalid {
+  border-color: var(--red-action, #dc2626);
+  background: var(--red-soft, rgba(220, 38, 38, 0.08));
+}
+
+.batch-upload-icon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--pen-blue-soft, #e0ecff);
+  color: var(--primary);
+}
+
+.batch-upload-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.batch-upload-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-upload-size {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.batch-upload-title-input {
+  margin-top: 3px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.74rem;
+}
+
+.batch-upload-subtitle {
+  margin-top: 1px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-upload-error {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--red-action-deep, #b91c1c);
+}
+
+.batch-upload-status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  background: var(--surface-soft, #f3f4f6);
+  color: var(--text-muted);
+}
+
+.batch-upload-status.status-uploading {
+  background: var(--pen-blue-soft, #e0ecff);
+  color: var(--primary);
+}
+
+.batch-upload-status.status-done {
+  background: var(--success-soft, #dcfce7);
+  color: var(--success-deep, #15803d);
+}
+
+.batch-upload-status.status-error,
+.batch-upload-status.status-invalid {
+  background: var(--red-soft, rgba(220, 38, 38, 0.1));
+  color: var(--red-action-deep, #b91c1c);
+}
+
+.batch-upload-remove {
+  flex-shrink: 0;
+}
+
+.batch-spin {
+  animation: batch-spin 0.9s linear infinite;
+}
+
+@keyframes batch-spin {
+  to { transform: rotate(360deg); }
+}
+
+.batch-upload-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.batch-upload-progress {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-soft, #e5e7eb);
+  overflow: hidden;
+}
+
+.batch-upload-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 0.2s ease;
+}
+
+.batch-upload-progress-text {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.batch-upload-summary {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.batch-upload-summary.ok {
+  background: var(--success-soft, #dcfce7);
+  color: var(--success-deep, #15803d);
+}
+
+.batch-upload-summary.has-error {
+  background: var(--red-soft, rgba(220, 38, 38, 0.08));
+  color: var(--red-action-deep, #b91c1c);
+}
+
+.batch-upload-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 640px) {
+  .batch-mode {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-upload-row {
+    flex-wrap: wrap;
+  }
+
+  .batch-upload-list {
+    max-height: 42vh;
+  }
+
+  .batch-upload-footer {
+    flex-wrap: wrap;
+  }
+}

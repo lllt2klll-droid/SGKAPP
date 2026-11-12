@@ -74,16 +74,16 @@ export const CONN_OPTS = [
 ];
 
 export const LAYOUT_OPTS = [
-  { id: "tree-tb", label: "Top → Bottom" }, { id: "tree-lr", label: "Left → Right" },
-  { id: "tree-rl", label: "Right → Left" }, { id: "tree-bt", label: "Bottom → Top" },
-  { id: "radial", label: "Radial" },
+  { id: "tree-tb", label: "Cây: Trên xuống dưới" }, { id: "tree-lr", label: "Cây: Trái sang phải" },
+  { id: "tree-rl", label: "Cây: Phải sang trái" }, { id: "tree-bt", label: "Cây: Dưới lên trên" },
+  { id: "radial", label: "Tỏa tròn" }, { id: "grid", label: "Lưới đều" },
 ];
 
 // Tour 30 giây cho người mới (mở tự động 1 lần khi bảng trống)
 export const TOUR_STEPS = [
   { icon: "▣", title: "1. Thêm khối", desc: "Bấm công cụ ở dock bên phải (Chữ / Hình / Ghi chú / Mindmap) rồi bấm lên bảng. Kéo-thả file ảnh vào cũng được." },
   { icon: "→", title: "2. Nối các khối", desc: "Bôi đen 1 khối → kéo từ chấm neo xanh ở 4 cạnh sang khối khác. Double-click lên đường nối để ghi nhãn." },
-  { icon: "✦", title: "3. AI vẽ sơ đồ", desc: "Nút ＋ ở dock → AI tạo sơ đồ: dán văn bản, xem trước, sửa nhãn rồi mới đưa lên bảng." },
+  { icon: "✦", title: "3. AI vẽ và sắp xếp", desc: "Nút ＋ ở dock → AI tạo sơ đồ mới; Tùy chọn canvas → Sắp xếp bằng AI để bố trí lại các khối hiện có." },
   { icon: "🗺", title: "4. Đi lại trên bảng", desc: "Kéo bản đồ thu nhỏ góc trái-dưới để di chuyển. Phím F = vừa màn hình, Shift+F = về khối đang chọn." },
   { icon: "⌨", title: "5. Phím tắt", desc: "Alt+↑↓←→ = tạo nhánh nhanh từ khối đang chọn. Tab = chuyển khối. Enter/F2 = sửa chữ. Ctrl+Z/Y = hoàn tác/làm lại. +/- = zoom." },
 ];

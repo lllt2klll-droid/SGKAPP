@@ -1,36 +1,32 @@
-// ── Dữ liệu: sao lưu 1-file, khôi phục, xóa sạch, thống kê ───────────
-// Khớp toàn app: header wt-like + card 14px + tokens + 3D buttons
-import React, { useEffect, useState } from "react";
-import { appEvents, AppEvents } from "../core/appEvents.js";
-import { STORAGE_KEYS } from "../core/storageKeys.js";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  DatabaseBackup,
-  Upload,
-  Trash2,
-  ShieldCheck,
-  HardDrive,
-  RefreshCw,
-  Eye,
   AlertTriangle,
-  X,
-  Check,
   BookMarked,
+  Check,
+  DatabaseBackup,
   Download,
-  Sparkles,
-  Info,
   FileText,
+  HardDrive,
   RotateCcw,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  X,
 } from "lucide-react";
+import { appEvents, AppEvents } from "../core/appEvents.js";
+import { safeGetJSON, safeGetString, safeSetString, safeRemove, listKeys } from "../safeStorage.js";
+import { isCacheKey } from "../core/storageKeys.js";
+import indexedDBService, { STORES } from "../data/indexedDB.js";
 import {
   exportBackup,
   importBackup,
   parseBackupPreview,
   wipeAppData,
-  isBackupKey,
-  isCacheKey,
+  isBackupSnapshotKey,
 } from "../data/storage.js";
 import { getMergedTocBooks, getCustomTocBooks, upsertTocBook, deleteCustomTocBook } from "../data/tocData.js";
-import { getPlans as getKhbdPlans, savePlan as saveKhbdPlan, clearLegacyData, hasLegacyData } from "../khbd/planModel.js";
+import { parseTocExcel, generateTocTemplateExcel, exportTocToExcel } from "../data/tocExcel.js";
+import { savePlan as saveKhbdPlan } from "../khbd/planModel.js";
 import { restoreQuestion, restoreActivity, restoreWorksheet } from "../data/teachingDB.js";
 import { restoreIdea } from "../data/personalDB.js";
 import { restoreVocabEntries } from "../data/userdata.js";
@@ -47,222 +43,96 @@ import {
 } from "../data/trashStore.js";
 import { purgeExpiredTrashNow, hardDeleteBook } from "../data/trashPurge.js";
 import { getAutoBackupMeta, getAutoBackupPayload, deleteAutoBackup } from "../services/autoBackup.js";
-import { parseTocExcel, generateTocTemplateExcel, exportTocToExcel } from "../data/tocExcel.js";
-import DataTable from "./DataTable.jsx";
-import FileDropzone from "../components/FileDropzone.jsx";
-import aiDataStorage from "../ai/aiDataStorage.js";
 import { checkOrphanData, getStorageStats } from "../services/dataIntegrity.js";
-import { runStorageHealth, repairStorageHealth } from "../core/storageHealth.js";
-import { calcRenderScale, calcViewportSize } from "../reader/pdfRenderer.js";
-import { APP_COPYRIGHT, teacherCopy } from "../ai/appPersona.js";
-import { YCCD, MACHS } from "../ai/ctgpt.js";
-import { safeGetJSON, safeGetString, safeRemove, safeSetString, listKeys } from "../safeStorage.js";
+import { runStorageHealth } from "../core/storageHealth.js";
+import FileDropzone from "../components/FileDropzone.jsx";
 import { uiMessage } from "../core/errors.js";
 
+const IMPORT_MAX_BYTES = 200 * 1024 * 1024;
+
+function formatBytes(bytes = 0) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export default function DataToolsView() {
-  const [, setTick] = useState(0);
-  const refresh = () => setTick((t) => t + 1);
-  useEffect(() => { const h = () => { setTick(t=>t+1); setTrash(listTrash()); const m = getAutoBackupMeta(); setAutoSnaps(m.snapshots); setAutoAt(m.lastSuccess); }; window.addEventListener("sgk:data-updated", h); return () => window.removeEventListener("sgk:data-updated", h); }, []);
-  const [msg, setMsg] = useState(null);
-  const [progress, setProgress] = useState(0);
-  const [progressScope, setProgressScope] = useState(null);
-  const [importing, setImporting] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [lastBackup, setLastBackup] = useState(() => Number(safeGetString("sgk_last_backup", "0")) || 0);
+  const [busy, setBusy] = useState("");
   const [preview, setPreview] = useState(null);
-  const [pendingText, setPendingText] = useState(null);
-  const [confirmChecked, setConfirmChecked] = useState(false);
-  const [tocBooks, setTocBooks] = useState(() => getMergedTocBooks());
-  const [tocMsg, setTocMsg] = useState(null);
-  const [selectedBookKey, setSelectedBookKey] = useState("");
+  const [pendingText, setPendingText] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
   const [health, setHealth] = useState(null);
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [libStats, setLibStats] = useState(null);
-  const restoreSectionRef = React.useRef(null);
-  const previewRef = React.useRef(null);
-  const notify = (scope, kind, text) => setMsg({ scope, kind, text });
-  useEffect(() => {
-    if (preview) previewRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [preview]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch("/api/health");
-        if (!r.ok) return;
-        const j = await r.json();
-        if (!cancelled) setLibStats(j);
-      } catch {}
-    })();
-    return () => { cancelled = true; };
-  }, []);
-  const [lastBackup, setLastBackup] = useState(() => {
-    try {
-      const v = safeGetString("sgk_last_backup", null);
-      return v ? Number(v) : null;
-    } catch (e) {
-      console.warn("[DataToolsView] safeGetString failed for sgk_last_backup", e);
-      return null;
-    }
-  });
-
-  // A2 • Thùng rác 30 ngày
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [tocBooks, setTocBooks] = useState(() => getMergedTocBooks());
+  const [tocMessage, setTocMessage] = useState(null);
+  const [selectedBookKey, setSelectedBookKey] = useState("");
   const [trash, setTrash] = useState(() => listTrash());
-  // A3 • Bản sao lưu tự động (IndexedDB riêng)
-  const [autoSnaps, setAutoSnaps] = useState(() => getAutoBackupMeta().snapshots);
-  const [autoAt, setAutoAt] = useState(() => getAutoBackupMeta().lastSuccess);
+  const [legacyBackups, setLegacyBackups] = useState(() => getAutoBackupMeta().snapshots);
+  const [wipeArmed, setWipeArmed] = useState(false);
 
-  const refreshTrash = () => {
-    setTrash(listTrash());
-    const m = getAutoBackupMeta();
-    setAutoSnaps(m.snapshots);
-    setAutoAt(m.lastSuccess);
-  };
+  useEffect(() => {
+    const refresh = () => {
+      setTrash(listTrash());
+      setLegacyBackups(getAutoBackupMeta().snapshots);
+    };
+    const off = appEvents.on(AppEvents.DATA_UPDATED, refresh);
+    return () => off();
+  }, []);
 
-  const restoreTrashItem = (item) => {
-    const taken = takeFromTrash(item.id);
-    if (!taken) { notify("trash", "err", "Không khôi phục được mục này."); return; }
-    try {
-      if (taken.type === TRASH_TYPE.PLAN) saveKhbdPlan(taken.payload);
-      else if (taken.type === TRASH_TYPE.QUESTION) restoreQuestion(taken.payload);
-      else if (taken.type === TRASH_TYPE.VOCAB) {
-        // payload: { entries: [...] } hoặc 1 entry đơn lẻ
-        const entries = Array.isArray(taken.payload?.entries)
-          ? taken.payload.entries
-          : Array.isArray(taken.payload)
-            ? taken.payload
-            : taken.payload && taken.payload.id
-              ? [taken.payload]
-              : [];
-        restoreVocabEntries(entries);
-      }
-      else if (taken.type === TRASH_TYPE.ACTIVITY) restoreActivity(taken.payload);
-      else if (taken.type === TRASH_TYPE.WORKSHEET) restoreWorksheet(taken.payload);
-      else if (taken.type === TRASH_TYPE.IDEA) restoreIdea(taken.payload);
-      // Sách: file PDF chưa bị xóa — đưa ra khỏi thùng rác là App tự nạp lại thư viện
-    } catch (e) {
-      notify("trash", "err", `Khôi phục lỗi: ${e.message}`);
-      return;
-    }
-    refreshTrash();
-    notify("trash", "ok", `Đã khôi phục "${taken.label}".`);
-  };
+  useEffect(() => {
+    if (!wipeArmed) return undefined;
+    const timeout = setTimeout(() => setWipeArmed(false), 8000);
+    return () => clearTimeout(timeout);
+  }, [wipeArmed]);
 
-  const deleteTrashItemForever = async (item) => {
-    if (!window.confirm(`Xóa vĩnh viễn "${item.label}"? Không thể hoàn tác.`)) return;
-    removeFromTrash(item.id);
-    if (item.type === TRASH_TYPE.BOOK && item.meta?.filename) {
-      try { await hardDeleteBook(item.meta.filename); } catch {}
-    }
-    refreshTrash();
-    notify("trash", "ok", `Đã xóa vĩnh viễn "${item.label}".`);
-  };
+  const customTocBooks = useMemo(() => getCustomTocBooks(), [tocBooks]);
+  const tocItemCount = useMemo(
+    () => tocBooks.reduce((sum, book) => sum + (book.items?.length || 0), 0),
+    [tocBooks],
+  );
+  const storageStats = useMemo(() => getStorageStats(), [lastBackup, health]);
 
-  const purgeExpired = async () => {
-    try {
-      const r = await purgeExpiredTrashNow();
-      refreshTrash();
-      try { appEvents.emit(AppEvents.DATA_UPDATED, { source: "trash-purge" }); } catch {}
-      notify("trash", "ok", r.expired ? `Đã xóa vĩnh viễn ${r.expired} mục hết hạn (${r.purgedBooks} file sách).` : "Chưa có mục nào hết hạn 30 ngày.");
-    } catch (e) { notify("trash", "err", `Không dọn được: ${e.message}`); }
-  };
-
-  const emptyAllTrash = async () => {
-    const items = listTrash();
-    if (!items.length) return;
-    if (!window.confirm(`Xóa vĩnh viễn TOÀN BỘ ${items.length} mục trong thùng rác? Không thể hoàn tác.`)) return;
-    for (const it of items) {
-      if (it.type === TRASH_TYPE.BOOK && it.meta?.filename) { try { await hardDeleteBook(it.meta.filename); } catch {} }
-    }
-    emptyTrash();
-    refreshTrash();
-    try { appEvents.emit(AppEvents.DATA_UPDATED, { source: "trash-purge" }); } catch {}
-    notify("trash", "ok", `Đã xóa vĩnh viễn ${items.length} mục.`);
-  };
-
-  const restoreAutoBackup = async (snap) => {
-    try {
-      const text = await getAutoBackupPayload(snap.id);
-      if (!text) { notify("restore", "err", "Không đọc được bản sao lưu tự động này."); return; }
-      const result = parseBackupPreview(text);
-      if (!result.valid) { notify("restore", "err", `Bản sao lưu hỏng: ${result.error}`); return; }
-      setPendingText(text);
-      setPreview(result.preview);
-      setConfirmChecked(false);
-      notify("restore", "ok", "Đã nạp bản sao lưu tự động. Kiểm tra nội dung bên dưới rồi xác nhận khôi phục.");
-      restoreSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } catch (e) { notify("restore", "err", `Không đọc được bản sao lưu: ${e.message}`); }
-  };
-
-
-  // statistics over localStorage that belongs to this app
-  const stats = (() => {
-    const groups = {};
-    let totalBytes = 0,
-      totalKeys = 0,
-      cacheKeys = 0,
-      cacheBytes = 0;
-    for (const key of listKeys()) {
-      if (!key) continue;
-      const bytes = (safeGetString(key, "") || "").length;
-      if (isCacheKey(key)) {
-        cacheKeys++;
-        cacheBytes += bytes;
-        continue;
-      }
-      if (!isBackupKey(key)) continue;
-      const prefix = key.split("_")[0];
-      const group = key.startsWith("sgk_marks_")
-        ? "sgk_marks_"
-        : key.startsWith("notes_") ||
-            key.startsWith("studynotes_") ||
-            key.startsWith("glossary_history")
-          ? "ghi chú/ghi sổ"
-          : prefix;
-      groups[group] = groups[group] || { keys: 0, bytes: 0 };
-      groups[group].keys++;
-      groups[group].bytes += bytes;
-      totalBytes += bytes;
-      totalKeys++;
-    }
-    return { groups, totalKeys, totalBytes, cacheKeys, cacheBytes };
-  })();
+  const notify = (kind, text) => setMessage({ kind, text });
+  const refreshToc = () => setTocBooks(getMergedTocBooks());
 
   const doExport = async () => {
+    setBusy("backup");
     try {
       const result = await exportBackup();
-      const now = Date.now();
-      try {
-        const res = safeSetString("sgk_last_backup", String(now));
-        if (!res.ok) {
-          if (res.quota) console.warn("[safeStorage] Quota exceeded on sgk_last_backup", res);
-          else console.warn("[DataToolsView] safeSetString failed for sgk_last_backup", res);
-        }
-        setLastBackup(now);
-      } catch (e) { console.warn("[DataToolsView] save sgk_last_backup failed", e); }
-      try { appEvents.emit(AppEvents.DATA_UPDATED, { source: "backup-export" }); } catch (e) { console.warn("[DataToolsView] emit data-updated failed", e); }
-      const backupNote = !result.indexedDataAvailable
-        ? " Cảnh báo: IndexedDB không khả dụng nên file chỉ chứa dữ liệu localStorage."
+      const timestamp = Date.now();
+      const saved = safeSetString("sgk_last_backup", String(timestamp));
+      if (!saved.ok) {
+        console.warn("[DataToolsView] Could not store the last-backup timestamp", saved);
+      }
+      setLastBackup(timestamp);
+      appEvents.emit(AppEvents.DATA_UPDATED, { source: "backup-export" });
+      const warning = !result.indexedDataAvailable
+        ? " IndexedDB không khả dụng nên file có thể thiếu dữ liệu."
         : !result.indexedDataComplete
-          ? " Lưu ý: một số kho IndexedDB được chủ động bỏ qua."
+          ? " File chưa chứa đầy đủ dữ liệu IndexedDB."
           : "";
-      notify("backup", "ok", `Đã tải xuống file sao lưu (${result.total} mục: ${result.localCount} localStorage + ${result.indexedCount} IndexedDB).${backupNote}`);
-    } catch (err) {
-      notify("backup", "err", `Không xuất được file sao lưu: ${err.message}`);
+      notify("ok", `Đã tải file sao lưu gồm ${result.total} mục dữ liệu.${warning} Hãy lưu file ở nơi an toàn.`);
+    } catch (error) {
+      notify("err", `Không tạo được bản sao lưu: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    } finally {
+      setBusy("");
     }
   };
 
-  const IMPORT_MAX_BYTES = 200 * 1024 * 1024;
-  const doImport = (file) => {
+  const readBackupFile = (file) => {
     if (!file) return;
     setPreview(null);
-    setPendingText(null);
-    setConfirmChecked(false);
-    setMsg(null);
+    setPendingText("");
+    setConfirmed(false);
+    setMessage(null);
     if (file.size > IMPORT_MAX_BYTES) {
-      notify("restore", "err", `File quá lớn (${(file.size / 1048576).toFixed(0)}MB > 200MB). Hãy dùng file sao lưu nhỏ hơn.`);
+      notify("err", `File vượt quá giới hạn ${formatBytes(IMPORT_MAX_BYTES)}.`);
       return;
     }
     if (!/\.json$/i.test(file.name || "") && file.type !== "application/json") {
-      notify("restore", "err", "File sao lưu phải là .json (xuất từ nút Sao lưu).");
+      notify("err", "Hãy chọn file sao lưu định dạng .json.");
       return;
     }
     const reader = new FileReader();
@@ -270,748 +140,472 @@ export default function DataToolsView() {
       const text = String(reader.result || "");
       const result = parseBackupPreview(text);
       if (!result.valid) {
-        notify("restore", "err", `Không khôi phục được: ${result.error}`);
+        notify("err", `File sao lưu không hợp lệ: ${result.error}`);
         return;
       }
       setPendingText(text);
       setPreview(result.preview);
-      setConfirmChecked(false);
     };
-    reader.onerror = () =>
-      notify("restore", "err", "Không đọc được file.");
+    reader.onerror = () => notify("err", "Không đọc được file đã chọn.");
     reader.readAsText(file);
   };
 
-  const doConfirmImport = async () => {
-    if (!pendingText) return;
-    if (!confirmChecked) {
-      notify("restore", "err", "Vui lòng xác nhận sẽ ghi đè dữ liệu hiện tại.");
-      return;
-    }
-    setImporting(true);
-    setProgressScope("restore");
-    setProgress(10);
-    // Tiến trình thật theo giai đoạn (không còn 20→60→100 giả bằng timeout)
-    const tick = setInterval(() => {
-      setProgress((p) => (p < 90 ? p + 5 : p));
-    }, 400);
+  const confirmRestore = async () => {
+    if (!pendingText || !confirmed) return;
+    setBusy("restore");
     try {
-      const res = await importBackup(pendingText);
-      clearInterval(tick);
-      setProgress(95);
-      const indexedMsg =
-        res.indexedCount > 0 ? ` (${res.indexedCount} mục IndexedDB)` : "";
-      setPreview(null);
-      setPendingText(null);
-      // Xác minh thật: đối chiếu key trong backup với localStorage sau khôi phục
-      let verifyOk = false;
-      let verifyDetail = "";
-      try {
-        const payload = JSON.parse(pendingText);
-        const keys = Object.keys(payload?.data || {});
-        const missing = keys.filter((k) => {
-          try { return localStorage.getItem(k) == null; } catch { return true; }
-        });
-        verifyOk = missing.length === 0 && res.count === res.total;
-        verifyDetail = missing.length
-          ? `thiếu ${missing.length} key (${missing.slice(0, 3).join(", ")})`
-          : res.count !== res.total
-            ? `chỉ áp dụng ${res.count}/${res.total}`
-            : "đủ key";
-      } catch {
-        verifyOk = res.count > 0;
-        verifyDetail = "không đối chiếu được key";
-      }
-      setProgress(100);
-      notify("restore", verifyOk ? "ok" : "err", verifyOk
-        ? `Khôi phục xong: ${res.count}/${res.total} mục hợp lệ${indexedMsg}. Xác minh localStorage và IndexedDB: đạt.${res.indexedDataComplete ? "" : " Lưu ý: file này không chứa đầy đủ dữ liệu IndexedDB."} Ứng dụng sẽ tự tải lại…`
-        : `Khôi phục xong nhưng xác minh CẢNH BÁO (${verifyDetail}). Hãy kiểm tra dữ liệu trước khi tiếp tục.`);
-      if (!verifyOk) {
-        setImporting(false);
-        setProgressScope(null);
+      const result = await importBackup(pendingText);
+      const payload = JSON.parse(pendingText);
+      const missing = Object.keys(payload.data || {}).filter(
+        (key) => isBackupSnapshotKey(key) && localStorage.getItem(key) == null,
+      );
+      if (missing.length || result.count !== result.total) {
+        notify("err", `Đã khôi phục nhưng xác minh chưa hoàn tất (${missing.length} mục còn thiếu). Hãy kiểm tra dữ liệu trước khi tiếp tục.`);
         return;
       }
-      setTimeout(() => {
-        location.reload();
-      }, 900);
-    } catch (e) {
-      clearInterval(tick);
-      setImporting(false);
-      setProgress(0);
-      setProgressScope(null);
-      notify("restore", "err", `Không khôi phục được: ${uiMessage(e, "không rõ nguyên nhân")}`);
       setPreview(null);
+      setPendingText("");
+      setConfirmed(false);
+      notify("ok", "Khôi phục và xác minh xong. Ứng dụng sẽ tải lại.");
+      setTimeout(() => location.reload(), 900);
+    } catch (error) {
+      notify("err", `Không khôi phục được: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    } finally {
+      setBusy("");
     }
   };
 
-  const [wipeArmed, setWipeArmed] = useState(false);
-  useEffect(() => {
-    if (!wipeArmed) return;
-    const t = setTimeout(() => {
-      setWipeArmed(false);
-      setMsg((current) => current?.scope === "wipe" ? null : current);
-    }, 8000);
-    return () => clearTimeout(t);
-  }, [wipeArmed]);
+  const runUnifiedCheck = async () => {
+    setHealthBusy(true);
+    setHealth(null);
+    try {
+      const books = safeGetJSON("sgk_books", [], Array.isArray);
+      const [storage, orphans] = await Promise.all([
+        runStorageHealth({ books }),
+        checkOrphanData(books),
+      ]);
+      setHealth({ storage, orphans, stats: getStorageStats(), checkedAt: Date.now() });
+    } catch (error) {
+      notify("err", `Không kiểm tra được toàn bộ dữ liệu: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    } finally {
+      setHealthBusy(false);
+    }
+  };
+
+  const restoreLegacyBackup = async (snapshot) => {
+    try {
+      const text = await getAutoBackupPayload(snapshot.id);
+      if (!text) throw new Error("Không đọc được bản sao lưu cũ này.");
+      const result = parseBackupPreview(text);
+      if (!result.valid) throw new Error(result.error);
+      setPendingText(text);
+      setPreview(result.preview);
+      setConfirmed(false);
+      document.getElementById("data-restore")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      notify("err", `Không mở được bản sao lưu cũ: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    }
+  };
+
+  const restoreTrashItem = (item) => {
+    const taken = takeFromTrash(item.id);
+    if (!taken) {
+      notify("err", "Không khôi phục được mục này.");
+      return;
+    }
+    try {
+      if (taken.type === TRASH_TYPE.PLAN) saveKhbdPlan(taken.payload);
+      else if (taken.type === TRASH_TYPE.QUESTION) restoreQuestion(taken.payload);
+      else if (taken.type === TRASH_TYPE.VOCAB) {
+        const entries = Array.isArray(taken.payload?.entries)
+          ? taken.payload.entries
+          : Array.isArray(taken.payload)
+            ? taken.payload
+            : taken.payload?.id
+              ? [taken.payload]
+              : [];
+        restoreVocabEntries(entries);
+      } else if (taken.type === TRASH_TYPE.ACTIVITY) restoreActivity(taken.payload);
+      else if (taken.type === TRASH_TYPE.WORKSHEET) restoreWorksheet(taken.payload);
+      else if (taken.type === TRASH_TYPE.IDEA) restoreIdea(taken.payload);
+    } catch (error) {
+      notify("err", `Khôi phục lỗi: ${uiMessage(error, "không rõ nguyên nhân")}`);
+      return;
+    }
+    setTrash(listTrash());
+    notify("ok", `Đã khôi phục “${taken.label}”.`);
+  };
+
+  const deleteTrashItem = async (item) => {
+    if (!window.confirm(`Xóa vĩnh viễn “${item.label}”? Không thể hoàn tác.`)) return;
+    if (item.type === TRASH_TYPE.BOOK && item.meta?.filename) {
+      try {
+        await hardDeleteBook(item.meta.filename);
+      } catch (error) {
+        notify("err", `Không xóa được file sách: ${uiMessage(error, "không rõ nguyên nhân")}`);
+        return;
+      }
+    }
+    removeFromTrash(item.id);
+    setTrash(listTrash());
+    notify("ok", `Đã xóa vĩnh viễn “${item.label}”.`);
+  };
+
+  const emptyAllTrash = async () => {
+    if (!trash.length || !window.confirm(`Xóa vĩnh viễn ${trash.length} mục trong thùng rác?`)) return;
+    try {
+      for (const item of trash) {
+        if (item.type === TRASH_TYPE.BOOK && item.meta?.filename) await hardDeleteBook(item.meta.filename);
+      }
+      emptyTrash();
+      setTrash([]);
+      notify("ok", "Đã dọn thùng rác.");
+    } catch (error) {
+      setTrash(listTrash());
+      notify("err", `Không dọn hết được thùng rác: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    }
+  };
+
+  const purgeExpiredTrash = async () => {
+    try {
+      const result = await purgeExpiredTrashNow();
+      setTrash(listTrash());
+      notify("ok", result.expired
+        ? `Đã dọn ${result.expired} mục hết hạn.`
+        : "Không có mục nào hết hạn.");
+    } catch (error) {
+      notify("err", `Không dọn được mục hết hạn: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    }
+  };
+
+  const clearRebuildableCache = async () => {
+    if (!window.confirm("Xóa cache có thể dựng lại được? Dữ liệu cá nhân và file sách sẽ được giữ nguyên.")) return;
+    setBusy("cache");
+    try {
+      let removed = 0;
+      const failures = [];
+      for (const key of listKeys()) {
+        if (!isCacheKey(key)) continue;
+        const result = safeRemove(key);
+        if (result.ok) removed += 1;
+        else failures.push(key);
+      }
+      if (indexedDBService.constructor.isAvailable()) {
+        for (const store of [STORES.OCR, STORES.SEARCH_INDEX]) {
+          const cleared = await indexedDBService.clear(store);
+          if (cleared) removed += 1;
+          else failures.push(store);
+        }
+      }
+      if (failures.length) {
+        notify("err", `Đã dọn ${removed} mục cache; không dọn được ${failures.join(", ")}.`);
+      } else {
+        setHealth(null);
+        notify("ok", `Đã dọn cache có thể dựng lại (${removed} mục/kho).`);
+      }
+    } catch (error) {
+      notify("err", `Không dọn được cache: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const doWipe = async () => {
-    // Xóa toàn bộ: bấm 2 lần cách nhau <8s thay vì 1 confirm (tránh bấm nhầm),
-    // và bắt buộc đã sao lưu trước đó.
     if (!lastBackup) {
-      notify("wipe", "err", "Hãy xuất bản sao lưu thủ công trước khi xóa toàn bộ dữ liệu.");
+      notify("err", "Hãy tải file sao lưu trước khi xóa dữ liệu.");
       setWipeArmed(false);
       return;
     }
     if (!wipeArmed) {
       setWipeArmed(true);
-      notify("wipe", "err", "Bấm “Xóa toàn bộ dữ liệu” lần nữa trong 8 giây để xác nhận. Thao tác này không thể hoàn tác.");
+      notify("err", "Bấm nút xác nhận lần nữa trong 8 giây để xóa toàn bộ dữ liệu ứng dụng.");
       return;
     }
     setWipeArmed(false);
+    setBusy("wipe");
     try {
-      const result = await wipeAppData();
-      notify("wipe", "ok", `Đã xóa ${result.localStorageKeys} mục localStorage và toàn bộ dữ liệu IndexedDB.`);
-      setImporting(true);
-      setProgressScope("wipe");
-      setProgress(50);
-      setTimeout(() => {
-        setProgress(100);
-        location.reload();
-      }, 600);
-    } catch (err) {
-      notify("wipe", "err", `Không xóa được dữ liệu: ${err.message}`);
+      await wipeAppData();
+      notify("ok", "Đã xóa dữ liệu ứng dụng. Ứng dụng sẽ tải lại.");
+      setTimeout(() => location.reload(), 700);
+    } catch (error) {
+      notify("err", `Không xóa được dữ liệu: ${uiMessage(error, "không rõ nguyên nhân")}`);
+    } finally {
+      setBusy("");
     }
   };
 
-  const refreshToc = () => setTocBooks(getMergedTocBooks());
+  const downloadExcel = async (data, filename, successText) => {
+    try {
+      const blob = new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setTocMessage({ kind: "ok", text: successText });
+    } catch (error) {
+      setTocMessage({ kind: "err", text: uiMessage(error, "không rõ nguyên nhân") });
+    }
+  };
 
-  const handleDownloadTemplate = async () => {
-    try {
-      const data = await generateTocTemplateExcel(tocBooks);
-      const blob = new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "mau-muc-luc.xlsx";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setTocMsg({ kind: "ok", text: "Đã tải mẫu Excel mục lục." });
-    } catch (e) { setTocMsg({ kind: "err", text: e.message }); }
-  };
-  const handleExportToc = async () => {
-    try {
-      const data = await exportTocToExcel(tocBooks);
-      const blob = new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `muc-luc-${new Date().toISOString().slice(0,10)}.xlsx`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setTocMsg({ kind: "ok", text: `Đã xuất ${tocBooks.length} sách / ${tocBooks.reduce((s,b)=>s+(b.items?.length||0),0)} mục.` });
-    } catch (e) { setTocMsg({ kind: "err", text: e.message }); }
-  };
-  const handleImportTocExcel = async (file) => {
+  const importTocExcel = async (file) => {
     if (!file) return;
     try {
-      const buf = await file.arrayBuffer();
-      const selected = selectedBookKey ? tocBooks.find(b => b.key === selectedBookKey) || null : null;
-      const parsed = await parseTocExcel(buf, selected);
-      for (const b of parsed) upsertTocBook(b);
+      const selected = selectedBookKey ? tocBooks.find((book) => book.key === selectedBookKey) || null : null;
+      const books = await parseTocExcel(await file.arrayBuffer(), selected);
+      for (const book of books) upsertTocBook(book);
       refreshToc();
-      setTocMsg({ kind: "ok", text: `Đã nhập ${parsed.length} sách, ${parsed.reduce((s,b)=>s+b.items.length,0)} mục từ Excel. Mục lục cũ được giữ nguyên, sách trùng key sẽ được ghi đè.` });
-    } catch (e) { setTocMsg({ kind: "err", text: e.message }); }
-  };
-
-  useEffect(() => {
-    if (msg && msg.kind === "ok") {
-      const t = setTimeout(() => setMsg(null), 6000);
-      return () => clearTimeout(t);
+      setTocMessage({
+        kind: "ok",
+        text: `Đã nhập ${books.length} sách, ${books.reduce((sum, book) => sum + book.items.length, 0)} mục lục.`,
+      });
+    } catch (error) {
+      setTocMessage({ kind: "err", text: uiMessage(error, "không rõ nguyên nhân") });
     }
-  }, [msg]);
+  };
 
-  const fmt = (b) => {
-    if (b < 1024) return `${b} B`;
-    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-    return `${(b / (1024 * 1024)).toFixed(2)} MB`;
-  };
-  const renderMessage = (scope) => {
-    if (!msg || (msg.scope || "diagnostics") !== scope) return null;
-    return (
-      <div className={`dt-msg ${msg.kind === "err" ? "err" : "ok"}`} role={msg.kind === "err" ? "alert" : "status"}>
-        {msg.kind === "err" ? <AlertTriangle size={16} /> : <Check size={16} />}
-        <span>{msg.text}</span>
-        <button className="btn btn-ghost btn-xs" onClick={() => setMsg(null)} aria-label="Đóng thông báo">
-          <X size={12} />
-        </button>
-      </div>
-    );
-  };
+  const renderMessage = () => message && (
+    <div className={`dt-msg ${message.kind === "err" ? "err" : "ok"}`} role={message.kind === "err" ? "alert" : "status"}>
+      {message.kind === "err" ? <AlertTriangle size={16} /> : <Check size={16} />}
+      <span>{message.text}</span>
+      <button className="btn btn-ghost btn-xs" onClick={() => setMessage(null)} aria-label="Đóng thông báo"><X size={12} /></button>
+    </div>
+  );
+
+  const healthSummary = health?.storage?.summary;
 
   return (
-    <div className="datatools-view">
-      {/* Header — khớp WebToolbox / Dashboard: iconBox + primary CTA như toàn app */}
-      <div className="dt-header">
+    <div className="datatools-view storage-center">
+      <header className="dt-header storage-center-hero">
         <div className="dt-header-left">
           <div className="dt-iconBox" aria-hidden="true"><DatabaseBackup size={22} /></div>
           <div>
-            <h1 className="dt-title">Sao lưu & Khôi phục</h1>
-            <p className="dt-subtitle">
-              Quản lý file sao lưu, bản tự động và dữ liệu đã xóa. File PDF sách không nằm trong bản sao lưu.
-              {lastBackup && <span style={{ color: 'var(--success-deep)', fontWeight: 800 }}> • Sao lưu thủ công gần nhất: {new Date(lastBackup).toLocaleString('vi-VN')}</span>}
-            </p>
+            <h1 className="dt-title">Dữ liệu & sao lưu</h1>
+            <p className="dt-subtitle">Một nơi để sao lưu, khôi phục và kiểm tra dữ liệu ứng dụng.</p>
           </div>
         </div>
-        <div className="dt-header-actions">
-          <span className="dt-info-badge" title="Tổng mục + dung lượng hiện tại">{stats.totalKeys} mục • {fmt(stats.totalBytes)}</span>
-          <button className="btn btn-ghost btn-sm" onClick={refresh} aria-label="Làm mới số liệu"><RefreshCw size={14} /></button>
+        <div className="storage-center-status">
+          <span className="storage-status-dot" />
+          {lastBackup ? `Sao lưu gần nhất · ${new Date(lastBackup).toLocaleString("vi-VN")}` : "Chưa có bản sao lưu"}
         </div>
-      </div>
+      </header>
 
-      <div className="dt-info">
-        <span><Sparkles size={12} /> Mẹo: Trước khi đổi máy/nâng cấp — hãy Xuất file và lưu ra OneDrive/USB</span>
-        <span className="dt-info-badge"><Info size={12} /> Dữ liệu chỉ ở trình duyệt này • {fmt(stats.cacheBytes)} cache có thể dựng lại</span>
-      </div>
+      {renderMessage()}
 
-      <section className="dt-card dt-backup-card" aria-labelledby="dt-backup-title">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><ShieldCheck size={16} /></span>
-          <span id="dt-backup-title">Sao lưu thủ công</span>
-          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 800, color: 'var(--pen-blue-deep)', background: 'var(--pen-blue-soft)', border: '1px solid var(--border-color)', padding: '0.15rem 0.45rem', borderRadius: 99 }}>JSON 1-file • localStorage + IndexedDB</span>
+      <section className="storage-primary-card" aria-labelledby="storage-backup-title">
+        <div className="storage-primary-copy">
+          <span className="storage-eyebrow"><ShieldCheck size={14} /> AN TOÀN DỮ LIỆU</span>
+          <h2 id="storage-backup-title">Sao lưu mọi dữ liệu ứng dụng</h2>
+          <p>
+            Bao gồm cài đặt, mục lục tùy chỉnh, giáo án, ghi chú và dữ liệu trong các kho ứng dụng.
+            Không bao gồm file PDF sách giáo khoa.
+          </p>
         </div>
-        <div className="dt-card-body">
-          <p className="dt-hint">Tạo một file để chuyển dữ liệu sang thiết bị khác hoặc lưu giữ bên ngoài trình duyệt. File sẽ chứa dữ liệu ứng dụng trong localStorage và IndexedDB.</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-            {[
-              "đánh dấu sách","từ vựng","ghi chú","thẻ CTGDPT","bộ sưu tập","khái niệm","thư mục tham khảo","giáo án","hoạt động mẫu","phiếu học tập","ngân hàng câu hỏi"
-            ].map(t=>(
-              <span key={t} className="tag-pill" style={{ background: 'var(--surface)', border: '1px solid var(--border-color)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-mid)' }}>{t}</span>
-            ))}
-          </div>
-          <div className="dt-warning" style={{ background: 'var(--pen-blue-soft)', borderColor: 'var(--border-color)', borderLeft: '3px solid var(--pen-blue)' }}>
-            <HardDrive size={16} style={{ color: 'var(--pen-blue)', flexShrink: 0, marginTop: 1 }} />
-            <span>Dữ liệu nghiên cứu và bộ nhớ <b>IndexedDB</b> được đưa vào file sao lưu. File lớn hơn có thể mất thêm thời gian để xuất/khôi phục.</span>
-          </div>
-          <div className="dt-warning" style={{ background: 'var(--warning-soft)', borderColor: 'rgba(245,158,11,0.22)', borderLeft: '3px solid var(--warning)' }}>
-            <AlertTriangle size={16} style={{ color: 'var(--warning-deep)', flexShrink: 0, marginTop: 1 }} />
-            <span><b>Lưu ý:</b> File PDF sách giáo khoa <b>không</b> được đưa vào file sao lưu (chỉ sao lưu dữ liệu người dùng).</span>
-          </div>
-          <div className="dt-actions">
-            <button className="btn btn-primary" onClick={doExport}><Download size={15} /> Xuất file sao lưu (.json)</button>
-          </div>
-          {renderMessage("backup")}
+        <button className="btn btn-primary storage-backup-button" onClick={doExport} disabled={!!busy}>
+          <Download size={17} /> {busy === "backup" ? "Đang tạo bản sao…" : "Tạo file sao lưu"}
+        </button>
+        <div className="storage-primary-foot">
+          <span><HardDrive size={14} /> {storageStats.backupKeys} mục dữ liệu · {formatBytes(storageStats.backupBytes)}</span>
+          <span>File JSON · Lưu trên thiết bị của bạn</span>
         </div>
       </section>
 
-      <section className="dt-card dt-restore-card" ref={restoreSectionRef} aria-labelledby="dt-restore-title">
+      <section className="dt-card" id="data-restore" aria-labelledby="dt-restore-title">
         <div className="dt-card-header">
           <span className="dt-card-header-icon"><RotateCcw size={16} /></span>
           <span id="dt-restore-title">Khôi phục từ file</span>
-          <span className="dt-card-header-note">Kiểm tra nội dung trước khi áp dụng</span>
         </div>
         <div className="dt-card-body">
-          <p className="dt-hint">Chọn file sao lưu <b>.json</b>. Ứng dụng sẽ đọc và hiển thị thông tin trước; dữ liệu hiện tại chỉ bị thay thế sau khi bạn xác nhận.</p>
+          <p className="dt-hint">Chọn file sao lưu .json. Bạn sẽ xem lại nội dung và xác nhận trước khi thay dữ liệu hiện tại.</p>
           <FileDropzone
             accept=".json,application/json"
             multiple={false}
-            title="Chọn hoặc kéo thả file sao lưu (.json)"
-            hint="Tối đa 200 MB • chỉ chấp nhận file JSON sao lưu của ứng dụng"
+            title="Chọn hoặc thả file sao lưu vào đây"
+            hint="Tối đa 200 MB"
             compact
-            onFiles={(f) => doImport(Array.isArray(f) ? f[0] : f)}
-            onError={(m) => notify("restore", "err", m)}
+            onFiles={(files) => readBackupFile(Array.isArray(files) ? files[0] : files)}
+            onError={(text) => notify("err", text)}
           />
-          {renderMessage("restore")}
-          {importing && progressScope === "restore" && (
-            <div className="dt-progress-panel" role="status" aria-live="polite">
-              <div className="dt-progress-label"><RefreshCw size={14} className="spin" /> Đang khôi phục dữ liệu… {progress}%</div>
-              <div className="dt-bar-track"><div className="dt-bar-fill" style={{ width: `${progress}%` }} /></div>
-              {progress === 100 && <p className="dt-hint">Đã khôi phục. Ứng dụng đang tải lại…</p>}
-            </div>
-          )}
           {preview && (
-            <div ref={previewRef} className="dt-import-review" role="region" aria-labelledby="preview-title">
+            <div className="dt-import-review" role="region" aria-labelledby="preview-title">
               <div className="dt-import-review-heading">
                 <div>
-                  <h3 id="preview-title"><Eye size={16} /> Xem trước bản sao lưu</h3>
-                  <p>Hãy xác nhận đúng file và nội dung trước khi ghi đè dữ liệu hiện tại.</p>
+                  <h3 id="preview-title">Xem lại bản sao lưu</h3>
+                  <p>{preview.createdAt ? new Date(preview.createdAt).toLocaleString("vi-VN") : "Ngày tạo không có"} · {preview.localCount} mục · {preview.indexedTotal} bản ghi</p>
                 </div>
-                <button className="btn btn-ghost btn-xs" onClick={() => { setPreview(null); setPendingText(null); setConfirmChecked(false); setMsg(null); }} aria-label="Hủy xem trước">
-                  <X size={15} /> Hủy
-                </button>
+                <button className="btn btn-ghost btn-xs" onClick={() => { setPreview(null); setPendingText(""); setConfirmed(false); }}>Hủy</button>
               </div>
-              <div className="dt-preview-body">
-                <div className="dt-preview-meta">
-                  <span><b>Phiên bản:</b> {preview.schemaVersion} (app {preview.appVersion || "—"})</span>
-                  <span><b>Ngày tạo:</b> {preview.createdAt ? new Date(preview.createdAt).toLocaleString("vi-VN") : "—"}</span>
-                  <span><b>LocalStorage:</b> {preview.localCount} keys</span>
-                  <span><b>IndexedDB:</b> {preview.indexedTotal} records</span>
-                  {preview.label && <span className="dt-preview-label"><b>Nhãn:</b> {preview.label}</span>}
+              {!preview.indexedDataComplete && (
+                <div className="dt-warning" role="alert">
+                  <AlertTriangle size={16} />
+                  <span>Bản sao lưu có thể thiếu dữ liệu IndexedDB{preview.indexedDataSkippedStores.length ? ` (${preview.indexedDataSkippedStores.join(", ")})` : ""}.</span>
                 </div>
-                <div className="dt-preview-keys">
-                  <div className="dt-preview-keys-title">Dữ liệu trong file</div>
-                  <div className="dt-badge-row">
-                    {preview.localKeys.map((key) => (
-                      <span key={key} className="tag-pill">{key}</span>
-                    ))}
-                    {preview.hasMoreKeys && <span className="tag-pill">+{preview.localCount - preview.localKeys.length} mục khác</span>}
-                  </div>
-                  {Object.keys(preview.indexedCounts).length > 0 && (
-                    <div className="dt-preview-indexed">
-                      <b>IndexedDB:</b>
-                      {Object.entries(preview.indexedCounts).map(([store, count]) => (
-                        <span key={store} className="tag-pill">{store}: {count}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="dt-warning">
-                  <AlertTriangle size={16} style={{ color: 'var(--warning-deep)', flexShrink: 0, marginTop: 1 }} />
-                  <span>Dữ liệu hiện tại sẽ bị <b>ghi đè</b> bởi file này. Hãy sao lưu dữ liệu hiện tại nếu bạn muốn có thể quay lại.</span>
-                </div>
-                {!preview.indexedDataComplete && (
-                  <div className="dt-warning" role="alert">
-                    <AlertTriangle size={16} style={{ color: 'var(--warning-deep)', flexShrink: 0, marginTop: 1 }} />
-                    <span>File này không chứa đầy đủ dữ liệu IndexedDB{preview.indexedDataSkippedStores.length ? ` (đã bỏ qua: ${preview.indexedDataSkippedStores.join(", ")})` : ""}. Khôi phục sẽ không thể đưa lại phần dữ liệu đó.</span>
-                  </div>
-                )}
-                <label className="dt-import-confirm">
-                  <input type="checkbox" checked={confirmChecked} onChange={(event) => setConfirmChecked(event.target.checked)} />
-                  Tôi đã kiểm tra và đồng ý thay thế dữ liệu hiện tại
-                </label>
-                <div className="dt-actions dt-import-actions">
-                  <button className="btn btn-primary" onClick={doConfirmImport} disabled={!confirmChecked || importing} title={!confirmChecked ? "Xác nhận nội dung trước khi khôi phục" : "Khôi phục dữ liệu"}>
-                    <Check size={14} /> Xác nhận khôi phục
-                  </button>
-                </div>
-              </div>
+              )}
+              <label className="dt-import-confirm">
+                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+                Tôi hiểu dữ liệu hiện tại sẽ được thay bằng bản sao lưu này.
+              </label>
+              <button className="btn btn-primary" onClick={confirmRestore} disabled={!confirmed || !!busy}>
+                <Check size={14} /> {busy === "restore" ? "Đang khôi phục…" : "Xác nhận khôi phục"}
+              </button>
             </div>
           )}
         </div>
       </section>
 
-      <section className="dt-card dt-wipe-card" aria-labelledby="dt-wipe-title">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><AlertTriangle size={16} /></span>
-          <span id="dt-wipe-title">Xóa dữ liệu ứng dụng</span>
-          <span className="dt-card-header-note danger">Thao tác không thể hoàn tác</span>
-        </div>
-        <div className="dt-card-body">
-          <p className="dt-hint">Xóa dữ liệu đã lưu trong ứng dụng trên trình duyệt này. File sách PDF trong thư viện không bị xóa. Để tránh thao tác nhầm, cần sao lưu trước và xác nhận hai lần.</p>
-          <div className="dt-actions">
-            <button className="btn btn-danger" onClick={doWipe} disabled={importing} aria-describedby="dt-wipe-help">
-              <Trash2 size={15} /> {wipeArmed ? "Bấm lần nữa để xác nhận" : "Xóa toàn bộ dữ liệu"}
-            </button>
-            <span id="dt-wipe-help" className="dt-hint">{lastBackup ? "Đã có bản sao lưu thủ công." : "Cần xuất bản sao lưu thủ công trước khi xóa."}</span>
-          </div>
-          {renderMessage("wipe")}
-          {importing && progressScope === "wipe" && (
-            <div className="dt-progress-panel" role="status" aria-live="polite">
-              <div className="dt-progress-label"><RefreshCw size={14} className="spin" /> Đang xóa dữ liệu… {progress}%</div>
-              <div className="dt-bar-track"><div className="dt-bar-fill" style={{ width: `${progress}%` }} /></div>
-              {progress === 100 && <p className="dt-hint">Đã xóa dữ liệu. Ứng dụng đang tải lại…</p>}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* A3 • Sao lưu tự động — bản chụp nền, khôi phục 1 bấm */}
-      <section className="dt-card dt-auto-backup-card" aria-labelledby="dt-auto-title">
-        <div className="dt-card-header">
+      <section className="storage-check-card" aria-labelledby="storage-check-title">
+        <div className="storage-check-copy">
           <span className="dt-card-header-icon"><ShieldCheck size={16} /></span>
-          <span id="dt-auto-title">Sao lưu tự động</span>
-          <span
-            style={{
-              marginLeft: "auto",
-              fontSize: "0.72rem",
-              fontWeight: 800,
-              color: autoAt ? "var(--success-deep, #16a34a)" : "var(--text-mid)",
-              background: autoAt ? "var(--success-soft, #dcfce7)" : "var(--surface-soft)",
-              border: "1px solid var(--border-color)",
-              padding: "0.15rem 0.45rem",
-              borderRadius: 99,
-            }}
-          >
-            {autoAt ? `Lần cuối: ${new Date(autoAt).toLocaleString("vi-VN")}` : "Chưa chạy"}
-          </span>
+          <div>
+            <h2 id="storage-check-title">Kiểm tra dữ liệu</h2>
+            <p>Kiểm tra lỗi lưu trữ, dữ liệu liên kết sách, mục lục giáo án và dung lượng.</p>
+          </div>
         </div>
-        <div className="dt-card-body">
-          <p className="dt-hint" style={{ margin: 0 }}>
-            App tự chép 1 bản chụp dữ liệu (giáo án, câu hỏi, ghi chú, từ vựng…) ở nền theo chu kỳ đã chọn trong{" "}
-            <b>Cài đặt → Sao lưu</b>. Không mở cửa sổ, không gửi đi đâu — chỉ nằm trên máy này. Ảnh nặng được bỏ qua để bản chụp nhẹ.
-          </p>
-          {!autoSnaps.length && (
-            <p className="dt-hint" style={{ marginTop: "0.5rem" }}>
-              Chưa có bản nào — mở lại app sau vài giây là app tự chạy.
-            </p>
-          )}
-          {autoSnaps.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: "0.5rem" }}>
-              {autoSnaps.map((s) => (
-                <div
-                  key={s.id}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-                    border: "1px solid var(--border-color)", borderRadius: 10,
-                    padding: "0.45rem 0.6rem", background: "var(--surface-soft)",
-                  }}
-                >
-                  <DatabaseBackup size={14} style={{ color: "var(--pen-blue)", flexShrink: 0 }} />
-                  <span style={{ flex: "1 1 200px", fontSize: "0.78rem", fontWeight: 700 }}>
-                    {new Date(s.createdAt).toLocaleString("vi-VN")}
-                    <span style={{ fontWeight: 600, color: "var(--text-mid)" }}>
-                      {" "}• {s.localCount || 0} mục • {((s.bytes || 0) / 1048576).toFixed(2)} MB
-                    </span>
-                  </span>
-                  <button className="btn btn-ghost btn-xs" onClick={() => restoreAutoBackup(s)}>
-                    <RotateCcw size={12} /> Khôi phục bản này
-                  </button>
-                  <button
-                    className="btn btn-danger btn-xs"
-                    aria-label="Xóa bản sao lưu tự động"
-                    title="Xóa bản này"
-                    onClick={async () => {
-                      if (!window.confirm("Xóa bản sao lưu tự động này?")) return;
-                      try {
-                        await deleteAutoBackup(s.id);
-                        refreshTrash();
-                        notify("auto", "ok", "Đã xóa bản sao lưu tự động.");
-                      } catch (error) {
-                        notify("auto", "err", `Không xóa được bản sao lưu: ${uiMessage(error, "không rõ nguyên nhân")}`);
-                      }
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
+        <button className="btn btn-secondary" onClick={runUnifiedCheck} disabled={healthBusy}>
+          <ShieldCheck size={15} /> {healthBusy ? "Đang kiểm tra…" : "Kiểm tra ngay"}
+        </button>
+        {health && (
+          <div className="storage-check-report" role="status" aria-live="polite">
+            <strong>
+              {healthSummary.healthy && !healthSummary.hasWarnings && health.orphans.totalOrphans === 0
+                ? "Dữ liệu hoạt động bình thường"
+                : "Đã hoàn tất kiểm tra"}
+            </strong>
+            <div className="storage-report-grid">
+              <span>{healthSummary.totalErrors} lỗi lưu trữ</span>
+              <span>{health.orphans.totalOrphans} liên kết không còn sách</span>
+              <span>{healthSummary.orphanAssets} tệp thừa</span>
+              <span>{health.storage.khbd.invalid.length} giáo án lỗi</span>
+              <span>{health.storage.khbd.legacyKeys.length} mục KHBD cũ</span>
+              <span>{healthSummary.quotaAvailable ? "Bộ nhớ ghi được" : "Không ghi được vào bộ nhớ"}</span>
             </div>
-          )}
-          {renderMessage("auto")}
-        </div>
+            <details>
+              <summary>Xem chi tiết kết quả</summary>
+              <ul>
+                <li>JSON lỗi: {health.storage.corrupted.length}; dữ liệu sai cấu trúc: {health.storage.schemaInvalid.length}.</li>
+                <li>Liên kết sách thừa: ghi chú {health.orphans.orphanNotes.length}, đánh dấu {health.orphans.orphanMarks.length}, trích dẫn {health.orphans.orphanRefs.length}, đoạn trích {health.orphans.orphanClips.length}, khái niệm {health.orphans.orphanConcepts.length}.</li>
+                <li>Giáo án: {health.storage.khbd.count} bài, {formatBytes(health.storage.khbd.bytes)}; quá lớn {health.storage.khbd.oversized.length}.</li>
+                <li>Dữ liệu: {health.stats.totalKeys} mục, {formatBytes(health.stats.totalBytes)}.</li>
+              </ul>
+            </details>
+            <small>Đã kiểm tra {new Date(health.checkedAt).toLocaleString("vi-VN")}. Không có dữ liệu nào bị tự ý sửa hoặc xóa.</small>
+          </div>
+        )}
       </section>
 
-      {/* A2 • Thùng rác 30 ngày */}
-      <section className="dt-card dt-trash-card" aria-labelledby="dt-trash-title">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><Trash2 size={16} /></span>
-          <span id="dt-trash-title">Thùng rác</span>
-          <span
-            style={{
-              marginLeft: "auto",
-              fontSize: "0.72rem", fontWeight: 800,
-              color: trash.length ? "var(--danger)" : "var(--text-mid)",
-              background: trash.length ? "var(--danger-soft, #fef2f2)" : "var(--surface-soft)",
-              border: "1px solid var(--border-color)",
-              padding: "0.15rem 0.45rem", borderRadius: 99,
-            }}
-          >
-            {trash.length ? `${trash.length} mục` : "Trống"}
-          </span>
-        </div>
-        <div className="dt-card-body">
-          {renderMessage("trash")}
-          {trash.length === 0 ? (
-            <p className="dt-hint" style={{ margin: 0 }}>
-              Thùng rác trống. Sách / giáo án / câu hỏi bạn xóa sẽ nằm đây <b>{TRASH_TTL_DAYS} ngày</b> trước khi biến mất —
-              bấm <b>Khôi phục</b> bất cứ lúc nào.
-            </p>
-          ) : (
-            <>
-              <p className="dt-hint" style={{ margin: 0 }}>
-                Xóa không mất ngay: mỗi mục giữ <b>{TRASH_TTL_DAYS} ngày</b>. Hết hạn sẽ tự xóa vĩnh viễn vào lần mở app sau.
-                Với sách, file PDF vẫn còn nguyên trên máy cho tới lúc đó.
-              </p>
-              <div className="dt-actions" style={{ marginTop: "0.5rem" }}>
-                <button className="btn btn-primary btn-sm" onClick={purgeExpired}>
-                  <Trash2 size={14} /> Dọn mục hết hạn
-                </button>
-                <button className="btn btn-danger btn-sm" onClick={emptyAllTrash}>
-                  Xóa vĩnh viễn tất cả
-                </button>
+      {legacyBackups.length > 0 && (
+        <details className="dt-card storage-legacy-card">
+          <summary className="dt-card-header"><span className="dt-card-header-icon"><DatabaseBackup size={16} /></span> Bản sao lưu cũ trên thiết bị ({legacyBackups.length})</summary>
+          <div className="dt-card-body">
+            <p className="dt-hint">Các bản tự động tạo trước đây được giữ nguyên. Từ nay, bản sao lưu mới chỉ được tạo khi bạn bấm nút.</p>
+            {legacyBackups.map((snapshot) => (
+              <div className="storage-legacy-row" key={snapshot.id}>
+                <span>{new Date(snapshot.createdAt).toLocaleString("vi-VN")} · {formatBytes(snapshot.bytes)}</span>
+                <button className="btn btn-ghost btn-xs" onClick={() => restoreLegacyBackup(snapshot)}>Xem / khôi phục</button>
+                <button className="btn btn-ghost btn-xs" aria-label="Xóa bản sao lưu cũ" onClick={async () => {
+                  if (!window.confirm("Xóa bản sao lưu cũ này?")) return;
+                  try {
+                    await deleteAutoBackup(snapshot.id);
+                    setLegacyBackups(getAutoBackupMeta().snapshots);
+                  } catch (error) {
+                    notify("err", `Không xóa được bản sao lưu: ${uiMessage(error, "không rõ nguyên nhân")}`);
+                  }
+                }}><Trash2 size={13} /></button>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: "0.55rem" }}>
-                {trash.map((it) => (
-                  <div
-                    key={it.id}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-                      border: "1px solid var(--border-color)", borderRadius: 10,
-                      padding: "0.45rem 0.6rem", background: "var(--surface-soft)",
-                    }}
-                  >
-                    <span
-                      className="tag-pill"
-                      style={{ fontSize: "0.7rem", fontWeight: 800, background: "var(--surface)", border: "1px solid var(--border-color)" }}
-                    >
-                      {TRASH_TYPE_LABEL[it.type] || it.type}
-                    </span>
-                    <span
-                      style={{ flex: "1 1 180px", fontSize: "0.8rem", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      title={it.label}
-                    >
-                      {it.label}
-                    </span>
-                    <span style={{ fontSize: "0.72rem", fontWeight: 700, color: isExpired(it) ? "var(--danger)" : "var(--text-mid)" }}>
-                      {isExpired(it) ? "đã hết hạn" : `còn ${daysLeft(it)} ngày`}
-                    </span>
-                    <button className="btn btn-ghost btn-xs" onClick={() => restoreTrashItem(it)}>
-                      <RotateCcw size={12} /> Khôi phục
-                    </button>
-                    <button
-                      className="btn btn-danger btn-xs"
-                      onClick={() => deleteTrashItemForever(it)}
-                      aria-label="Xóa ngay"
-                      title="Xóa ngay, không chờ hết hạn"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* Card 2 — Tổng quan — thống nhất: thư viện ngoài + trong app + toàn bộ */}
-      <div className="dt-card">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><HardDrive size={16} /></span>
-          Tổng quan dung lượng — thống nhất
-        </div>
-        <div className="dt-card-body">
-          <div className="quick-stats-grid">
-            <div className="quick-stat-card" title={libStats?.booksDir || "thư viện ngoài"}>
-              <div className="quick-stat-icon"><BookMarked size={16} /></div>
-              <div>
-                <div className="quick-stat-value">{libStats ? `${libStats.pdfCount} sách` : "—"}</div>
-                <div className="quick-stat-label">thư viện ngoài (FS)</div>
-                <div className="quick-stat-sub">{libStats ? fmt(libStats.totalBytes) : "đang tải..."} {libStats?.byGrade ? `• ${Object.keys(libStats.byGrade).length} khối` : ""}</div>
-              </div>
-            </div>
-            <div className="quick-stat-card">
-              <div className="quick-stat-icon"><HardDrive size={16} /></div>
-              <div>
-                <div className="quick-stat-value">{stats.totalKeys}</div>
-                <div className="quick-stat-label">mục trong app (LS)</div>
-                <div className="quick-stat-sub">{fmt(stats.totalBytes)} + {fmt(stats.cacheBytes)} cache</div>
-              </div>
-            </div>
-            <div className="quick-stat-card">
-              <div className="quick-stat-icon"><DatabaseBackup size={16} /></div>
-              <div>
-                <div className="quick-stat-value">{health?.idb ? `${Object.values(health.idb.stores||{}).reduce((a,c)=>a+(c.count||0),0)} IDB` : fmt(stats.totalBytes + (health?.quota?.estimate?.usage||0))}</div>
-                <div className="quick-stat-label">trong app + IDB</div>
-                <div className="quick-stat-sub">{health?.quota?.estimate ? fmt(health.quota.estimate.usage) + " ước tính" : fmt(stats.totalBytes + stats.cacheBytes) + " LS"}</div>
-              </div>
-            </div>
-            <div className="quick-stat-card">
-              <div className="quick-stat-icon"><ShieldCheck size={16} /></div>
-              <div>
-                <div className="quick-stat-value">{libStats ? fmt((libStats.totalBytes||0) + stats.totalBytes + stats.cacheBytes + (health?.quota?.estimate?.usageDetails?.indexedDB||0)) : fmt(stats.totalBytes + stats.cacheBytes)}</div>
-                <div className="quick-stat-label">toàn bộ (ngoài + trong)</div>
-                <div className="quick-stat-sub">{libStats ? `${libStats.pdfCount} PDF + ${stats.totalKeys} LS + IDB` : "ngoài + trong"}</div>
-              </div>
-            </div>
+            ))}
           </div>
-          <p className="dt-hint">Thư viện ngoài: PDF gốc trên ổ đĩa (server /api/health totalBytes). Trong app: localStorage ({fmt(stats.totalBytes)} backup + {fmt(stats.cacheBytes)} cache) + IndexedDB ({health?.quota?.estimate ? fmt(health.quota.estimate.usageDetails?.indexedDB||0) : "—"}). Toàn bộ = ngoài + trong — phản ánh thực tế.</p>
-          {libStats?.byGrade && <p className="dt-hint">Theo khối: {Object.entries(libStats.byGrade).sort().map(([k,v])=>`${k.replace("grade","Lớp ")}: ${fmt(v)}`).join(" • ")}</p>}
-        </div>
-      </div>
+        </details>
+      )}
 
-      {/* Card 3 — Nhóm dữ liệu */}
-      <div className="dt-card">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><HardDrive size={16} /></span>
-          Nhóm dữ liệu theo tính năng
-        </div>
+      <details className="dt-card">
+        <summary className="dt-card-header"><span className="dt-card-header-icon"><BookMarked size={16} /></span> Mục lục tùy chỉnh ({customTocBooks.length})</summary>
         <div className="dt-card-body">
-          {(() => {
-            const dtData = Object.entries(stats.groups).map(([g, v]) => ({
-              id: g,
-              nhom: g,
-              soMuc: v.keys,
-              dungLuong: fmt(v.bytes),
-              _bytes: v.bytes,
-            }));
-            const dtColumns = [
-              { key: "nhom", label: "Nhóm", sortable: true, render: (v) => <span className="cell-clamp">{v}</span> },
-              { key: "soMuc", label: "Số mục", sortable: true, width: "110px", align: "right" },
-              { key: "dungLuong", label: "Dung lượng", sortable: true, width: "140px", align: "right", render: (v) => <span className="tag-pill">{v}</span> },
-            ];
-            return (
-              <div className="dt-table-wrap">
-                <DataTable columns={dtColumns} data={dtData} keyField="id" emptyText="Chưa có dữ liệu nào." emptyHint="Dữ liệu sẽ xuất hiện sau khi bạn sử dụng các tính năng ghi chú, đánh dấu, giáo án…" />
-              </div>
-            );
-          })()}
-          <p className="dt-hint">Mẹo: trước khi nâng cấp/chuyển máy hãy xuất file sao lưu; giữ file ở OneDrive/USB vì dữ liệu chỉ nằm trong trình duyệt này.</p>
-        </div>
-      </div>
-
-      {/* Card 4 — Chẩn đoán & Dọn rác */}
-      <div className="dt-card">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><AlertTriangle size={16} /></span>
-          Chẩn đoán & Dọn rác
-          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 800, color: 'var(--warning-deep)', background: 'var(--warning-soft)', border: '1px solid rgba(245,158,11,0.22)', padding: '0.15rem 0.45rem', borderRadius: 99 }}>Nâng cao</span>
-        </div>
-        <div className="dt-card-body">
-          {renderMessage("diagnostics")}
-          <div style={{ background: 'linear-gradient(135deg, var(--color-action, #2563eb) 0%, var(--color-action-active, #1e40af) 100%)', borderRadius: 10, padding: '0.65rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', color: 'white' }}>
-            <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 180 }}>
-              <div style={{ fontWeight: 800, fontSize: '0.88rem' }}>Quét lưu trữ — kiểm tra lỗi ở đâu</div>
-              <div style={{ fontSize: '0.75rem', opacity: 0.92 }}>Toàn bộ localStorage + IndexedDB, chỉ ra key corrupted/orphan/vương vãi</div>
-            </div>
-            <button className="btn" disabled={healthLoading} onClick={async()=>{
-              setHealthLoading(true);
-              try{
-                const books = (()=>{ try{ return safeGetJSON('sgk_books', [], Array.isArray); }catch{ return []; }})();
-                const r = await runStorageHealth({ books });
-                setHealth(r);
-                if(r.summary.healthy) setMsg({kind:"ok", text:`✅ Khỏe: ${r.summary.totalKeys} khóa`});
-                else setMsg({kind:"err", text:`⚠️ ${r.summary.totalErrors} lỗi — xem bên dưới`});
-              }catch(e){ setMsg({kind:"err", text:"Quét lỗi: "+uiMessage(e, "không rõ nguyên nhân")}); }
-              setHealthLoading(false);
-            }} style={{ background: 'white', color: '#4f46e5', fontWeight: 800, border: 'none', padding: '0.5rem 0.9rem', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.82rem' }}>
-              {healthLoading ? <RefreshCw size={14} className="spin" /> : <ShieldCheck size={14} />} Quét ngay
-            </button>
+          <p className="dt-hint">Mục lục nhập thêm được lưu cùng dữ liệu ứng dụng và có trong file sao lưu.</p>
+          <div className="storage-inline-actions">
+            <button className="btn btn-ghost btn-sm" onClick={async () => {
+              const data = await generateTocTemplateExcel(tocBooks);
+              await downloadExcel(data, "mau-muc-luc.xlsx", "Đã tải mẫu Excel mục lục.");
+            }}><Download size={14} /> Tải mẫu Excel</button>
+            <button className="btn btn-ghost btn-sm" onClick={async () => {
+              const data = await exportTocToExcel(tocBooks);
+              await downloadExcel(data, `muc-luc-${new Date().toISOString().slice(0, 10)}.xlsx`, `Đã xuất ${tocBooks.length} sách / ${tocItemCount} mục.`);
+            }}><Upload size={14} /> Xuất Excel</button>
+            <span className="dt-info-badge">{tocBooks.length} sách · {tocItemCount} mục</span>
           </div>
-          {health && (
-            <div id="storage-health-result" style={{ border: '1px solid var(--border-color)', borderRadius: 8, background: 'var(--surface-soft)', padding: '0.6rem', fontSize: '0.8rem' }}>
-              <div style={{ fontWeight: 800 }}>{health.summary.healthy ? '✅ Khỏe' : `⚠️ ${health.summary.totalErrors} lỗi`} • {health.summary.totalKeys} khóa • Hạn mức: {health.quota.available?'Còn chỗ':'Hết chỗ'} {health.summary.hasWarnings?`• Cảnh báo: ${health.summary.orphanAssets} mục thừa`:''}</div>
-              <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.4rem', flexWrap:'wrap' }}>
-                <button className="btn btn-primary btn-xs" onClick={async()=>{ if(!confirm(`Sửa ${health.summary.totalErrors} lỗi?`)) return; const r=await repairStorageHealth({dryRun:false}); setHealth(r.after); setMsg({kind:"ok", text:`Đã sửa: ${r.actions.join(" • ")||"xong"}`}); refresh(); }} style={{ background:'var(--success)', color:'white' }}>Sửa {health.summary.totalErrors} lỗi</button>
-                <button className="btn btn-ghost btn-xs" onClick={()=>{ navigator.clipboard?.writeText(JSON.stringify(health,null,2)); setMsg({kind:"ok", text:"Đã sao chép"}); }}>Sao chép báo cáo</button>
-                <button className="btn btn-ghost btn-xs" onClick={()=>setHealth(null)}>Ẩn</button>
-              </div>
-            </div>
-          )}
-          <p className="dt-hint">Quét mồ côi (scan/autosave/questionLink), bộ nhớ AI, và kiểm tra backup. Các thao tác nguy hiểm cần xác nhận.</p>
-          <div className="dt-actions" style={{ gap: '0.4rem' }}>
-            <button className="btn btn-secondary btn-sm" onClick={()=>{
-              try{
-                const hist = aiDataStorage.getAnalysisHistory?.() || safeGetJSON(STORAGE_KEYS.AI_HISTORY, [], Array.isArray);
-                // ai_image_cache lưu dạng object {imageId: ...} (xem aiDataStorage.getImageCache)
-                const cacheRaw = safeGetJSON(STORAGE_KEYS.AI_IMAGE_CACHE, null, (v) => typeof v === "object" && v !== null);
-                const cacheCount = Array.isArray(cacheRaw) ? cacheRaw.length : (cacheRaw ? Object.keys(cacheRaw).length : 0);
-                const usage = (()=>{ try{ return aiDataStorage.getStorageUsage(); }catch (e) { console.warn("[DataToolsView] getStorageUsage failed", e); return null; }})();
-                const orphanScans = safeGetJSON('sgk_scans_v1', [], Array.isArray).length;
-                const orphanAutosaves = Object.keys(localStorage).filter(k=>k.startsWith('sgk_autosave_')).length;
-                const orphanMarks = Object.keys(localStorage).filter(k=>k.startsWith('sgk_marks_')).length;
-                const text = `AI history: ${hist.length} | AI cache: ${cacheCount||usage?.imageCache||0} | Scans: ${orphanScans} | Autosaves: ${orphanAutosaves} | Marks: ${orphanMarks}\nDung lượng AI: ${usage? JSON.stringify(usage): '—'}`;
-                setMsg({kind:"ok", text});
-              }catch(e){ console.warn("[DataToolsView] Quét AI failed", e); setMsg({kind:"err", text:uiMessage(e)}); }
-            }}><Eye size={15} /> Quét & Thống kê AI</button>
-            <button className="btn btn-ghost btn-sm" onClick={()=>{
-              // Khóa thật từ storageKeys (khớp aiDataStorage) — bản cũ ghi sai 'ai_model_prefs'
-              const aiKeys = Object.values(STORAGE_KEYS).filter((k) => typeof k === "string" && k.startsWith("ai_"));
-              const found = aiKeys.filter(k=> { try { return safeGetString(k, null) !== null; } catch (e) { console.warn("[DataToolsView] safeGetString failed for "+k, e); return false; } });
-              if(!found.length) { setMsg({kind:"ok", text:"Không có dữ liệu AI mồ côi."}); return; }
-              if(!confirm(`Xóa ${found.length} mục AI: ${found.join(', ')}?`)) return;
-              found.forEach(k=> { try { const res = safeRemove(k); if (!res.ok) console.warn("[DataToolsView] safeRemove failed for "+k, res); } catch (e) { console.warn("[DataToolsView] safeRemove failed for "+k, e); } });
-              setMsg({kind:"ok", text:`Đã xóa ${found.length} mục AI.`});
-              refresh();
-            }}><Trash2 size={14} /> Xóa lịch sử AI</button>
-            <button className="btn btn-secondary btn-sm" onClick={()=>{
-              try{
-                const books = (()=>{ try{ return safeGetJSON('sgk_books', [], Array.isArray); }catch (e) { console.warn("[DataToolsView] safeGetJSON failed for sgk_books", e); return []; }})();
-                const r = checkOrphanData(books);
-                const s = getStorageStats();
-                setMsg({kind:"ok", text:`Kiểm tra dữ liệu thừa: ${JSON.stringify(r).slice(0,400)} | Stats: ${JSON.stringify(s).slice(0,400)}`});
-              }catch(e){ console.warn("[DataToolsView] Quét Orphan failed", e); setMsg({kind:"err", text:uiMessage(e)}); }
-            }}><HardDrive size={14} /> Quét dữ liệu thừa</button>
-            <button className="btn btn-ghost btn-sm" onClick={()=>{
-              const sc = calcRenderScale(1.2, 2);
-              const vp = calcViewportSize(600, sc);
-              setMsg({kind:"ok", text:`pdfRenderer: scale=${sc.toFixed(2)} viewport=${JSON.stringify(vp)} | ${teacherCopy?.substring?.(0,80) || APP_COPYRIGHT} | YCCD:${YCCD.length} MACHS:${MACHS.length}`});
-            }}><Eye size={14} /> Kiểm tra Engine</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 4b — Giáo án KHBD (kho mới + tồn dư kho cũ) */}
-      <div className="dt-card">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><FileText size={16} /></span>
-          Giáo án KHBD
-          <span className="dt-info-badge" style={{ marginLeft: 'auto' }}>
-            {(() => { try { return `${getKhbdPlans().length} bài`; } catch { return "—"; } })()}
-          </span>
-        </div>
-        <div className="dt-card-body">
-          <p className="dt-hint">Kho mới <code>khbd_v2_plans</code> đã nằm trong sao lưu toàn app. Kiểm tra hợp lệ, dung lượng từng bài và dọn tồn dư kho cũ (<code>sgk_lessonplans_*</code>, <code>sgk_autosave_*</code>).</p>
-          <div className="dt-actions" style={{ gap: '0.4rem' }}>
-            <button className="btn btn-secondary btn-sm" onClick={async()=>{
-              try{
-                const r = await runStorageHealth({ books: [], includeIDB: false });
-                const k = r.khbd || { count: 0, bytes: 0, invalid: [], oversized: [], legacyKeys: [] };
-                const kb = (k.bytes / 1024).toFixed(1);
-                setMsg({kind: k.invalid.length ? "err" : "ok",
-                  text: `KHBD: ${k.count} bài (${kb}KB)` +
-                    (k.invalid.length ? ` | LỖI: ${k.invalid.map(x=>`${x.id} (${x.reason})`).join("; ")}` : " | hợp lệ") +
-                    (k.oversized.length ? ` | Nặng: ${k.oversized.map(x=>`${x.title||x.id} ${(x.bytes/1024).toFixed(0)}KB`).join("; ")}` : "") +
-                    (k.legacyKeys.length ? ` | Tồn dư kho cũ: ${k.legacyKeys.length} key` : " | sạch kho cũ")});
-              }catch(e){ setMsg({kind:"err", text:"Kiểm tra KHBD lỗi: "+uiMessage(e, "không rõ nguyên nhân")}); }
-            }}><ShieldCheck size={14} /> Kiểm tra KHBD</button>
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.18)' }} onClick={()=>{
-              if (!hasLegacyData()) { setMsg({kind:"ok", text:"Không còn dữ liệu KHBD cũ."}); return; }
-              if(!confirm("Xóa toàn bộ data KHBD CŨ (sgk_lessonplans_*, sgk_autosave_*)? Kho mới khbd_v2_* giữ nguyên.")) return;
-              try{ const removed = clearLegacyData(); setMsg({kind:"ok", text:`Đã dọn ${removed.length} key cũ.`}); refresh(); }catch(e){ setMsg({kind:"err", text:e.message}); }
-            }}><Trash2 size={14} /> Dọn dữ liệu KHBD cũ</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 5 — Mục lục Excel */}
-      <div className="dt-card">
-        <div className="dt-card-header">
-          <span className="dt-card-header-icon"><BookMarked size={16} /></span>
-          Mục lục — Nhập từ Excel
-        </div>
-        <div className="dt-card-body">
-          <p className="dt-hint">
-            Thêm mục lục cho sách mới hoặc cập nhật sách cũ bằng Excel. Gốc trong <code>tocData.js</code> được giữ — dữ liệu nhập lưu vào <code>sgk_toc_custom_v1</code> và ghi đè theo <code>key</code> nếu trùng.
-          </p>
-          <p className="dt-hint muted">Excel: <b>Mã sách | Tên sách | Lớp | Môn | Tập | Tiêu đề | Mô tả | Trang (PDF) | Độ sâu | Tuần</b>. Nếu nhập 1 sách, chọn sách dưới và Excel chỉ cần <b>Tiêu đề | Mô tả | Trang | Độ sâu | Tuần</b>.</p>
-          <div className="dt-actions">
-            <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><Download size={14} /> Tải mẫu Excel</button>
-            <button className="btn btn-secondary btn-sm" onClick={handleExportToc}><Upload size={14} /> Xuất mục lục hiện tại ra Excel</button>
-            <span className="dt-info-badge" style={{ marginLeft: 'auto' }}>{tocBooks.length} sách / {tocBooks.reduce((s,b)=>s+(b.items?.length||0),0)} mục</span>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-            <select className="form-control" style={{ minWidth: 220, flex: 1 }} value={selectedBookKey} onChange={(e) => setSelectedBookKey(e.target.value)}>
-              <option value="">— Nhập nhiều sách (Excel có cột Mã sách) —</option>
-              {tocBooks.map(b => (
-                <option key={b.key} value={b.key}>{b.title} — Lớp {b.grade} ({b.key})</option>
-              ))}
+          <div className="storage-inline-actions">
+            <select className="form-control" value={selectedBookKey} onChange={(event) => setSelectedBookKey(event.target.value)} aria-label="Chọn sách để nhập mục lục">
+              <option value="">Nhập nhiều sách (Excel có mã sách)</option>
+              {tocBooks.map((book) => <option key={book.key} value={book.key}>{book.title} — Lớp {book.grade}</option>)}
             </select>
             <FileDropzone
               accept=".xlsx,.xls"
               multiple={false}
-              title="Kéo thả Excel mục lục vào đây hoặc bấm để chọn"
-              hint=".xlsx / .xls — đúng mẫu cột"
+              title="Chọn file Excel mục lục"
+              hint=".xlsx hoặc .xls"
               compact
-              onFiles={(f) => handleImportTocExcel(Array.isArray(f) ? f[0] : f)}
-              onError={(m) => setTocMsg({ kind: "err", text: m })}
+              onFiles={(files) => importTocExcel(Array.isArray(files) ? files[0] : files)}
+              onError={(text) => setTocMessage({ kind: "err", text })}
             />
           </div>
-          {tocMsg && <div className={`dt-msg ${tocMsg.kind==="err"?"err":"ok"}`}><span>{tocMsg.text}</span><button className="btn btn-ghost btn-xs" onClick={()=>setTocMsg(null)} style={{ marginLeft: 'auto' }}><X size={12} /></button></div>}
-          <div style={{ maxHeight: 180, overflow: "auto", border: "1px solid var(--border-color)", borderRadius: 10, padding: "0.45rem", background: 'var(--surface-soft)' }}>
-            {getCustomTocBooks().length === 0 ? (
-              <p className="dt-hint" style={{ margin: 0 }}>Chưa có mục lục tùy chỉnh. Mục lục gốc vẫn hiển thị.</p>
-            ) : (
-              getCustomTocBooks().map(b => (
-                <div key={b.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.3rem 0", borderBottom: "1px dashed var(--border-color)" }}>
-                  <span style={{ fontSize: "0.82rem" }}><b>{b.title}</b> <span style={{ color: 'var(--text-muted)' }}>({b.key})</span> — {b.items?.length||0} mục</span>
-                  <button className="btn btn-ghost btn-xs" style={{ color: 'var(--danger)' }} onClick={()=>{ if(confirm(`Xóa mục lục tùy chỉnh "${b.title}"?`)){ deleteCustomTocBook(b.key); refreshToc(); setTocMsg({kind:"ok", text:"Đã xóa"});} }}><Trash2 size={12} /></button>
-                </div>
-              ))
-            )}
-          </div>
+          {tocMessage && <p className={`dt-msg ${tocMessage.kind === "err" ? "err" : "ok"}`} role="status">{tocMessage.text}</p>}
+          {customTocBooks.map((book) => (
+            <div className="storage-legacy-row" key={book.key}>
+              <span><b>{book.title}</b> · {book.items?.length || 0} mục</span>
+              <button className="btn btn-ghost btn-xs" aria-label={`Xóa mục lục ${book.title}`} onClick={() => {
+                if (!window.confirm(`Xóa mục lục tùy chỉnh “${book.title}”?`)) return;
+                deleteCustomTocBook(book.key);
+                refreshToc();
+              }}><Trash2 size={13} /></button>
+            </div>
+          ))}
         </div>
-      </div>
+      </details>
 
+      <details className="dt-card dt-trash-card">
+        <summary className="dt-card-header"><span className="dt-card-header-icon"><Trash2 size={16} /></span> Thùng rác ({trash.length})</summary>
+        <div className="dt-card-body">
+          <p className="dt-hint">Mục đã xóa được giữ tối đa {TRASH_TTL_DAYS} ngày để bạn có thể khôi phục.</p>
+          {trash.length > 0 && (
+            <>
+              <div className="storage-inline-actions">
+                <button className="btn btn-ghost btn-sm" onClick={purgeExpiredTrash}>Dọn mục hết hạn</button>
+                <button className="btn btn-danger btn-sm" onClick={emptyAllTrash}>Xóa toàn bộ thùng rác</button>
+              </div>
+              {trash.map((item) => (
+                <div className="storage-legacy-row" key={item.id}>
+                  <span><b>{TRASH_TYPE_LABEL[item.type] || item.type}</b> · {item.label} · {isExpired(item) ? "hết hạn" : `còn ${daysLeft(item)} ngày`}</span>
+                  <button className="btn btn-ghost btn-xs" onClick={() => restoreTrashItem(item)}>Khôi phục</button>
+                  <button className="btn btn-ghost btn-xs" onClick={() => deleteTrashItem(item)} aria-label={`Xóa vĩnh viễn ${item.label}`}><Trash2 size={13} /></button>
+                </div>
+              ))}
+            </>
+          )}
+          {trash.length === 0 && <p className="dt-hint">Thùng rác đang trống.</p>}
+        </div>
+      </details>
+
+      <details className="dt-card">
+        <summary className="dt-card-header"><span className="dt-card-header-icon"><HardDrive size={16} /></span> Giải phóng dung lượng</summary>
+        <div className="dt-card-body">
+          <p className="dt-hint">Chỉ xóa cache tìm kiếm/OCR có thể tạo lại. Không xóa cài đặt, dữ liệu cá nhân hay file SGK.</p>
+          <button className="btn btn-ghost btn-sm" onClick={clearRebuildableCache} disabled={!!busy}>
+            {busy === "cache" ? "Đang dọn…" : "Dọn cache có thể dựng lại"}
+          </button>
+        </div>
+      </details>
+
+      <details className="dt-card storage-danger-card">
+        <summary className="dt-card-header"><span className="dt-card-header-icon"><AlertTriangle size={16} /></span> Xóa dữ liệu ứng dụng</summary>
+        <div className="dt-card-body">
+          <p className="dt-hint">Xóa dữ liệu ứng dụng trên thiết bị này. File sách giáo khoa không bị xóa. Hãy tải file sao lưu trước.</p>
+          <button className="btn btn-danger" onClick={doWipe} disabled={!!busy || !lastBackup}>
+            <Trash2 size={14} /> {wipeArmed ? "Bấm lần nữa để xác nhận" : "Xóa toàn bộ dữ liệu"}
+          </button>
+        </div>
+      </details>
+
+      <footer className="storage-center-foot"><FileText size={14} /> Bản sao lưu gồm dữ liệu ứng dụng; file PDF sách giáo khoa được giữ riêng.</footer>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 // Delegates key classification to canonical core/storageKeys so Backup/Cache truth stays single.
 import { getClips, getRefs, getConcepts, getCollections } from '../data/researchDB.js';
 import { isBackupKey as isBackupKeyCore, isCacheKey as isCacheKeyCore } from '../core/storageKeys.js';
-import { isBackupKey as isBackupKeyLegacy, isCacheKey as isCacheKeyLegacy } from '../data/storage.js';
+import { isBackupKey as isBackupKeyLegacy, isCacheKey as isCacheKeyLegacy, isBackupSnapshotKey } from '../data/storage.js';
 const isBackupKey = isBackupKeyCore || isBackupKeyLegacy;
 const isCacheKey = isCacheKeyCore || isCacheKeyLegacy;
 import { safeGetJSON, safeSetJSON, safeGetString, safeRemove, safeGetWithStatus, listKeys } from '../safeStorage.js';
@@ -232,7 +232,7 @@ export function getStorageStats() {
     stats.totalKeys++;
     stats.totalBytes += bytes;
 
-    if (isBackupKey(key)) {
+    if (isBackupSnapshotKey(key)) {
       stats.backupKeys++;
       stats.backupBytes += bytes;
       stats.breakdown[prefix] = (stats.breakdown[prefix] || { backup: 0, cache: 0, other: 0 });

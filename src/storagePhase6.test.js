@@ -11,10 +11,21 @@ globalThis.URL={ createObjectURL:()=>'blob:test', revokeObjectURL:()=>{} };
 globalThis.Blob=class Blob{ constructor(parts,opts){this.parts=parts; this.type=opts?.type} };
 globalThis.indexedDB=undefined;
 
-const { BACKUP_KEYS, isBackupKey, isCacheKey, exportBackup, importBackup, wipeAppData, parseBackupPreview } = await import('./data/storage.js');
+const {
+  BACKUP_KEYS,
+  isBackupKey,
+  isCacheKey,
+  isBackupSnapshotKey,
+  buildBackupPayload,
+  exportBackup,
+  importBackup,
+  wipeAppData,
+  parseBackupPreview,
+} = await import('./data/storage.js');
 const { STORES } = await import('./data/indexedDB.js');
 const { addQuestion, getQuestions } = await import('./data/teachingDB.js');
 const { SYNC_MODE } = await import('./services/syncService.js');
+const { getStorageStats } = await import('./services/dataIntegrity.js');
 
 describe('PHASE 6 — Backup/Restore/Wipe/Sync', ()=>{
   beforeEach(()=> localStorage.clear());
@@ -29,6 +40,11 @@ describe('PHASE 6 — Backup/Restore/Wipe/Sync', ()=>{
     assert.ok(!isBackupKey('ocr_book_1'), 'ocr cache not backed up');
     assert.ok(isCacheKey('sgk_index_test'), 'index is cache');
     assert.ok(isCacheKey('ocr_book_1'), 'ocr is cache');
+    for (const key of ['chat_book.pdf', 'assistant_history', 'sgk_textbook_draft_current']) {
+      assert.ok(isBackupKey(key), `${key} is user data backed up`);
+      assert.equal(isCacheKey(key), false, `${key} is not evictable cache`);
+      assert.equal(isBackupSnapshotKey(key), true, `${key} is included in full snapshot`);
+    }
   });
 
   it('backup coverage includes required keys', ()=>{
@@ -41,6 +57,48 @@ describe('PHASE 6 — Backup/Restore/Wipe/Sync', ()=>{
     // IndexedDB stores
     assert.ok(Object.values(STORES).includes('scan_assets'), 'scan_assets store exists');
     assert.ok(Object.values(STORES).includes('ocr_cache'), 'ocr_cache store exists');
+  });
+
+  it('full snapshot includes settings, custom TOC, and future app data but excludes caches and recovery snapshots', async()=>{
+    localStorage.setItem('sgk_settings', JSON.stringify({ appearance: { theme: 'dark' } }));
+    localStorage.setItem('sgk_toc_custom_v1', JSON.stringify([{ key: 'custom-book' }]));
+    localStorage.setItem('future_app_data', JSON.stringify({ retained: true }));
+    localStorage.setItem('chat_book.pdf', JSON.stringify({ messages: [{ role: 'user', content: 'Keep this conversation' }] }));
+    localStorage.setItem('assistant_history', JSON.stringify([{ prompt: 'Keep this history' }]));
+    localStorage.setItem('sgk_textbook_draft_current', JSON.stringify({ title: 'Keep this draft' }));
+    localStorage.setItem('sgk_index_book.pdf', 'rebuildable');
+    localStorage.setItem('sgk_recovery_before_import_123', 'recovery');
+
+    const payload = await buildBackupPayload();
+    assert.ok(payload.data.sgk_settings);
+    assert.ok(payload.data.sgk_toc_custom_v1);
+    assert.ok(payload.data.future_app_data);
+    assert.ok(payload.data['chat_book.pdf']);
+    assert.ok(payload.data.assistant_history);
+    assert.ok(payload.data.sgk_textbook_draft_current);
+    assert.equal(payload.data['sgk_index_book.pdf'], undefined);
+    assert.equal(payload.data.sgk_recovery_before_import_123, undefined);
+    assert.equal(isBackupSnapshotKey('future_app_data'), true);
+
+    localStorage.setItem('current_only_data', 'remove on snapshot restore');
+    await importBackup(JSON.stringify(payload));
+    assert.equal(localStorage.getItem('current_only_data'), null);
+    assert.equal(localStorage.getItem('future_app_data'), JSON.stringify({ retained: true }));
+    assert.ok(localStorage.getItem('chat_book.pdf'));
+    assert.ok(localStorage.getItem('assistant_history'));
+    assert.ok(localStorage.getItem('sgk_textbook_draft_current'));
+    assert.equal(localStorage.getItem('sgk_recovery_before_import_123'), 'recovery');
+  });
+
+  it('storage totals use the same app-data scope as backups', ()=>{
+    localStorage.setItem('sgk_settings', '{}');
+    localStorage.setItem('future_app_data', 'kept');
+    localStorage.setItem('sgk_index_book.pdf', 'cache');
+    localStorage.setItem('sgk_recovery_before_import_123', 'recovery');
+
+    const stats = getStorageStats();
+    assert.equal(stats.backupKeys, 2);
+    assert.equal(stats.cacheKeys, 1);
   });
 
   it('backup → wipe → restore preserves same logical data', async()=>{

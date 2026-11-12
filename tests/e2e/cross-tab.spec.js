@@ -16,6 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const PORT = Number(process.env.E2E_CROSSTAB_PORT || 5325);
 const BASE = `http://127.0.0.1:${PORT}`;
+const APP_BASE = `${BASE}/?app=1`;
 
 let serverProcess = null;
 let browser = null;
@@ -126,7 +127,7 @@ function channelHits(cap) {
 }
 
 async function openBase(page) {
-  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".app-shell", { timeout: 20000 });
 }
 

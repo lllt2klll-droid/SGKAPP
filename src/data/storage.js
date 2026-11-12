@@ -372,14 +372,12 @@ async function exportIndexedDBData({ skipStores = [] } = {}) {
     for (const store of Object.values(STORES)) {
       if (skip.has(store)) continue;
       const records = await indexedDBService.getAllRecords(store, { strict: true });
-      if (records.length > 0) {
-        if (store === STORES.WB_IMAGES || store === STORES.NOTE_IMAGES) {
-          const serialized = [];
-          for (const r of records) serialized.push(await serializeWBRecord(r));
-          indexedData[store] = serialized;
-        } else {
-          indexedData[store] = records;
-        }
+      if (store === STORES.WB_IMAGES || store === STORES.NOTE_IMAGES) {
+        const serialized = [];
+        for (const r of records) serialized.push(await serializeWBRecord(r));
+        indexedData[store] = serialized;
+      } else {
+        indexedData[store] = records;
       }
     }
   } catch (err) {
@@ -557,10 +555,10 @@ export async function runHybridMigrations() {
 // See docs/storage-inventory.md for full table (generated via grep audit).
 // Summary: 7 stores IndexedDB + ~40 localStorage keys.
 // Persistent user data (backup+wipe+restore): bookmarks, vocab, quiz, refs, concepts, collections, clips, marks, teacherNotes, evidence, ideas, tasks, internship, lessonplans (+versions/autosave), activities, worksheets, questions, scans, custom_titles, sidebar/expanded, missions, settings, gemini key, activity_ratings, etc.
-// Cache / rebuildable (wipe but NOT backup): sgk_index_, sgk_meta_, sgk_idx_, ocr_, txt_, chat_, assistant_history
+// Derived cache (not backed up): sgk_index_, sgk_meta_, sgk_idx_, ocr_, txt_, toc_.
+// User conversations and textbook drafts are backed up even though old cache rules listed them.
 // ── Backup / restore ─────────────────────────────────────────────────
-// Keys remembered for backup (do NOT include caches or per-book indexes —
-// they can be rebuilt locally and would bloat the backup file).
+// Keys remembered for backup; derived caches and per-book indexes are excluded.
 // PHASE 6: includes scans, autosave, custom_titles, activity ratings (user-owned).
 // Canonical re-export — không duplicate array, tránh drift với core/storageKeys.js:116
 export const BACKUP_KEYS = _BACKUP_KEYS_CORE;
@@ -574,7 +572,10 @@ const CACHE_PREFIXES = _STORAGE_KEYS_CORE.CACHE_PREFIXES;
 
 export function isCacheKey(key) {
   // Delegate to canonical core to avoid drift
-  try { return _isCacheKeyCore(key); } catch { return CACHE_PREFIXES.some((prefix) => key.startsWith(prefix)); }
+  try { return _isCacheKeyCore(key); } catch {
+    if (key.startsWith("chat_") || key.startsWith("assistant_history") || key.startsWith("sgk_textbook_draft")) return false;
+    return CACHE_PREFIXES.some((prefix) => key.startsWith(prefix));
+  }
 }
 
 export async function removeBookData(filename) {
@@ -1141,16 +1142,28 @@ export async function migrateBookData(oldFilename, newFilename) {
   }
 }
 
-// Thu thập toàn bộ key localStorage thuộc diện sao lưu (dùng chung cho xuất file + sao lưu tự động)
+const INTERNAL_STORAGE_KEYS = new Set(["__health_test__", "_diag_test", "__proto__", "constructor", "prototype"]);
+
+export function isBackupSnapshotKey(key) {
+  return typeof key === "string" &&
+    key.length > 0 &&
+    key.length <= 512 &&
+    !INTERNAL_STORAGE_KEYS.has(key) &&
+    !key.startsWith("sgk_recovery_") &&
+    !isCacheKey(key);
+}
+
+// localStorage is origin-scoped; include future app data as well as the known inventory.
 export function collectLocalBackupData() {
   const data = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (!key || !isBackupKey(key)) continue;
+    if (!isBackupSnapshotKey(key)) continue;
     try {
-      data[key] = localStorage.getItem(key);
-    } catch {
-      /* skip */
+      const value = localStorage.getItem(key);
+      if (value !== null) data[key] = value;
+    } catch (error) {
+      throw new Error(`Không thể đọc dữ liệu "${key}" để sao lưu: ${error?.message || error}`);
     }
   }
   return data;
@@ -1363,7 +1376,7 @@ export async function importBackup(text) {
   const keysToClear = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && isBackupKey(k)) {
+    if (isBackupSnapshotKey(k)) {
       keysToClear.push(k);
       snapshotOriginals[k] = localStorage.getItem(k);
     }
@@ -1378,7 +1391,7 @@ export async function importBackup(text) {
     const rollback = {};
     for (const key of keysToClear) rollback[key] = snapshotOriginals[key] ?? null;
     for (const key of Object.keys(payload.data)) {
-      if (isBackupKey(key) && !Object.prototype.hasOwnProperty.call(rollback, key)) rollback[key] = null;
+      if (isBackupSnapshotKey(key) && !Object.prototype.hasOwnProperty.call(rollback, key)) rollback[key] = null;
     }
     saveBatch(rollback);
   };
@@ -1422,7 +1435,7 @@ export async function importBackup(text) {
 
   let count = 0;
   for (const [key, value] of Object.entries(payload.data)) {
-    if (!isBackupKey(key)) continue;
+    if (!isBackupSnapshotKey(key)) continue;
     updates[key] = value === undefined || value === null ? null : String(value);
     if (value !== undefined && value !== null) count++;
   }
@@ -1535,7 +1548,7 @@ export async function importBackup(text) {
 
   return {
     count,
-    total: Object.keys(payload.data).length,
+    total: count,
     indexedCount,
     indexedDataAvailable: payload.indexedDataAvailable !== false,
     indexedDataComplete: preview.preview.indexedDataComplete,
@@ -1557,7 +1570,7 @@ export async function importBackupMerge(text) {
   const payload = preview.payload;
   let count = 0;
   for (const [key, value] of Object.entries(payload.data)) {
-    if (!isBackupKey(key)) continue;
+    if (!isBackupSnapshotKey(key)) continue;
     try {
       if (value === undefined || value === null) localStorage.removeItem(key);
       else localStorage.setItem(key, String(value));

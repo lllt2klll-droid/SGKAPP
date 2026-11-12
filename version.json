@@ -1,0 +1,13 @@
+{
+  "version": "1.0.3",
+  "name": "Bản phát hành chính thức 1.0.3",
+  "releaseDate": "11/11/2026",
+  "changelog": [
+    "Thêm nhiều sách cùng lúc: chọn hoặc kéo-thả tối đa 60 file mỗi lần",
+    "Bảng thêm hàng loạt: xem tiến trình, sửa tiêu đề từng file, thử lại file lỗi",
+    "PDF trên máy có thể chọn “Chỉ liên kết file gốc” cho cả loạt — không sao chép",
+    "Tự gợi ý tiêu đề, lớp, môn cho từng file khi thêm hàng loạt",
+    "Giữ nguyên luồng xem trước khi chỉ thêm một sách"
+  ],
+  "downloadUrl": "https://github.com/lllt2klll-droid/book-update/releases"
+}

@@ -47,7 +47,7 @@ describe('A1 • Ngưỡng cảnh báo bộ nhớ trình duyệt', () => {
     const danger = storageNoticeText('danger', 98);
     assert.match(danger, /98%/);
     assert.match(danger, /Sao lưu ngay/);
-    assert.match(danger, /Sao lưu & Khôi phục/);
+    assert.match(danger, /Dữ liệu & sao lưu/);
 
     const warn = storageNoticeText('warn', 93);
     assert.match(warn, /93%/);

@@ -11,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const PORT = 55000 + (process.pid % 10000);
 const BASE = `http://127.0.0.1:${PORT}`;
+const APP_BASE = `${BASE}/?app=1`;
 const BOOK_FILE = "reader-flip-regression.pdf";
 
 let serverProcess = null;
@@ -92,7 +93,7 @@ test("BookReader chỉ đổi canvas sau khi hiệu ứng lật tới/lùi hoàn
         accessibility: { pageFlip3D: true },
       }));
     });
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.evaluate(() => {
       const button = [...document.querySelectorAll("aside button")].find((item) =>
@@ -205,7 +206,7 @@ test("BookReader tìm trang, đánh dấu trang, phóng to và lưu ghi chú", a
         items: [{ id: "jump-target", title: "Mục kiểm tra", page: 4, pdfPage: 4, depth: 0 }],
       }));
     });
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.evaluate(() => {
       [...document.querySelectorAll("aside button")]
@@ -315,7 +316,7 @@ test("Tạo giáo án AI giữ trang sách và quay lại đúng giáo án sau k
         }),
       });
     });
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.evaluate(() => {
       [...document.querySelectorAll("aside button")]

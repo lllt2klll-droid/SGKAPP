@@ -1,116 +1,18 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, X, BookOpen, Lightbulb, FileText, Puzzle, Database, ListChecks, Library, NotebookPen, Scissors, ClipboardCheck, Palette, Layers, StickyNote, Tag, Clock, Trash2 } from "lucide-react";
 import { findTocBook } from "../data/tocData.js";
-import { getShortcut, matchesShortcut, splitCombo } from "../services/keyboardShortcuts.js";
+import { getShortcut, matchesShortcut } from "../services/keyboardShortcuts.js";
 import { safeGetJSON } from "../safeStorage.js";
 import { searchNotes, getNoteKindLabel } from "../data/noteSearch.js";
 import { getRecentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } from "../data/searchRecent.js";
 import { groupResultsForDisplay, FILTER_DEFS, parseFilterPrefix, filterResultsByType, countByType } from "../data/searchDisplayOrder.js";
 import { resolveVocabBookTitle } from "../data/vocabSearch.js";
 import { applySearchConfig, getSearchConfig, getDisabledViews } from "../services/settingsStore.js";
-
-// Chuẩn hoá không dấu để highlight khớp cả khi gõ không dấu
-function normVi(s) {
-  return String(s || "")
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-}
-
-// Highlight các token của query trong text — khớp trực tiếp (hoa/thường) trước,
-// fallback khớp không dấu thì highlight toàn bộ cụm (tránh sai index do mất dấu).
-function HighlightedText({ text, query }) {
-  const t = String(text ?? "");
-  const q = String(query ?? "").trim();
-  if (!t || !q) return <>{t}</>;
-  const tokens = q.split(/\s+/).filter((w) => w.length >= 2);
-  if (!tokens.length) return <>{t}</>;
-  const lower = t.toLowerCase();
-  // Tìm tất cả vị trí khớp trực tiếp của mọi token
-  const ranges = [];
-  for (const tok of tokens) {
-    const tl = tok.toLowerCase();
-    let from = 0;
-    while (from <= lower.length - tl.length) {
-      const i = lower.indexOf(tl, from);
-      if (i === -1) break;
-      ranges.push([i, i + tl.length]);
-      from = i + Math.max(1, tl.length);
-    }
-  }
-  if (ranges.length) {
-    ranges.sort((a, b) => a[0] - b[0]);
-    const merged = [];
-    for (const r of ranges) {
-      const last = merged[merged.length - 1];
-      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
-      else merged.push([...r]);
-    }
-    const parts = [];
-    let cur = 0;
-    merged.forEach(([a, b], idx) => {
-      if (cur < a) parts.push(<span key={`p${idx}-0`}>{t.slice(cur, a)}</span>);
-      parts.push(<mark key={`p${idx}-1`} className="gs-mark">{t.slice(a, b)}</mark>);
-      cur = b;
-    });
-    if (cur < t.length) parts.push(<span key="p-end">{t.slice(cur)}</span>);
-    return <>{parts}</>;
-  }
-  // Không khớp trực tiếp nhưng khớp không dấu → bôi nhẹ toàn bộ (gợi ý liên quan)
-  const nt = normVi(t);
-  const hit = tokens.some((tok) => nt.includes(normVi(tok)));
-  if (hit) return <span className="gs-fuzzy-hit">{t}</span>;
-  return <>{t}</>;
-}
-
-// Ánh xạ nhóm mặc định trong Cài đặt → filter chip Ctrl+K
-function mapDefaultTypeToFilter(t) {
-  if (t === "toc") return "toc";
-  if (t === "notes") return "note";
-  return "all";
-}
-
-// Lệnh nhanh kiểu VSCode — gõ ">" + tên lệnh để nhảy thẳng / tạo mới
-// disabledViews (Cài đặt → Tính năng): lệnh nhảy tới module đang tắt bị ẩn.
-function buildQuickCommands(onNavigateRef, disabledViews) {
-  const go = (view, opts) => () => onNavigateRef.current(view, opts);
-  const cmds = [
-    { id: "cmd-dashboard", view: "dashboard", title: "Đi tới: Tổng quan", subtitle: "Mở trang tổng quan", keywords: "tong quan dashboard home", action: go("dashboard") },
-    { id: "cmd-library", view: "library", title: "Đi tới: Thư viện sách", subtitle: "Mở thư viện", keywords: "thu vien library sach", action: go("library") },
-    { id: "cmd-search", view: "search", title: "Đi tới: Tìm kiếm nâng cao", subtitle: "Mở trang Tìm kiếm", keywords: "tim kiem search nang cao", action: go("search") },
-    { id: "cmd-lessonplans", view: "lessonplans", title: "Đi tới: Giáo án", subtitle: "Mở danh sách giáo án", keywords: "giao an khbd lessonplan", action: go("lessonplans") },
-    { id: "cmd-activities", view: "activities", title: "Đi tới: Hoạt động", subtitle: "Mở hoạt động học tập", keywords: "hoat dong activity", action: go("activities") },
-    { id: "cmd-worksheets", view: "worksheets", title: "Đi tới: Phiếu học tập", subtitle: "Mở phiếu", keywords: "phieu worksheet", action: go("worksheets") },
-    { id: "cmd-questionbank", view: "questionbank", title: "Đi tới: Ngân hàng câu hỏi", subtitle: "Mở ngân hàng câu hỏi", keywords: "cau hoi question ngan hang", action: go("questionbank") },
-    { id: "cmd-vocab", view: "vocab", title: "Đi tới: Từ vựng", subtitle: "Mở sổ tay từ vựng", keywords: "tu vung vocab", action: go("vocab") },
-    { id: "cmd-tasks", view: "tasks", title: "Đi tới: Nhiệm vụ", subtitle: "Mở hub nhiệm vụ", keywords: "nhiem vu task mission", action: go("tasks") },
-    { id: "cmd-ideas", view: "ideas", title: "Đi tới: Ý tưởng", subtitle: "Mở ý tưởng dạy học", keywords: "y tuong idea", action: go("ideas") },
-    { id: "cmd-references", view: "references", title: "Đi tới: Tài liệu tham khảo", subtitle: "Mở tham khảo", keywords: "tham khao reference tai lieu", action: go("references") },
-    { id: "cmd-collections", view: "collections", title: "Đi tới: Bộ sưu tập", subtitle: "Mở bộ sưu tập", keywords: "bo suu tap collection", action: go("collections") },
-    { id: "cmd-whiteboard", view: "whiteboard", title: "Đi tới: Bảng trắng", subtitle: "Mở bảng trắng", keywords: "bang trang whiteboard", action: go("whiteboard") },
-    { id: "cmd-new-idea", view: "ideas", title: "Tạo mới: Ý tưởng", subtitle: "Mở Ý tưởng để thêm", keywords: "tao moi new idea", action: go("ideas") },
-    { id: "cmd-new-task", view: "tasks", title: "Tạo mới: Nhiệm vụ", subtitle: "Mở Nhiệm vụ để thêm việc", keywords: "tao moi new task viec", action: go("tasks", { tab: "tasks" }) },
-    { id: "cmd-new-plan", view: "lessonplans", title: "Tạo mới: Giáo án", subtitle: "Mở Giáo án để soạn", keywords: "tao moi new giao an khbd", action: go("lessonplans") },
-  ];
-  return disabledViews && disabledViews.size ? cmds.filter((c) => !disabledViews.has(c.view)) : cmds;
-}
-
-// Hiển thị combo phím từ cài đặt (không hardcode "Ctrl+K"/"Escape" trong hint —
-// user đổi shortcut trong Settings thì hint phải tự cập nhật, lỗi #13).
-function KbdCombo({ combo, k = "c" }) {
-  const parts = splitCombo(combo);
-  return (
-    <>
-      {parts.map((p, i) => (
-        <React.Fragment key={`${k}-${i}`}>
-          {i > 0 ? " + " : ""}
-          <kbd className="kbd">{p}</kbd>
-        </React.Fragment>
-      ))}
-    </>
-  );
-}
+import {
+  HighlightedText,
+  KbdCombo,
+} from "./globalSearchHelpers.jsx";
+import { buildQuickCommands, mapDefaultTypeToFilter, normVi } from "./globalSearchData.js";
 
 export default function GlobalSearch({ books, onNavigate, onOpenBook }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -272,8 +174,20 @@ export default function GlobalSearch({ books, onNavigate, onOpenBook }) {
   useEffect(() => {
     if (!isOpen) return;
     const el = document.querySelector(".global-search-result.selected, .global-search-recent-item.selected");
-    if (el && typeof el.scrollIntoView === "function") {
-      el.scrollIntoView({ block: "nearest" });
+    const body = el?.closest(".global-search-body");
+    if (!el || !body) return;
+    const itemRect = el.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
+    const scrollDelta = itemRect.top < bodyRect.top
+      ? itemRect.top - bodyRect.top - 2
+      : itemRect.bottom > bodyRect.bottom
+        ? itemRect.bottom - bodyRect.bottom + 2
+        : 0;
+    if (scrollDelta) {
+      const previousBehavior = body.style.scrollBehavior;
+      body.style.scrollBehavior = "auto";
+      body.scrollTop += scrollDelta;
+      body.style.scrollBehavior = previousBehavior;
     }
   }, [isOpen, selectedIndex, query, effectiveQuery, effectiveFilter, flatResults.length, visibleCommands.length]);
 

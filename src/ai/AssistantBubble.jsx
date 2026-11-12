@@ -155,12 +155,12 @@ const GUIDES = [
   },
   {
     id: "backup", icon: "💾", title: "Sao lưu & Thùng rác", view: "datatools",
-    desc: "Xuất 1 file JSON, khôi phục, chẩn đoán.",
+    desc: "Một nơi để sao lưu, khôi phục và kiểm tra dữ liệu.",
     keywords: ["sao lưu", "backup", "khôi phục", "thùng rác", "xóa", "xuất", "json"],
     steps: [
-      { t: "Xuất ngay", d: "Sao lưu & Khôi phục → “Xuất ngay” → lưu file hanhtrang-backup-YYYY-MM-DD.json ra OneDrive/USB." },
+      { t: "Sao lưu", d: "Mở Dữ liệu & sao lưu → “Tạo file sao lưu” → lưu file JSON ra OneDrive/USB." },
       { t: "Thùng rác", d: "Sách / từ vựng xóa nhầm → vào Thùng rác → Khôi phục (giữ 30 ngày)." },
-      { t: "Sao lưu tự động", d: "Bật snapshot theo ngày/tuần/tháng để không bao giờ mất dữ liệu." },
+      { t: "Khôi phục", d: "Chọn file sao lưu, xem lại nội dung rồi xác nhận để khôi phục." },
     ],
   },
   {
@@ -290,7 +290,7 @@ function followUpsFor(text, lastQ) {
   if (/trắc nghiệm|câu hỏi|đề/.test(t)) out.push("Tạo thêm 5 câu mức Vận dụng?", "Xuất các câu này thành phiếu học tập thế nào?");
   if (/quét|scan|ảnh|ocr/.test(t)) out.push("Hướng dẫn quét SGK để tạo quiz?", "Quét xong lưu ở đâu?");
   if (/thư viện|thêm sách|sách/.test(t)) out.push("Cách đánh dấu trang đang đọc?", "Cách tìm kiếm toàn văn trong sách?");
-  if (/sao lưu|backup|thùng rác|mất/.test(t)) out.push("Cách khôi phục sách đã xóa?", "Sao lưu tự động bật ở đâu?");
+  if (/sao lưu|backup|thùng rác|mất/.test(t)) out.push("Cách khôi phục sách đã xóa?", "Dữ liệu nào nằm trong file sao lưu?");
   out.push("Tóm tắt lại ngắn gọn hơn?");
   return [...new Set(out)].slice(0, 3);
 }

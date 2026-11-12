@@ -443,6 +443,8 @@
 .whiteboard-root .wb-opts-divider { height:1px; background:var(--border-color,#e2e8f0); margin:6px 4px; }
 .whiteboard-root .wb-opts-footer { display:flex; flex-direction:column; align-items:stretch; gap:6px; padding:4px 4px 2px; }
 .whiteboard-root .wb-popover-select { width:100%; box-sizing:border-box; }
+.whiteboard-root .wb-ai-sort-trigger { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; gap:5px; min-height:30px; padding:4px 9px; border-radius:8px; font-size:0.7188rem; white-space:nowrap; }
+@media (max-width: 700px) { .whiteboard-root .wb-ai-sort-trigger { padding:4px 7px; font-size:0.6563rem; } }
 
 [data-theme="dark"] .whiteboard-root .wb-opt-row { color:#e2e8f0; }
 [data-theme="dark"] .whiteboard-root .wb-opt-row:hover { background:#1e293b; border-color:#273449; }

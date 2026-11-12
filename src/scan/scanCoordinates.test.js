@@ -5,7 +5,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { toCanvasPixels, pickCanvasForSelection } from './scanCoordinates.js';
+import { getInitialCropRect, toCanvasPixels, pickCanvasForSelection } from './scanCoordinates.js';
 
 // Helper functions for testing (copied from scanCoordinates.js)
 function normalizeRect(x, y, w, h) {
@@ -48,6 +48,35 @@ function simulateTransformedRect(baseRect, panX, panY, zoom, originX = 0.5, orig
 }
 
 describe('Coordinate System Tests', () => {
+
+  describe('getInitialCropRect', () => {
+    it('uses the visible cropped image bounds when source-page coordinates are present', () => {
+      assert.deepStrictEqual(
+        getInitialCropRect(640, 480, {
+          x: 120,
+          y: 240,
+          w: 800,
+          h: 600,
+          srcRect: { sx: 1200, sy: 1800, sw: 800, sh: 600 },
+        }),
+        { x: 0, y: 0, w: 640, h: 480 },
+      );
+    });
+
+    it('keeps already-adjusted crop coordinates inside the current image', () => {
+      assert.deepStrictEqual(
+        getInitialCropRect(640, 480, { x: 40, y: 30, w: 900, h: 500 }),
+        { x: 40, y: 30, w: 600, h: 450 },
+      );
+    });
+
+    it('falls back to the full image when crop coordinates are invalid', () => {
+      assert.deepStrictEqual(
+        getInitialCropRect(640, 480, { x: 700, y: 0, w: 50, h: 50 }),
+        { x: 0, y: 0, w: 640, h: 480 },
+      );
+    });
+  });
   
   describe('normalizeRect (test helper)', () => {
     it('should normalize negative width', () => {

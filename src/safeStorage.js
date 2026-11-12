@@ -5,7 +5,7 @@
 import { appEvents as _busSafe, AppEvents as _EventsSafe } from "./core/appEvents.js";
 
 const CORRUPTED_PREFIX = "__corrupted__";
-const QUOTA_MSG = "Không thể lưu dữ liệu vì bộ nhớ trình duyệt đã đầy. Hãy vào Sao lưu & Khôi phục → Quản lý dữ liệu để xóa cache.";
+const QUOTA_MSG = "Không thể lưu dữ liệu vì bộ nhớ trình duyệt đã đầy. Hãy vào Dữ liệu & sao lưu → Giải phóng dung lượng để dọn cache.";
 
 // Test cố tình gây corrupted/quota — im lặng log dự kiến để output sạch.
 // Bật bằng globalThis.__SGK_TEST__ = true trong các file *.test.js
@@ -203,7 +203,7 @@ export function countKeysByPrefix(prefix) { return listKeysByPrefix(prefix).leng
 //  1. __corrupted__ backups (rác chẩn đoán)
 //  2. ai_image_cache (cache ảnh AI, tái tạo được)
 //  3. Prefix cache rebuildable: sgk_idx_, sgk_idxmeta_, sgk_index_, sgk_meta_,
-//     ocr_, txt_, chat_ (OCR/index/chat có thể build lại từ PDF)
+//     ocr_, txt_ (conversations are user data and must be preserved)
 // Chỉ xóa tối đa ~40 keys / lần để tránh treo UI.
 const EVICT_PREFIXES = [
   "__corrupted__",
@@ -213,7 +213,6 @@ const EVICT_PREFIXES = [
   "sgk_meta_",
   "ocr_",
   "txt_",
-  "chat_",
 ];
 const EVICT_EXACT_KEYS = ["ai_image_cache"];
 

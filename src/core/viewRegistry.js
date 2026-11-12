@@ -49,7 +49,7 @@ export const VIEW_REGISTRY = {
   ideas:       { id:"ideas",       label:"Ý tưởng",            section:"CÔNG VIỆC", sectionId:"cong-viec", component: lazyWithRetry(()=> import("../views/IdeasView.jsx")), breadcrumb:["CÔNG VIỆC"], mobile:true },
   stats:       { id:"stats",       label:"Thống kê",           section:"CÔNG VIỆC", sectionId:"cong-viec", component: null, breadcrumb:["CÔNG VIỆC"], mobile:true }, // inline StatsView in App.jsx — depends on counts/quizHistory/favs
   webtools:    { id:"webtools",    label:"Kho Công cụ Web",    section:"KHO CÔNG CỤ", sectionId:"kho-cong-cu",component: lazyWithRetry(()=> import("../views/WebToolboxView.jsx")), breadcrumb:["KHO CÔNG CỤ"], mobile:true },
-  datatools:   { id:"datatools",   label:"Sao lưu & Khôi phục",section:"TIỆN ÍCH", sectionId:"tien-ich", component: lazyWithRetry(()=> import("../views/DataToolsView.jsx")), breadcrumb:["TIỆN ÍCH"], mobile:true },
+  datatools:   { id:"datatools",   label:"Dữ liệu & sao lưu",section:"TIỆN ÍCH", sectionId:"tien-ich", component: lazyWithRetry(()=> import("../views/DataToolsView.jsx")), breadcrumb:["TIỆN ÍCH"], mobile:true },
   help:        { id:"help",        label:"Trợ giúp",           section:"TIỆN ÍCH", sectionId:"tien-ich", component: lazyWithRetry(()=> import("../views/HelpView.jsx")), breadcrumb:["TIỆN ÍCH"], mobile:true },
 };
 

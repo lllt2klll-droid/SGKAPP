@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const PORT = Number(process.env.E2E_PORT || 5321);
 const BASE = `http://127.0.0.1:${PORT}`;
+const APP_BASE = `${BASE}/?app=1`;
 
 let serverProcess = null;
 let browser = null;
@@ -60,12 +61,50 @@ after(async () => {
   }
 });
 
+test("landing page giới thiệu tính năng, quyền riêng tư và lựa chọn cài đặt", async () => {
+  const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+  try {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector(".site-header");
+    assert.match(await page.title(), /Hành trang Tiểu học/);
+    assert.equal(await page.locator(".site-preview img").count(), 2);
+    assert.equal(await page.locator(".site-showcase-image img").count(), 1);
+    await page.locator(".site-showcase-image img").scrollIntoViewIfNeeded();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll(".site-preview img, .site-showcase-image img")].every((image) =>
+        image.complete && image.naturalWidth > 0,
+      ),
+    );
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("[data-reveal]")].every((element) =>
+        element.classList.contains("site-reveal") && element.classList.contains("is-visible"),
+      ),
+    );
+    assert.equal(await page.locator(".site-feature-card").count(), 9);
+    assert.equal(await page.locator(".site-faq details").count(), 5);
+    assert.equal(await page.locator(".site-install-card").count(), 2);
+    assert.ok(await page.locator('a[href*="app=1"]').count() >= 2);
+    const manifest = await page.evaluate(async () => (await fetch("/manifest.webmanifest")).json());
+    assert.equal(manifest.short_name, "Hành trang Tiểu học");
+    assert.match(manifest.start_url, /app=1/);
+    assert.match(await page.locator(".site-install-windows a").getAttribute("href"), /github\.com/);
+    await page.getByRole("button", { name: /Cài đặt trên thiết bị/ }).click();
+    assert.notEqual(await page.locator(".site-install-message").innerText(), "");
+    await page.getByRole("link", { name: /Dùng ứng dụng web/ }).click();
+    await page.waitForSelector(".app-shell", { timeout: 20000 });
+    assert.match(page.url(), /app=1/);
+  } finally {
+    await page.close();
+  }
+});
+
 test("app load duoc, khong co pageerror", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     assert.equal(await page.locator(".app-shell").count(), 1, "phai render duoc .app-shell");
     assert.deepEqual(errors, [], `khong duoc co pageerror: ${errors.join(" | ")}`);
@@ -77,7 +116,7 @@ test("app load duoc, khong co pageerror", async () => {
 test("chuyen den Thu vien sach thay duoc toolbar hien thi/sap xep", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.evaluate(() => {
       const btn = [...document.querySelectorAll("aside button")].find((b) =>
@@ -97,7 +136,7 @@ test("chuyen den Thu vien sach thay duoc toolbar hien thi/sap xep", async () => 
 test("Ctrl+K mo dung 1 lop GlobalSearch", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.keyboard.press("Control+k");
     await page.waitForTimeout(700);
@@ -114,7 +153,7 @@ test("Ctrl+K mo dung 1 lop GlobalSearch", async () => {
 test("dang doc sach: Ctrl+K mo GlobalSearch, khong mo trung command palette cua reader", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     // Vao Thu vien sach
     await page.evaluate(() => {
@@ -165,7 +204,7 @@ test("Ctrl+K: Enter chay dung item dang highlight khi nhieu nhom ket qua", async
       );
     }, KEY);
 
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.keyboard.press("Control+k");
     await page.waitForTimeout(500);
@@ -198,7 +237,7 @@ test("Ctrl+K phan quyen: TextBookModal dang mo so huu Ctrl+K (chen link), khong 
   const dialogs = [];
   page.on("dialog", async (d) => { dialogs.push(d.message()); await d.dismiss(); });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("sgk:open-word-editor")));
     await page.waitForSelector(".word-modal-overlay", { timeout: 10000 });
@@ -221,7 +260,7 @@ test("Ctrl+K phan quyen: TextBookModal dang mo so huu Ctrl+K (chen link), khong 
 test("Escape tu GlobalSearch khong noi event len reader: bang lenh reader van con", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.evaluate(() => {
       const btn = [...document.querySelectorAll("aside button")].find((b) =>
@@ -272,7 +311,7 @@ test("Xoa query reset selectedIndex: Enter tren danh sach recent dung item dang 
       },
       { k: KEY, recent: RECENT },
     );
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
 
     await page.keyboard.press("Control+k");
@@ -323,7 +362,7 @@ test("Ctrl+K ton trong Cài đặt tìm kiếm: caseSensitive=true khong khop ch
       );
       localStorage.setItem("sgk_ideas", JSON.stringify([{ id: "idea-case-1", title: t, description: "" }]));
     }, TITLE);
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
 
     await page.keyboard.press("Control+k");
@@ -367,7 +406,7 @@ test("Hint Ctrl+K/Escape lay tu Settings — doi shortcut thi hint tu cap nhat",
         }),
       );
     });
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
 
     // Ctrl+K không còn là combo → mở qua event để xem hint
@@ -395,7 +434,7 @@ test("Hint Ctrl+K/Escape lay tu Settings — doi shortcut thi hint tu cap nhat",
 test("Lock scroll body khi mo GlobalSearch, khoi phuc khi dong", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     const before = await page.evaluate(() => document.body.style.overflow);
     assert.notEqual(before, "hidden", "truoc khi mo, body khong bi khoa scroll");
@@ -433,7 +472,7 @@ test("↑↓ cuon item highlight vao viewport (scrollIntoView)", async () => {
       }));
       localStorage.setItem("sgk_vocab", JSON.stringify(vocab));
     }, KEY);
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
 
     await page.keyboard.press("Control+k");
@@ -477,7 +516,7 @@ test("a11y GlobalSearch: dialog/combobox/listbox, aria-activedescendant, focus t
     await page.addInitScript((k) => {
       localStorage.setItem("sgk_ideas", JSON.stringify([{ id: "idea-a11y-1", title: k, description: "" }]));
     }, KEY);
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
 
     await page.keyboard.press("Control+k");
@@ -560,7 +599,7 @@ test("Ctrl+K debounce quet localStorage va khong quet lai khi App re-render", as
         return orig.call(this, k);
       };
     });
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     // Chờ app boot settle (fetchBooks xong) — nếu không, books đổi giữa chừng sẽ
     // hợp lệ kích hoạt effect lần 2, nhiễu số liệu đo debounce.
@@ -617,7 +656,7 @@ test("Ctrl+K debounce quet localStorage va khong quet lai khi App re-render", as
 test("GlobalSearch dung token z-index --z-search-overlay, khong so cung", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.keyboard.press("Control+k");
     await page.waitForTimeout(500);
@@ -655,7 +694,7 @@ test("GlobalSearch dung token z-index --z-search-overlay, khong so cung", async 
 test("dang doc sach: 2 lop cung mo — Enter/↑↓ thuoc GlobalSearch, khong chay lenh reader an", async () => {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   try {
-    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     await page.evaluate(() => {
       const btn = [...document.querySelectorAll("aside button")].find((b) =>

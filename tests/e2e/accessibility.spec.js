@@ -12,6 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const PORT = Number(process.env.E2E_A11Y_PORT || 5326);
 const BASE = `http://127.0.0.1:${PORT}`;
+const APP_BASE = `${BASE}/?app=1`;
 
 let serverProcess = null;
 let browser = null;
@@ -64,7 +65,7 @@ after(async () => {
 
 async function freshPage() {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
-  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".app-shell", { timeout: 20000 });
   await page.evaluate(() => localStorage.removeItem("sgk_settings"));
   await page.reload({ waitUntil: "domcontentloaded" });

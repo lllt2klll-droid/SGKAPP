@@ -7,17 +7,16 @@ import React, {
   lazy,
   useRef,
 } from "react";
-import { getApiBase, writeHeaders } from "./services/apiConfig.js";
+import { apiUrl, getApiBase, writeHeaders } from "./services/apiConfig.js";
 import { getBreadcrumb as getBreadcrumbCore, buildNavSections as buildNavSectionsCore, getFooterNav, normalizeExpandedKeys as normalizeExpandedKeysCore } from "./core/navigationRegistry.js";
 import { appEvents as appEventsCore, AppEvents as AppEventsCore } from "./core/appEvents.js";
 import { BookProvider } from "./core/bookContext.js";
 import { VIEW_REGISTRY, getViewEntry } from "./core/viewRegistry.js";
 import { toFriendlyError } from "./core/errors.js";
-import BookCover from "./reader/BookCover.jsx";
 import TextBookModal from "./reader/TextBookModal.jsx";
 import { storageNoticeLevel, storageNoticeText } from "./data/storageNotice.js";
 import { APP_COPYRIGHT } from "./ai/appPersona.js";
-import { preventWindowDrop, hasFilesInDataTransfer } from "./components/fileDropzoneUtils.js";
+import { preventWindowDrop } from "./components/fileDropzoneUtils.js";
 
 // -- Chunk load retry: khắc phục 404 stale chunk sau khi build mới (PWA) --
 function lazyWithRetry(factory, retries = 1) {
@@ -47,46 +46,28 @@ function lazyWithRetry(factory, retries = 1) {
   });
 }
 import { getShortcut, matchesShortcut } from "./services/keyboardShortcuts.js";
-import { bookProgress, progressFromPages, READ_STATUS } from "./reader/readingProgress.js";
+import { bookProgress, READ_STATUS } from "./reader/readingProgress.js";
 import {
   PRIMARY_SUBJECTS,
-  getSubjectCatalog,
   syncCatalogWithBooks,
-  sortSubjects,
 } from "./data/subjectCatalog.js";
 import {
   Settings,
   Search,
+  Download,
   BookOpen,
   RefreshCw,
   X,
   Plus,
-  Check,
   Sparkles,
-  Upload,
-  Clock,
-  Star,
   Sun,
   Moon,
   Monitor,
-  LayoutGrid,
-  List,
-  ArrowUpDown,
   Trash2,
-  BookOpenCheck,
-  Bookmark,
-  BookmarkCheck,
   DatabaseBackup,
   ChevronLeft,
   ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
-  Pencil,
-  RotateCcw,
-  Edit3,
   Maximize,
   Minimize,
 } from "lucide-react";
@@ -117,10 +98,8 @@ import { getQuestions } from "./data/teachingDB.js";
 import { getPlans as getKhbdV2Plans } from "./khbd/planModel.js";
 import { getClips, countMarks } from "./data/researchDB.js";
 import { saveJSON, exportBackup } from "./data/storage.js";
-import { moveToTrash, takeFromTrash, listTrash, listTrashByType, TRASH_TYPE, TRASH_TTL_DAYS } from "./data/trashStore.js";
-import { safeGetJSON, safeSetJSON, safeGetString, safeSetString } from "./safeStorage.js";
-import SampleButton from "./views/SampleButton.jsx";
-import DataTable from "./views/DataTable.jsx";
+import { moveToTrash, takeFromTrash, listTrash, listTrashByType, removeBooksFromTrashByFilename, TRASH_TYPE, TRASH_TTL_DAYS } from "./data/trashStore.js";
+import { safeGetJSON, safeSetJSON, safeGetString, safeSetString, safeRemove } from "./safeStorage.js";
 import VocabView from "./views/VocabView.jsx";
 import BookmarksNotesView from "./views/BookmarksNotesView.jsx";
 import AssistantBubble from "./ai/AssistantBubble.jsx";
@@ -148,7 +127,6 @@ import {
   addVocabEntry,
   getQuizHistory,
   clearQuizHistory,
-  formatDateTime,
   clearLastPages,
 } from "./data/userdata.js";
 import { getGeminiApiKey } from "./data/storage.js";
@@ -156,6 +134,19 @@ import { formatSuggestedBookTitle } from "./reader/bookUtils.js";
 import { pdfjsLib } from "./reader/pdfjs-config.js";
 import { buildIndex, needsRebuild, getIndexMeta } from "./data/searchIndex.js";
 import { useFocusTrap } from "./ui/useFocusTrap.js";
+import LibraryView from "./views/LibraryView.jsx";
+import ContinueView from "./views/ContinueView.jsx";
+import StatsView from "./views/StatsView.jsx";
+import BatchUploadDialog from "./components/BatchUploadDialog.jsx";
+import {
+  BATCH_CHUNK_SIZE,
+  BATCH_MAX_FILES,
+  batchResultSummary,
+  buildBatchItems,
+  canLinkAll,
+  chunkItems,
+  sanitizeBatchTitle,
+} from "./views/batchUpload.js";
 
 const API_BASE = getApiBase();
 
@@ -201,18 +192,6 @@ function useDebouncedValue(value, delay = 220) {
   return debounced;
 }
 
-const SORT_OPTIONS = [
-  { id: "grade", label: "Lớp + môn" },
-  { id: "name", label: "Tên A→Z" },
-  { id: "nameDesc", label: "Tên Z→A" },
-  { id: "size", label: "Kích thước nhỏ→lớn" },
-  { id: "sizeDesc", label: "Kích thước lớn→nhỏ" },
-  { id: "recent", label: "Mở gần đây" },
-  { id: "progress", label: "Tiến độ cao→thấp" },
-  { id: "progressAsc", label: "Tiến độ thấp→cao" },
-];
-
-const SUBJECTS = PRIMARY_SUBJECTS; // giữ nguyên master, chi tiết trong subjectCatalog.js
 const BOOK_INFO_SUBJECTS = [...new Set([...PRIMARY_SUBJECTS, "Khác"])];
 const TERMS = [1, 2];
 
@@ -355,6 +334,99 @@ export default function App() {
     window.addEventListener("offline", off);
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
+
+  // Tự động kiểm tra bản cập nhật mới khi mở ứng dụng (sau 3.5 giây)
+  const [appUpdateNotice, setAppUpdateNotice] = useState(null);
+  const [appUpdateDialogOpen, setAppUpdateDialogOpen] = useState(false);
+  const [desktopUpdateStatus, setDesktopUpdateStatus] = useState({ status: "idle" });
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(apiUrl("/api/update/check"));
+        if (res.ok) {
+          const data = await res.json();
+          const pendingUpdate = safeGetJSON("sgk_pending_app_update", null);
+          if (pendingUpdate?.version && pendingUpdate.version === data?.currentVersion) {
+            safeRemove("sgk_pending_app_update");
+            setAppUpdateNotice({
+              ...data,
+              hasUpdate: false,
+              justUpdated: true,
+              latestVersion: pendingUpdate.version,
+              changelog: pendingUpdate.changelog || data.changelog || [],
+            });
+            setAppUpdateDialogOpen(true);
+          } else if (data?.hasUpdate) {
+            setAppUpdateNotice(data);
+          }
+        }
+      } catch {}
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    return window.sgkUpdater?.onStatus((status) => {
+      setDesktopUpdateStatus(status);
+      if (status.status === "downloaded") setAppUpdateDialogOpen(true);
+    });
+  }, []);
+
+  const startAppUpdate = async () => {
+    setAppUpdateDialogOpen(true);
+    setDesktopUpdateStatus({ status: "checking" });
+    if (!window.sgkUpdater) {
+      setDesktopUpdateStatus({
+        status: "unsupported",
+        message: "Tự cập nhật chỉ khả dụng trong ứng dụng Windows đã cài đặt.",
+      });
+      return;
+    }
+    try {
+      const result = await window.sgkUpdater.checkForUpdates();
+      if (!result?.supported) {
+        setDesktopUpdateStatus({ status: "unsupported", message: result?.message || "Không thể tự cập nhật phiên bản này." });
+        return;
+      }
+      if (result.downloaded) {
+        setDesktopUpdateStatus({ status: "downloaded", version: result.version });
+        return;
+      }
+      if (!result.available) {
+        setDesktopUpdateStatus({ status: "not-available" });
+        return;
+      }
+      await window.sgkUpdater.downloadUpdate();
+    } catch (error) {
+      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể tải bản cập nhật." });
+    }
+  };
+
+  const installDownloadedUpdate = async () => {
+    const saved = safeSetJSON("sgk_pending_app_update", {
+      version: appUpdateNotice?.latestVersion || desktopUpdateStatus.version,
+      changelog: appUpdateNotice?.changelog || [],
+    });
+    if (!saved.ok) {
+      console.warn("[App] Could not save pending update notice:", saved.error);
+    }
+    try {
+      await window.sgkUpdater?.installUpdate();
+    } catch (error) {
+      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể khởi động trình cài đặt." });
+    }
+  };
+
+  const openUpdateReleases = async () => {
+    try {
+      if (window.sgkUpdater?.openReleases) {
+        await window.sgkUpdater.openReleases();
+      } else if (appUpdateNotice?.downloadUrl) {
+        window.open(appUpdateNotice.downloadUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể mở trang tải bản Setup." });
+    }
+  };
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const v = safeGetString("sgk_sidebar_collapsed", null);
     return v === "true";
@@ -463,6 +535,8 @@ export default function App() {
   const [noticeUndo, setNoticeUndo] = useState(null); // { text, run }
   const [uploadError, setUploadError] = useState("");
   const [uploadDraft, setUploadDraft] = useState(null);
+  const [batchUpload, setBatchUpload] = useState(null);
+  const batchAbortRef = useRef(null);
   const [uploadThumb, setUploadThumb] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const uploadInputRef = useRef(null);
@@ -474,7 +548,7 @@ export default function App() {
   const [vocabQuery, setVocabQuery] = useState("");
   // tinh tế: thay confirm/prompt bằng modal
   const [deleteTarget, setDeleteTarget] = useState(null);
-  // A2 • số mục trong Thùng rác → badge ở mục "Sao lưu & Khôi phục"
+  // A2 • số mục trong Thùng rác → badge ở mục "Dữ liệu & sao lưu"
   const [trashCount, setTrashCount] = useState(() => {
     try { return listTrash().length; } catch { return 0; }
   });
@@ -587,46 +661,19 @@ export default function App() {
     return () => { try { if (typeof off === "function") off(); } catch {} clearInterval(timer); };
   }, [checkStorageQuota, showStorageNotice]);
 
-  // Bấm "Sao lưu ngay" trong banner → xuất file + ghi mốc thời gian
+  // Bấm "Sao lưu ngay" trong banner → dùng cùng định dạng sao lưu toàn app.
   const handleBackupNow = useCallback(async () => {
     try {
       const result = await exportBackup();
-      const iso = new Date().toISOString();
-      try { safeSetString("sgk_last_backup", String(Date.now())); } catch {}
-      try { updateSettings({ backup: { lastBackupTime: iso } }); } catch {}
+      const saved = safeSetString("sgk_last_backup", String(Date.now()));
+      if (!saved.ok) console.warn("[App] Could not store the last-backup timestamp", saved);
+      appEventsCore.emit(AppEventsCore.DATA_UPDATED, { source: "backup-export" });
       dismissStorageNotice();
       setUploadNotice(`Đã tải file sao lưu (${result.total} mục). Hãy lưu file vào OneDrive/USB để an toàn.`);
     } catch (e) {
       setUploadError(`Sao lưu thất bại: ${e?.message || "lỗi không rõ"}`);
     }
   }, [dismissStorageNotice]);
-
-  // ── A3 • Tự sao lưu định kỳ — mở app là chạy 1 lần nếu đã đến hạn ──
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      try {
-        const autoBackup = await import("./services/autoBackup.js");
-        let settings = loadSettings();
-        // Migr 1 lần: bản cũ đặt autoBackup=false → bật lần đầu, sau đó tôn trọng lựa chọn của cô/thầy
-        try {
-          if (!safeGetString("sgk_autobackup_v1", null)) {
-            settings = { ...settings, backup: { ...(settings.backup || {}), autoBackup: true } };
-            saveSettings(settings);
-            safeSetString("sgk_autobackup_v1", "1");
-          }
-        } catch {}
-        if (cancelled || !autoBackup.isAutoBackupDue(settings)) return;
-        const res = await autoBackup.runAutoBackup("startup");
-        if (cancelled || !res.ok) return;
-        try { appEventsCore.emit(AppEventsCore.DATA_UPDATED, { source: "auto-backup" }); } catch {}
-        setUploadNotice("Đã tự sao lưu nền — bản gần nhất xem ở Sao lưu & Khôi phục.");
-      } catch (e) {
-        console.warn("[App] auto backup failed:", e);
-      }
-    }, 2500);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, []);
 
   // Tạo thumbnail cho ảnh upload
   useEffect(() => {
@@ -1051,7 +1098,7 @@ export default function App() {
         if (currentBook?.filename === book.filename) closeBook("library");
         setDataVersion((v) => v + 1);
         say(
-          `Đã đưa "${book.title}" vào Thùng rác — giữ ${TRASH_TTL_DAYS} ngày, khôi phục được ở Sao lưu & Khôi phục.`,
+          `Đã đưa "${book.title}" vào Thùng rác — giữ ${TRASH_TTL_DAYS} ngày, khôi phục được ở Dữ liệu & sao lưu.`,
           () => {
             let back = null;
             try { back = takeFromTrash(trashed.id); } catch (e) { console.warn("undo trash failed:", e); }
@@ -1202,12 +1249,15 @@ export default function App() {
 
   const handleClearCacheAndReload = useCallback(async () => {
     try {
-      // Unified via core/storageKeys (single source) • keep legacy list as fallback
-      let cachePrefixes;
-      try { cachePrefixes = (await import("./core/storageKeys.js")).STORAGE_KEYS.CACHE_PREFIXES; } catch { cachePrefixes = ["sgk_idx_", "sgk_idxmeta_", "sgk_index_", "sgk_meta_", "ocr_", "txt_", "chat_"]; }
+      // Use the canonical predicate so user conversations and drafts are preserved.
+      let isCacheKey;
+      try { isCacheKey = (await import("./core/storageKeys.js")).isCacheKey; } catch {
+        const cachePrefixes = ["sgk_idx_", "sgk_idxmeta_", "sgk_index_", "sgk_meta_", "ocr_", "txt_", "toc_"];
+        isCacheKey = (key) => cachePrefixes.some((prefix) => key.startsWith(prefix));
+      }
       const { listKeys } = await import("./safeStorage.js");
       const { safeRemove } = await import("./safeStorage.js");
-      const toRemove = listKeys().filter(k => k && cachePrefixes.some((p) => k.startsWith(p)));
+      const toRemove = listKeys().filter((key) => key && isCacheKey(key));
       toRemove.forEach((k) => { const r = safeRemove(k); if (!r.ok) console.warn("[App] remove cache failed", k, r.error); });
       if ("caches" in window) {
         try {
@@ -1698,6 +1748,20 @@ export default function App() {
 
   const SUPPORTED_EXTS_CLIENT = [".pdf",".docx",".doc",".pptx",".ppt",".xlsx",".xls",".txt",".md",".html",".htm",".epub",".jpg",".jpeg",".png",".gif",".webp"];
   const isSupportedFile = (name) => SUPPORTED_EXTS_CLIENT.some((ext) => String(name || "").toLowerCase().endsWith(ext));
+
+  // Bản desktop (Electron 32+) lấy được đường dẫn thật của file đã chọn.
+  // Trình duyệt thường không có API này → sourcePath rỗng và chỉ dùng upload copy.
+  const getLocalSourcePath = (file) => {
+    try {
+      if (window.sgkDesktopFiles?.getPathForFile) {
+        return window.sgkDesktopFiles.getPathForFile(file) || "";
+      }
+    } catch (e) {
+      console.warn("[App] Không lấy được đường dẫn file gốc:", e);
+    }
+    return "";
+  };
+
   const prepareUploadCandidate = (file) => {
     if (!file) return;
     if (!isSupportedFile(file.name)) {
@@ -1705,8 +1769,12 @@ export default function App() {
       setUploadDraft(null);
       return;
     }
-    if (file.size > 50 * 1024 * 1024) {
-      setUploadError(`File quá lớn (${(file.size/1024/1024).toFixed(1)} MB). Giới hạn 50 MB.`);
+    const sourcePath = getLocalSourcePath(file);
+
+    // Có đường dẫn gốc thì có thể liên kết (không copy) → không áp giới hạn
+    // upload 50 MB. Chỉ chặn dung lượng khi thực sự phải gửi file lên server.
+    if (file.size > 50 * 1024 * 1024 && !(sourcePath && file.name.toLowerCase().endsWith(".pdf"))) {
+      setUploadError(`File quá lớn (${(file.size/1024/1024).toFixed(1)} MB). Giới hạn 50 MB khi sao chép vào thư viện.`);
       setUploadDraft(null);
       return;
     }
@@ -1718,14 +1786,59 @@ export default function App() {
       name: file.name,
       size: file.size,
       title: formatSuggestedBookTitle(file.name),
+      sourcePath,
     });
   };
 
-  const handleAddBook = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    prepareUploadCandidate(file);
+  // Nhiều file → mở hộp thoại hàng loạt; một file → giữ luồng xem trước cũ.
+  const prepareBatchUpload = (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    if (files.length === 1) {
+      prepareUploadCandidate(files[0]);
+      return;
+    }
+
+    const { items, skipped } = buildBatchItems(files, {
+      getSourcePath: getLocalSourcePath,
+      getTitle: formatSuggestedBookTitle,
+    });
+
+    setUploadDraft(null);
+    setUploadError(
+      skipped > 0
+        ? `Chỉ thêm tối đa ${BATCH_MAX_FILES} file mỗi lần; ${skipped} file còn lại đã được bỏ qua. Hãy thêm lần tiếp theo.`
+        : ""
+    );
+    setUploadNotice("");
+    setBatchUpload({
+      items,
+      // Tất cả file hợp lệ đều là PDF có đường dẫn gốc → mặc định "chỉ liên kết";
+      // còn lại phải sao chép vào thư viện.
+      mode: canLinkAll(items.filter((item) => item.status !== "invalid")) ? "link" : "copy",
+      phase: "idle",
+      progress: { current: 0, total: 0, percent: 0 },
+      summary: "",
+    });
+  };
+
+  const handleAddBook = (event) => {
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
+    if (!files.length) return;
+    if (files.length === 1) prepareUploadCandidate(files[0]);
+    else prepareBatchUpload(files);
+  };
+
+  // Thêm lại sách từng bị xóa: entry thùng rác cũ phải được bỏ, nếu không
+  // fetchBooks sẽ tiếp tục ẩn sách vừa thêm khỏi thư viện.
+  const clearTrashForAddedBooks = (filenames) => {
+    try {
+      const list = (Array.isArray(filenames) ? filenames : [filenames]).filter(Boolean);
+      if (list.length) removeBooksFromTrashByFilename(list);
+    } catch (e) {
+      console.warn("[App] removeBooksFromTrashByFilename failed:", e);
+    }
   };
 
   const submitUpload = async () => {
@@ -1764,6 +1877,7 @@ export default function App() {
           }
         }
       } catch (e) { console.warn("[App] submitUpload customTitles failed:", e); }
+      clearTrashForAddedBooks(data?.book?.filename);
       setUploadNotice(data.message || "Đã thêm sách vào thư viện.");
       setUploadDraft(null);
       await fetchBooks();
@@ -1771,6 +1885,47 @@ export default function App() {
       setDataVersion((v) => v + 1);
     } catch (err) {
       setUploadError(err.message || "Không thể thêm sách.");
+    } finally {
+      setUploadingBook(false);
+    }
+  };
+
+  // Chỉ liên kết file PDF gốc trên máy — không gửi nội dung file, không copy
+  // vào books/. Chỉ khả dụng ở bản desktop vì cần đường dẫn tuyệt đối.
+  const submitLinkLocal = async () => {
+    const draft = uploadDraft;
+    if (!draft?.sourcePath) {
+      setUploadError("Không lấy được đường dẫn file gốc. Hãy chọn lại file trong bản desktop.");
+      return;
+    }
+    const lowerName = String(draft.name || draft.file?.name || "").toLowerCase();
+    if (!lowerName.endsWith(".pdf")) {
+      setUploadError("Chỉ hỗ trợ liên kết file PDF. Với định dạng khác, hãy dùng nút sao chép.");
+      return;
+    }
+
+    setUploadingBook(true);
+    setUploadError("");
+    setUploadNotice("");
+    try {
+      const res = await fetch(`${API_BASE}/api/books/link-local`, {
+        method: "POST",
+        headers: writeHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          path: draft.sourcePath,
+          title: draft.title || "",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Không thể liên kết file PDF.");
+      clearTrashForAddedBooks(data?.book?.filename);
+      setUploadNotice(data.message || "Đã liên kết file PDF gốc (không sao chép).");
+      setUploadDraft(null);
+      await fetchBooks();
+      try { const { appEvents, AppEvents } = await import("./core/appEvents.js"); appEvents.emit(AppEvents.DATA_UPDATED, { domain: "books", action: "linked_local" }); } catch {}
+      setDataVersion((v) => v + 1);
+    } catch (err) {
+      setUploadError(err.message || "Không thể liên kết file PDF.");
     } finally {
       setUploadingBook(false);
     }
@@ -1815,6 +1970,7 @@ export default function App() {
       const warn = Array.isArray(data?.warnings) && data.warnings.length
         ? ` (Lưu ý: ${data.warnings[0]})`
         : "";
+      clearTrashForAddedBooks(data?.book?.filename);
       setUploadNotice((data.message || "Đã nhập Word thành sách (giữ nguyên định dạng).") + warn);
       setUploadDraft(null);
       await fetchBooks();
@@ -1824,6 +1980,279 @@ export default function App() {
       setUploadError(err.message || "Không thể nhập file Word.");
     } finally {
       setUploadingBook(false);
+    }
+  };
+
+  // ── Thêm nhiều sách cùng lúc ──────────────────────────────────────────
+  const closeBatchUpload = () => {
+    if (batchUpload?.phase === "uploading") return;
+    setBatchUpload(null);
+  };
+
+  const updateBatchItem = (id, patch) => {
+    setBatchUpload((prev) => prev ? {
+      ...prev,
+      items: prev.items.map((item) => item.id === id ? { ...item, ...patch } : item),
+    } : prev);
+  };
+
+  const removeBatchItem = (id) => {
+    setBatchUpload((prev) => prev ? {
+      ...prev,
+      items: prev.items.filter((item) => item.id !== id),
+    } : prev);
+  };
+
+  const retryBatchUpload = () => {
+    setBatchUpload((prev) => prev ? {
+      ...prev,
+      phase: "idle",
+      summary: "",
+      progress: { current: 0, total: 0, percent: 0 },
+      items: prev.items.map((item) => item.status === "error"
+        ? { ...item, status: "pending", error: "" }
+        : item),
+    } : prev);
+  };
+
+  const abortBatchUpload = () => {
+    const controller = batchAbortRef.current;
+    if (!controller) return;
+    controller.aborted = true;
+    try { controller.fetchAbort?.abort(); } catch {}
+    for (const xhr of controller.xhrs) {
+      try { xhr.abort(); } catch {}
+    }
+    controller.xhrs.clear();
+  };
+
+  // Tiêu đề sửa trong bảng hàng loạt phải được lưu cùng cơ chế với upload đơn
+  // (sgk_custom_titles theo filename) — nếu không, thư viện sẽ hiển thị lại
+  // tiêu đề suy ra từ tên file.
+  const persistBatchCustomTitles = (entries) => {
+    if (!entries.length) return;
+    try {
+      const custom = safeGetJSON("sgk_custom_titles", {}, (d) => d && typeof d === "object" && !Array.isArray(d));
+      let changed = false;
+      for (const { filename, title } of entries) {
+        if (filename && title && !custom[filename]) {
+          custom[filename] = title;
+          changed = true;
+        }
+      }
+      if (!changed) return;
+      const result = safeSetJSON("sgk_custom_titles", custom);
+      if (!result.ok && result.quota) {
+        setUploadError("Không thể lưu dữ liệu vì bộ nhớ trình duyệt đã đầy");
+      } else if (!result.ok) {
+        console.warn("[App] safeSetJSON failed sgk_custom_titles:", result.error);
+      }
+    } catch (e) {
+      console.warn("[App] persistBatchCustomTitles failed:", e);
+    }
+  };
+
+  const runBatchUpload = async () => {
+    const current = batchUpload;
+    if (!current || current.phase === "uploading") return;
+
+    // Bản sao cục bộ: cập nhật tuần tự từng file rồi đẩy vào state một lần,
+    // tránh setState dồn dập làm React gộp mất trạng thái trung gian.
+    const items = current.items.map((item) => ({ ...item }));
+    const pending = items.filter((item) => item.status === "pending");
+    if (!pending.length) return;
+
+    const mode = current.mode;
+    const total = pending.length;
+    const controller = { aborted: false, xhrs: new Set(), fetchAbort: new AbortController() };
+    batchAbortRef.current = controller;
+    let completed = 0;
+
+    const publish = (patch = {}) => {
+      setBatchUpload((prev) => prev ? {
+        ...prev,
+        ...patch,
+        items: items.map((item) => ({ ...item })),
+      } : prev);
+    };
+
+    const publishProgress = (fraction = 0) => {
+      const safeFraction = Math.max(0, Math.min(1, Number(fraction) || 0));
+      const ratio = total > 0 ? (completed + safeFraction) / total : 0;
+      publish({
+        progress: {
+          current: completed,
+          total,
+          percent: Math.round(Math.max(0, Math.min(1, ratio)) * 100),
+        },
+      });
+    };
+
+    const markChunkUploading = (chunk) => {
+      for (const item of chunk) {
+        const local = items.find((entry) => entry.id === item.id);
+        if (local) {
+          local.status = "uploading";
+          local.error = "";
+        }
+      }
+    };
+
+    const applyChunkResults = (chunk, data, fallbackError) => {
+      const results = Array.isArray(data?.results) ? data.results : [];
+      chunk.forEach((item, index) => {
+        const local = items.find((entry) => entry.id === item.id);
+        if (!local) return;
+        const result = results[index];
+        if (result?.ok) {
+          local.status = "done";
+          local.error = "";
+          local.bookFilename = result.book?.filename || "";
+        } else {
+          local.status = "error";
+          local.error = result?.error || fallbackError || "Không thể thêm file này.";
+        }
+      });
+      completed += chunk.length;
+    };
+
+    publish({ phase: "uploading", summary: "", progress: { current: 0, total, percent: 0 } });
+
+    try {
+      const chunks = chunkItems(pending, BATCH_CHUNK_SIZE);
+      for (const chunk of chunks) {
+        if (controller.aborted) break;
+        markChunkUploading(chunk);
+        publishProgress(0);
+
+        if (mode === "link") {
+          const res = await fetch(`${API_BASE}/api/books/link-local-batch`, {
+            method: "POST",
+            headers: writeHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({
+              items: chunk.map((item) => ({
+                path: item.sourcePath,
+                title: sanitizeBatchTitle(item.title, formatSuggestedBookTitle(item.name)),
+              })),
+            }),
+            signal: controller.fetchAbort.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (controller.aborted) break;
+          if (!res.ok && !Array.isArray(data?.results)) {
+            applyChunkResults(chunk, null, data?.error || "Không thể liên kết file PDF.");
+          } else {
+            applyChunkResults(chunk, data, data?.error);
+          }
+        } else {
+          const form = new FormData();
+          for (const item of chunk) form.append("files", item.file, item.name);
+          form.append("titles", JSON.stringify(
+            chunk.map((item) => sanitizeBatchTitle(item.title, formatSuggestedBookTitle(item.name)))
+          ));
+
+          const data = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            controller.xhrs.add(xhr);
+            xhr.open("POST", `${API_BASE}/api/books/upload-batch`);
+            try {
+              const headers = writeHeaders();
+              Object.entries(headers || {}).forEach(([key, value]) => {
+                try { xhr.setRequestHeader(key, value); } catch {}
+              });
+            } catch {}
+            xhr.upload.onprogress = (event) => {
+              if (!event.lengthComputable || !event.total) return;
+              publishProgress(event.loaded / event.total);
+            };
+            xhr.onload = () => {
+              controller.xhrs.delete(xhr);
+              let payload = {};
+              try { payload = JSON.parse(xhr.responseText || "{}"); } catch {}
+              resolve({ ok: xhr.status >= 200 && xhr.status < 300, data: payload });
+            };
+            xhr.onerror = () => {
+              controller.xhrs.delete(xhr);
+              reject(new Error("Mất kết nối tới máy chủ khi đang thêm sách."));
+            };
+            xhr.onabort = () => {
+              controller.xhrs.delete(xhr);
+              const abortError = new Error("aborted");
+              abortError.name = "AbortError";
+              reject(abortError);
+            };
+            xhr.send(form);
+          });
+
+          if (controller.aborted) break;
+          if (!data.ok && !Array.isArray(data.data?.results)) {
+            applyChunkResults(chunk, null, data.data?.error || "Không thể thêm sách.");
+          } else {
+            applyChunkResults(chunk, data.data, data.data?.error);
+          }
+        }
+
+        publishProgress(0);
+      }
+    } catch (error) {
+      if (!controller.aborted) {
+        const message = error?.message || "Không thể thêm sách.";
+        for (const item of items) {
+          if (item.status === "uploading") {
+            item.status = "error";
+            item.error = message;
+            completed += 1;
+          }
+        }
+      }
+    } finally {
+      batchAbortRef.current = null;
+
+      if (controller.aborted) {
+        // File đang gửi dở có thể đã kịp lưu trên máy chủ → đánh dấu lỗi kèm
+        // cảnh báo kiểm tra thư viện, tránh người dùng bấm thử lại gây trùng.
+        for (const item of items) {
+          if (item.status === "uploading") {
+            item.status = "error";
+            item.error = "Đã hủy khi đang lưu — kiểm tra thư viện trước khi thử lại.";
+          }
+        }
+      }
+
+      const done = items.filter((item) => item.status === "done").length;
+      const failed = items.filter((item) => item.status === "error").length;
+      const finished = done + failed;
+      persistBatchCustomTitles(
+        items
+          .filter((item) => item.status === "done" && item.bookFilename)
+          .map((item) => ({
+            filename: item.bookFilename,
+            title: sanitizeBatchTitle(item.title, formatSuggestedBookTitle(item.name)),
+          }))
+      );
+      clearTrashForAddedBooks(
+        items.filter((item) => item.status === "done" && item.bookFilename).map((item) => item.bookFilename)
+      );
+      setBatchUpload((prev) => prev ? {
+        ...prev,
+        phase: "done",
+        summary: batchResultSummary({ done, failed, mode, aborted: controller.aborted }),
+        progress: {
+          current: completed,
+          total,
+          percent: total > 0 ? Math.round((finished / total) * 100) : 0,
+        },
+        items: items.map((item) => ({ ...item })),
+      } : prev);
+
+      if (done > 0) {
+        try { await fetchBooks(); } catch {}
+        try {
+          const { appEvents, AppEvents } = await import("./core/appEvents.js");
+          appEvents.emit(AppEvents.DATA_UPDATED, { domain: "books", action: mode === "link" ? "linked_local" : "created" });
+        } catch {}
+        setDataVersion((v) => v + 1);
+      }
     }
   };
 
@@ -1874,6 +2303,7 @@ export default function App() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Không thể thêm sách từ link.");
+      clearTrashForAddedBooks((Array.isArray(data?.books) ? data.books : []).map((b) => b && b.filename));
       setShowUrlModal(false);
       setUrlBooks([]);
       setUploadNotice(data.message || "Đã thêm sách từ Google Drive.");
@@ -1954,6 +2384,7 @@ export default function App() {
         } catch (e) { console.warn("[App] handleTextBookSuccess custom failed:", e); }
       }
     } catch (e) { console.warn("[App] handleTextBookSuccess outer failed:", e); }
+    clearTrashForAddedBooks(book?.filename);
     setUploadNotice(editingTextBook ? `Đã cập nhật "${book.title}".` : `Đã tạo sách "${book.title}".`);
     setUploadError("");
     await fetchBooks();
@@ -2061,12 +2492,12 @@ export default function App() {
               aria-label="Về trang chủ"
             >
               <div className="logo-icon" aria-hidden="true">
-                📚
+                <img src="/favicon.svg" alt="" draggable="false" />
               </div>
               {!sidebarCollapsed && (
                 <div className="logo-text-wrapper">
                   <h1>Hành trang Tiểu học</h1>
-                  <p>AI • Lớp 1 • Lớp 5</p>
+                  <p>THƯ VIỆN SỐ · AI</p>
                 </div>
               )}
             </a>
@@ -2385,6 +2816,124 @@ export default function App() {
 
         {/* -- Main content -------------------------------------- */}
         <main id="main-content" className="main-content" tabIndex={-1}>
+          {/* Thông báo cập nhật phiên bản mới */}
+          {(appUpdateNotice?.hasUpdate || appUpdateNotice?.justUpdated) && (
+            <div
+              className="dash-notice info"
+              role="status"
+              style={{
+                margin: "0.55rem 1rem 0",
+                display: "flex",
+                gap: "0.6rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+                background: "linear-gradient(90deg, rgba(37, 99, 235, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%)",
+                border: "1px solid rgba(37, 99, 235, 0.25)",
+              }}
+            >
+              <span aria-hidden="true">🎉</span>
+              <span style={{ flex: "1 1 240px", fontWeight: 500 }}>
+                {appUpdateNotice.justUpdated
+                  ? <>Đã cập nhật lên <strong>v{appUpdateNotice.latestVersion}</strong>.</>
+                  : <>Đã có bản cập nhật mới <strong>v{appUpdateNotice.latestVersion}</strong>.</>}
+                {appUpdateNotice.changelog?.[0] ? ` — ${appUpdateNotice.changelog[0]}` : ""}
+              </span>
+              <span style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+                <button
+                  className="btn btn-primary btn-xs"
+                  onClick={appUpdateNotice.justUpdated ? () => setAppUpdateDialogOpen(true) : startAppUpdate}
+                >
+                  {appUpdateNotice.justUpdated ? "Xem thay đổi" : "Tải & cài đặt"}
+                </button>
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => setAppUpdateNotice(null)}
+                  aria-label="Đóng thông báo cập nhật"
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            </div>
+          )}
+          {appUpdateDialogOpen && appUpdateNotice && (
+            <div
+              role="presentation"
+              style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(15, 23, 42, 0.55)", display: "grid", placeItems: "center", padding: 16 }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="app-update-title"
+                style={{ width: "min(520px, 100%)", maxHeight: "min(80vh, 680px)", overflowY: "auto", borderRadius: 16, padding: 22, background: "var(--surface, #fff)", color: "var(--text-dark, #172033)", boxShadow: "0 24px 80px rgba(0,0,0,.28)" }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <h2 id="app-update-title" style={{ margin: "0 0 6px", fontSize: "1.2rem" }}>
+                      {appUpdateNotice.justUpdated ? "Cập nhật thành công" : `Bản cập nhật v${appUpdateNotice.latestVersion}`}
+                    </h2>
+                    <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
+                      {appUpdateNotice.justUpdated
+                        ? "Ứng dụng đã được cập nhật."
+                        : "Bấm một lần để tải bản cập nhật và chuẩn bị cài đặt."}
+                    </div>
+                  </div>
+                  <button className="header-action-btn" onClick={() => setAppUpdateDialogOpen(false)} aria-label="Đóng">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {!appUpdateNotice.justUpdated && (
+                  <div role="status" style={{ marginTop: 16, padding: 12, borderRadius: 10, background: "var(--surface-soft, #f3f6fb)", fontSize: "0.92rem" }}>
+                    {desktopUpdateStatus.status === "checking" && "Đang kiểm tra bản cập nhật…"}
+                    {desktopUpdateStatus.status === "available" && "Đã tìm thấy bản mới, đang chuẩn bị tải…"}
+                    {desktopUpdateStatus.status === "downloading" && (
+                      <>
+                        <div>Đang tải bản cập nhật… {Math.floor(desktopUpdateStatus.percent || 0)}%</div>
+                        <progress value={desktopUpdateStatus.percent || 0} max="100" style={{ width: "100%", marginTop: 8 }} />
+                      </>
+                    )}
+                    {desktopUpdateStatus.status === "downloaded" && "Đã tải xong bản cập nhật. Khởi động lại để cài đặt."}
+                    {desktopUpdateStatus.status === "not-available" && "Không tìm thấy gói cài đặt cập nhật cho phiên bản này."}
+                    {desktopUpdateStatus.status === "unsupported" && (desktopUpdateStatus.message || "Phiên bản này chưa hỗ trợ tự cập nhật.")}
+                    {desktopUpdateStatus.status === "error" && (desktopUpdateStatus.message || "Tải cập nhật thất bại.")}
+                    {desktopUpdateStatus.status === "idle" && "Đang chuẩn bị cập nhật…"}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 18 }}>
+                  <strong>{appUpdateNotice.justUpdated ? "Các thay đổi trong bản này" : "Có gì mới"}</strong>
+                  {Array.isArray(appUpdateNotice.changelog) && appUpdateNotice.changelog.length > 0 ? (
+                    <ul style={{ margin: "8px 0 0", paddingLeft: 22, lineHeight: 1.55 }}>
+                      {appUpdateNotice.changelog.map((change, index) => <li key={`${index}-${change}`}>{change}</li>)}
+                    </ul>
+                  ) : (
+                    <p style={{ margin: "8px 0 0", color: "var(--text-muted)" }}>Không có ghi chú phát hành.</p>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
+                  {desktopUpdateStatus.status === "downloaded" && (
+                    <button className="btn btn-primary" onClick={installDownloadedUpdate}>
+                      Khởi động lại và cài đặt
+                    </button>
+                  )}
+                  {desktopUpdateStatus.status === "unsupported" && (
+                    <button
+                      className="btn btn-primary"
+                      onClick={openUpdateReleases}
+                    >
+                      Mở trang tải bản Setup
+                    </button>
+                  )}
+                  {desktopUpdateStatus.status === "error" && (
+                    <button className="btn btn-primary" onClick={startAppUpdate}>Thử lại</button>
+                  )}
+                  <button className="btn btn-secondary" onClick={() => setAppUpdateDialogOpen(false)}>Đóng</button>
+                </div>
+              </section>
+            </div>
+          )}
+
           {/* A1 • Cảnh báo bộ nhớ — hiện ở mọi khu vực kể cả khi đang đọc sách */}
           {storageNotice && (
             <div
@@ -2395,11 +2944,11 @@ export default function App() {
               <span aria-hidden="true">{storageNotice.level === "danger" ? "🛑" : "⚠️"}</span>
               <span style={{ flex: "1 1 240px" }}>{storageNotice.text}</span>
               <span style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                <button className="btn btn-danger btn-xs" onClick={handleBackupNow}>
+                <button className="btn btn-secondary btn-xs" onClick={handleBackupNow}>
                   <DatabaseBackup size={13} /> Sao lưu ngay
                 </button>
                 <button className="btn btn-ghost btn-xs" onClick={() => { dismissStorageNotice(); setView("datatools"); }}>
-                  Dọn & Khôi phục
+                  Quản lý dữ liệu
                 </button>
                 <button className="btn btn-ghost btn-xs" onClick={dismissStorageNotice} aria-label="Đóng cảnh báo bộ nhớ">
                   <X size={13} />
@@ -2507,6 +3056,22 @@ export default function App() {
                     >
                       <Search size={18} />
                     </button>
+                    {appUpdateNotice?.hasUpdate && (
+                      <button
+                        className="header-action-btn"
+                        onClick={startAppUpdate}
+                        disabled={desktopUpdateStatus.status === "checking" || desktopUpdateStatus.status === "downloading"}
+                        aria-label={`Tải bản cập nhật v${appUpdateNotice.latestVersion}`}
+                        title={`Tải bản cập nhật v${appUpdateNotice.latestVersion}`}
+                        style={{ color: "var(--primary-color, #2563EB)", borderColor: "rgba(37, 99, 235, 0.4)" }}
+                      >
+                        <Download size={18} />
+                        <span
+                          aria-hidden="true"
+                          style={{ position: "absolute", top: -3, right: -3, width: 9, height: 9, borderRadius: "50%", background: "#ef4444", border: "2px solid var(--surface)" }}
+                        />
+                      </button>
+                    )}
 
                     {/* Theme Toggle */}
                     <button
@@ -2580,8 +3145,8 @@ export default function App() {
                         className="btn btn-primary header-add-btn"
                         onClick={() => uploadInputRef.current?.click()}
                         disabled={uploadingBook}
-                        aria-label="Thêm sách từ tập tin (PDF, DOCX, EPUB, ảnh…)"
-                        title="Thêm từ file • hỗ trợ PDF, DOCX, PPTX, EPUB, TXT, MD, JPG/PNG…"
+                        aria-label="Thêm một hoặc nhiều sách từ tập tin (PDF, DOCX, EPUB, ảnh…)"
+                        title="Thêm một hoặc nhiều file • hỗ trợ PDF, DOCX, PPTX, EPUB, TXT, MD, JPG/PNG…"
                       >
                         <Plus size={16} />
                         <span className="hide-mobile">
@@ -2611,6 +3176,7 @@ export default function App() {
                       <input
                         ref={uploadInputRef}
                         type="file"
+                        multiple
                         accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.txt,.md,.epub,.jpg,.jpeg,.png,.gif,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,text/plain,application/epub+zip,image/*"
                         hidden
                         onChange={handleAddBook}
@@ -2678,7 +3244,9 @@ export default function App() {
                     onEditTextBook={handleEditTextBook}
                     onAddBook={() => uploadInputRef.current?.click()}
                     onFileSelect={prepareUploadCandidate}
+                    onFilesSelect={prepareBatchUpload}
                     onUploadSubmit={submitUpload}
+                    onLinkLocal={submitLinkLocal}
                     onImportDocx={submitDocxImport}
                     onClearUpload={() => setUploadDraft(null)}
                     backendStatus={backendStatus}
@@ -3009,6 +3577,25 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {batchUpload && (
+          <BatchUploadDialog
+            open
+            items={batchUpload.items}
+            mode={batchUpload.mode}
+            phase={batchUpload.phase}
+            progress={batchUpload.progress}
+            summary={batchUpload.summary}
+            canLink={canLinkAll(batchUpload.items.filter((item) => item.status !== "invalid"))}
+            onClose={closeBatchUpload}
+            onStart={runBatchUpload}
+            onAbort={abortBatchUpload}
+            onRetry={retryBatchUpload}
+            onRemove={removeBatchItem}
+            onTitleChange={(id, value) => updateBatchItem(id, { title: value })}
+            onModeChange={(mode) => setBatchUpload((prev) => prev ? { ...prev, mode } : prev)}
+          />
+        )}
       </div>
     </AppErrorBoundary>
   );
@@ -3017,1961 +3604,3 @@ export default function App() {
 // ------------------------------------------------------------------
 // LIBRARY VIEW
 // ------------------------------------------------------------------
-function LibraryView({
-  books,
-  booksAll,
-  history,
-  totalBookmarks,
-  vocabCount,
-  totalMarks,
-  totalClips,
-  plansCount,
-  questionCount,
-  loading,
-  error,
-  onRetry,
-  onOpenBook,
-  onDeleteBook,
-  onRenameBook,
-  onAddBook,
-  onFileSelect,
-  onUploadSubmit,
-  onImportDocx,
-  onClearUpload,
-  lastPageMap,
-  lastTotalMap,
-  favs,
-  onToggleFav,
-  viewMode,
-  setViewMode,
-  sortBy,
-  setSortBy,
-  searchQuery,
-  setSearchQuery,
-  isSearching,
-  uploadThumb,
-  onDismissNotice,
-  gradeFilter,
-  setGradeFilter,
-  subjectFilter,
-  setSubjectFilter,
-  termFilter,
-  setTermFilter,
-  readingStatusFilter,
-  setReadingStatusFilter,
-  favOnly,
-  setFavOnly,
-  hasActiveFilters,
-  clearFilters,
-  geminiKey,
-  onOpenSettings,
-  uploadNotice,
-  uploadError,
-  noticeUndo,
-  uploadDraft,
-  isDragActive,
-  setDragActive,
-  uploadingBook,
-  backendStatus,
-  onEditTextBook,
-}) {
-  const historyBooks = (() => {
-    if (!history || !booksAll) return [];
-    const map = new Map(booksAll.map((b) => [b.filename, b]));
-    const seen = new Set();
-    const out = [];
-    for (const h of history) {
-      if (seen.has(h.filename)) continue;
-      const b = map.get(h.filename);
-      if (b) {
-        out.push(b);
-        seen.add(h.filename);
-      }
-      if (out.length >= 10) break;
-    }
-    return out;
-  })();
-
-  const [continueCollapsed, setContinueCollapsed] = React.useState(() => {
-    const v = safeGetString("sgk_continue_collapsed", null);
-    return v === "true";
-  });
-  const [showSubjectPicker, setShowSubjectPicker] = React.useState(false);
-  const [subjectQuery, setSubjectQuery] = React.useState("");
-  // Fix 4 • cách lưu file .docx: radio thay vì 2 nút dễ nhầm ("Nhập Word" vs "Lưu gốc")
-  const [docxMode, setDocxMode] = React.useState("import"); // import | keep
-  const isDocxDraft = String(uploadDraft?.name || "").toLowerCase().endsWith(".docx");
-  React.useEffect(() => { setDocxMode("import"); }, [uploadDraft]);
-  // Fix 5 • menu "..." gom nút hàng trên mobile (desktop vẫn hiện đủ nút)
-  const [openRowMenu, setOpenRowMenu] = React.useState(null); // filename đang mở menu
-  React.useEffect(() => {
-    if (!openRowMenu) return;
-    const onDown = (e) => {
-      if (!e.target.closest?.(".libx-rowmenu-anchor")) setOpenRowMenu(null);
-    };
-    // Esc đóng menu dù focus đang ở nút "..." (ngoài menu), không chỉ khi focus trong menu
-    const onKey = (e) => { if (e.key === "Escape") setOpenRowMenu(null); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [openRowMenu]);
-  // Phân trang thư viện: tránh render hết 70+ BookCard cùng lúc gây lag
-  const LIB_PAGE_SIZE = 24;
-  const [libPage, setLibPage] = React.useState(1);
-
-  // Đóng panel môn khi click ngoài
-  React.useEffect(() => {
-    if (!showSubjectPicker) return;
-    const onDown = (e) => {
-      if (!e.target.closest?.(".lib-subject-anchor")) setShowSubjectPicker(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [showSubjectPicker]);
-
-  // Danh mục môn học giữ nguyên đã đổi sách • lấy từ catalog persistent
-  const subjectCatalog = useMemo(() => {
-    try {
-      return sortSubjects(getSubjectCatalog());
-    } catch {
-      return [...SUBJECTS];
-    }
-  }, [booksAll]);
-
-  // Tìm nhanh trong panel chọn môn (không dấu: gõ "toan" ra "Toán")
-  const normVi = (s) => String(s ?? "").toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const filteredSubjectCatalog = React.useMemo(() => {
-    const q = normVi(subjectQuery.trim());
-    if (!q) return subjectCatalog;
-    return subjectCatalog.filter((s) => normVi(s).includes(q));
-  }, [subjectCatalog, subjectQuery]);
-
-  const favCount = favs ? favs.length : 0;
-
-  // Reset về trang 1 khi filter/search/sort đổi; kẹp trang khi danh sách rút ngắn
-  const totalLibPages = Math.max(1, Math.ceil((books?.length || 0) / LIB_PAGE_SIZE));
-  React.useEffect(() => {
-    setLibPage(1);
-  }, [searchQuery, gradeFilter, subjectFilter, termFilter, readingStatusFilter, favOnly, sortBy]);
-  React.useEffect(() => {
-    if (libPage > totalLibPages) setLibPage(totalLibPages);
-  }, [totalLibPages, libPage]);
-  // Fix 5 • đổi trang/danh sách thì đóng menu "..." (tránh menu mồ côi)
-  React.useEffect(() => { setOpenRowMenu(null); }, [libPage, books]);
-  const pagedBooks = React.useMemo(() => {
-    const start = (libPage - 1) * LIB_PAGE_SIZE;
-    return (books || []).slice(start, start + LIB_PAGE_SIZE);
-  }, [books, libPage]);
-  const libPageFrom = (books?.length || 0) === 0 ? 0 : (libPage - 1) * LIB_PAGE_SIZE + 1;
-  const libPageTo = Math.min(books?.length || 0, libPage * LIB_PAGE_SIZE);
-
-  // stats values derived from real data
-  const statItems = [
-    {
-      icon: <BookOpen size={18} />,
-      value: booksAll ? booksAll.length : books.length,
-      label: "Sách trong thư viện",
-      sub: "các môn học",
-    },
-    {
-      icon: <BookmarkCheck size={18} />,
-      value: totalBookmarks ?? 0,
-      label: "Trang đã đánh dấu",
-      sub: "để xem lại",
-    },
-    {
-      icon: <BookOpenCheck size={18} />,
-      value: history ? history.length : 0,
-      label: "Sách đang đọc",
-      sub: "đọc gần đây",
-    },
-    { icon: <Pencil size={18} />, value: vocabCount ?? 0, label: "Từ vựng đã lưu", sub: "đang ôn tập" },
-  ];
-
-  // Drag counter chống nhấp nháy khi kéo qua các thẻ con
-  const dragCounterRef = React.useRef(0);
-
-  return (
-    <div
-      className={`library-command-center libx-root ${isDragActive ? "drag-over" : ""}`}
-      onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); if (!hasFilesInDataTransfer(e)) return; dragCounterRef.current += 1; if (!isDragActive) setDragActive(true); }}
-      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; } catch {} if (!isDragActive && hasFilesInDataTransfer(e)) setDragActive(true); }}
-      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); dragCounterRef.current = Math.max(0, dragCounterRef.current - 1); if (dragCounterRef.current === 0) setDragActive(false); }}
-      onDrop={(e) => {
-        e.preventDefault(); e.stopPropagation();
-        dragCounterRef.current = 0;
-        setDragActive(false);
-        const file = e.dataTransfer?.files?.[0];
-        if (file) onFileSelect(file);
-      }}
-    >
-      <style>{`
-        .libx-root { display:flex; flex-direction:column; gap:13px; }
-        .libx-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:9px; }
-        .libx-stat { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:13px; border:1px solid var(--border-color); background:var(--surface); }
-        .libx-stat-ic { width:37px; height:37px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size: 1.0625rem; flex-shrink:0; background:var(--color-action-soft, var(--primary-light)); }
-        .libx-stat-val { font-size:1.15rem; font-weight:800; color:var(--text-dark); line-height:1.1; }
-        .libx-stat-label { font-size: 0.6563rem; color:var(--text-muted); font-weight:600; }
-        .libx-sec-head { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
-        .libx-sec-title { margin:0; font-size:0.93rem; font-weight:800; color:var(--text-dark); display:flex; align-items:center; gap:7px; }
-        .libx-sec-title svg { color:var(--color-action, var(--primary)); }
-        .libx-sec-hint { font-size: 0.6875rem; color:var(--text-muted); }
-        .libx-strip { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px, 1fr)); gap:9px; }
-        .libx-cont { display:flex; gap:10px; align-items:center; padding:9px 10px; border-radius:12px; border:1px solid var(--border-color); background:var(--surface); cursor:pointer; }
-        .libx-cont:hover { border-color:var(--color-action, var(--primary)); box-shadow:0 6px 16px rgba(15,23,42,0.08); }
-        .libx-cont-cover { width:52px; flex-shrink:0; border-radius:7px; overflow:hidden; border:1px solid var(--border-color); }
-        .libx-cont-t { font-size:0.83rem; font-weight:700; color:var(--text-dark); display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
-        .libx-cont-m { font-size: 0.6563rem; color:var(--text-muted); }
-        .libx-bar { height:6px; border-radius:99px; background:var(--surface-soft); border:1px solid var(--border-color); overflow:hidden; margin-top:5px; }
-        .libx-bar > i { display:block; height:100%; border-radius:99px; background:var(--color-action, var(--primary)); }
-        .libx-cta { margin-left:auto; flex-shrink:0; font-size: 0.6875rem; font-weight:800; color:#fff; background:var(--color-action, var(--primary)); padding:6px 11px; border-radius:999px; }
-        .libx-hero { display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-radius:13px; padding:12px 15px; color:#fff;
-          background:linear-gradient(120deg, var(--color-action-strong, #1e3a8a), var(--color-action, #2563eb) 60%, var(--color-action-active, #1e40af)); }
-        .libx-hero h2 { margin:0; font-size:0.92rem; display:flex; align-items:center; gap:7px; }
-        .libx-hero p { margin:3px 0 0; font-size: 0.7188rem; opacity:0.92; }
-        .libx-toolbar { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:11px 13px; display:flex; flex-direction:column; gap:9px; }
-        .libx-trow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .libx-search { flex:1 1 210px; min-width:170px; position:relative; }
-        .libx-search input { width:100%; padding:8px 30px 8px 32px; border-radius:10px; border:1px solid var(--border-color); font-size: 0.8125rem; background:var(--surface); color:var(--text-dark); }
-        .libx-search > svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text-muted); }
-        .libx-toolbar select { padding:8px 10px; border-radius:10px; border:1px solid var(--border-color); font-size: 0.7813rem; background:var(--surface); color:var(--text-dark); }
-        .libx-seg { display:inline-flex; border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
-        .libx-seg button { border:none; background:var(--surface); padding:8px 11px; cursor:pointer; color:var(--text-muted); display:inline-flex; }
-        .libx-seg button.active { background:var(--color-action, var(--primary)); color:#fff; }
-        .libx-fbtn { font-size: 0.75rem; font-weight:700; padding:6px 11px; border-radius:999px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-dark); cursor:pointer; }
-        .libx-fbtn.active { background:var(--color-action, var(--primary)); border-color:var(--color-action, var(--primary)); color:#fff; }
-        .libx-count { font-size: 0.75rem; color:var(--text-muted); }
-        .libx-count strong { color:var(--text-dark); font-size: 0.8125rem; }
-        .libx-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(215px, 1fr)); gap:12px; }
-        .libx-book { background:var(--surface); border:1px solid var(--border-color); border-radius:14px; overflow:hidden; cursor:pointer; transition:transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease; display:flex; flex-direction:column; }
-        .libx-book:hover { transform:translateY(-3px); box-shadow:0 12px 26px rgba(15,23,42,0.12); border-color:var(--color-action, var(--primary)); }
-        .libx-cover { position:relative; background:linear-gradient(135deg, var(--color-action-soft, #dbeafe), #ede9fe); aspect-ratio:1/1; overflow:hidden; display:flex; align-items:center; justify-content:center; }
-        .libx-cover .book-cover { width:100% !important; height:100% !important; min-height:100%; padding:0 !important; border:none !important; font-size:2rem; }
-        .libx-fav { position:absolute; top:8px; right:8px; width:30px; height:30px; border-radius:999px; border:1px solid rgba(255,255,255,0.6); background:rgba(15,23,42,0.35); color:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter:blur(4px); }
-        .libx-fav.on { background:#f59e0b; border-color:#f59e0b; }
-        .libx-grade { position:absolute; left:8px; bottom:8px; font-size: 0.625rem; font-weight:800; color:#fff; background:rgba(15,23,42,0.55); padding:3px 8px; border-radius:999px; backdrop-filter:blur(4px); }
-        .libx-body { padding:10px 12px 11px; display:flex; flex-direction:column; gap:6px; flex:1; }
-        .libx-title { margin:0; font-size:0.85rem; font-weight:800; color:var(--text-dark); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:2.35em; }
-        .libx-meta { font-size: 0.6875rem; color:var(--text-muted); display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-        .libx-foot { display:flex; gap:6px; align-items:center; margin-top:auto; padding-top:7px; border-top:1px dashed var(--border-color); }
-        .libx-open { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.7813rem; font-weight:800; padding:8px 10px; border-radius:10px; border:none; background:var(--color-action, var(--primary)); color:#fff; cursor:pointer; }
-        .libx-open:hover { filter:brightness(1.08); }
-        .libx-icobtn { width:32px; height:32px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid var(--border-color); background:var(--surface); color:var(--text-muted); cursor:pointer; }
-        .libx-icobtn:hover { border-color:var(--color-action, var(--primary)); color:var(--color-action-strong, var(--primary)); }
-        .libx-icobtn.danger:hover { border-color:#fca5a5; color:#dc2626; background:#fef2f2; }
-        .libx-row { display:flex; gap:11px; align-items:center; background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:9px 12px; cursor:pointer; }
-        .libx-row:hover { border-color:var(--color-action, var(--primary)); }
-        .libx-row-cover { width:46px; flex-shrink:0; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); }
-        .libx-list { display:flex; flex-direction:column; gap:8px; }
-        .libx-pager { display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; padding:10px; background:var(--surface); border:1px solid var(--border-color); border-radius:12px; }
-        .libx-pager .libx-fbtn { display:inline-flex; align-items:center; gap:4px; }
-        .libx-pager .libx-fbtn:disabled { opacity:0.45; cursor:not-allowed; }
-        .libx-row { position:relative; }
-        .libx-rowmenu-anchor { position:relative; flex-shrink:0; }
-        .libx-rowmenu-btn { display:none; }
-        .libx-rowmenu {
-          position:absolute; right:0; top:calc(100% + 6px); z-index:30; min-width:190px;
-          background:var(--surface); border:1px solid var(--border-color); border-radius:12px;
-          box-shadow:0 12px 28px rgba(15,23,42,0.16); padding:5px;
-        }
-        .libx-rowmenu-item {
-          display:flex; align-items:center; gap:9px; width:100%; text-align:left;
-          border:none; background:transparent; cursor:pointer; font-size: 0.7813rem; font-weight:600;
-          color:var(--text-dark); padding:8px 10px; border-radius:8px;
-        }
-        .libx-rowmenu-item:hover { background:var(--surface-soft); }
-        .libx-rowmenu-item.danger { color:#dc2626; }
-        .libx-rowmenu-item.danger:hover { background:#fef2f2; }
-        .libx-rowmenu-item svg { color:var(--text-muted); flex-shrink:0; }
-        .libx-rowmenu-item.danger svg { color:#dc2626; }
-        @media (max-width: 640px) {
-          .libx-row .libx-hide-mobile { display:none; }
-          .libx-rowmenu-btn { display:inline-flex; }
-          .libx-row { gap:8px; padding:8px 10px; }
-        }
-      `}</style>
-      {isDragActive && (
-        <div className="global-drag-overlay" aria-hidden="true"><span>Thả file để thêm vào thư viện</span></div>
-      )}
-      {/* Backend error is already shown in header; only show empty-specific notices here */}
-
-      <header className="libx-intro">
-        <span className="libx-intro-mark" aria-hidden="true"><BookOpenCheck size={22} /></span>
-        <div className="libx-intro-copy">
-          <span className="libx-intro-eyebrow">KHÔNG GIAN HỌC TẬP</span>
-          <h1>Hành trình đọc của bạn</h1>
-          <p>Sách giáo khoa, bài đọc gần đây và từ vựng đã lưu — tất cả ở một nơi.</p>
-        </div>
-      </header>
-
-      {/* Quick stats */}
-      <section className="libx-stats" aria-label="Thống kê nhanh">
-        {statItems.map((it) => (
-          <div key={it.label} className="libx-stat">
-            <span className="libx-stat-ic" aria-hidden="true">{it.icon}</span>
-            <span className="libx-stat-copy">
-              <span className="libx-stat-val">{it.value}</span>
-              <span className="libx-stat-label">{it.label}</span>
-              <span className="libx-stat-sub">{it.sub}</span>
-            </span>
-          </div>
-        ))}
-      </section>
-
-      {/* Tiếp tục học strip • có thể thu hồi, không xóa logic (giữ historyBooks) */}
-      {historyBooks.length > 0 && (
-        <section className="libx-continue-section" aria-label="Tiếp tục học">
-          <div className="libx-sec-head">
-            <h2 className="libx-sec-title"><Clock size={15} /> Tiếp tục học</h2>
-            <span className="libx-sec-hint">{historyBooks.length} cuốn gần đây</span>
-            <button
-              className="btn btn-ghost btn-xs"
-              onClick={() => {
-                const next = !continueCollapsed;
-                setContinueCollapsed(next);
-                try {
-                  const res = safeSetString("sgk_continue_collapsed", next ? "true" : "false");
-                  if (!res.ok && res.quota) console.warn("Không thể lưu dữ liệu vì bộ nhớ trình duyệt đã đầy");
-                  else if (!res.ok) console.warn("[App] safeSetString failed sgk_continue_collapsed:", res.error);
-                } catch (e) { console.warn("[App] safeSetString exception sgk_continue_collapsed:", e); }
-              }}
-              aria-label={continueCollapsed ? "Mở rộng Tiếp tục học" : "Thu hồi Tiếp tục học"}
-              aria-expanded={!continueCollapsed}
-              title={continueCollapsed ? "Mở rộng" : "Thu hồi"}
-              style={{ marginLeft: "auto" }}
-            >
-              {continueCollapsed ? <><ChevronDown size={14} /> Mở</> : <><ChevronUp size={14} /> Thu gọn</>}
-            </button>
-          </div>
-          {!continueCollapsed && (
-            <div className="libx-strip">
-              {historyBooks.map((book) => {
-                const { page, total, pct } = bookProgress(book.filename, lastPageMap, lastTotalMap);
-                const last = lastPageMap[book.filename] || 0;
-                return (
-                  <div
-                    key={book.filename}
-                    className="libx-cont"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onOpenBook(book, last || null)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onOpenBook(book, last || null);
-                      }
-                    }}
-                    aria-label={`Tiếp tục đọc ${book.title}`}
-                  >
-                    <span className="libx-cont-cover">
-                      <BookCover book={book} lastPage={last} numPages={total} height={64} />
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span className="libx-cont-t" title={book.title}>{book.title}</span><br />
-                      <span className="libx-cont-m">Lớp {book.grade} • {book.subject}{page > 0 && total > 0 ? ` • Tr.${page}/${total}` : " • Chưa đọc"}</span>
-                      {page > 0 && total > 0 && (
-                        <span className="libx-bar" aria-label={`Tiến để ${pct}%`}><i style={{ width: pct + "%" }} /></span>
-                      )}
-                    </span>
-                    <span className="libx-cta">Tiếp tục</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Welcome hero */}
-      <div className="libx-hero">
-        <span className="libx-hero-icon" aria-hidden="true"><Sparkles size={19} /></span>
-        <div className="libx-hero-copy">
-          <span className="libx-hero-eyebrow">HỌC TẬP TƯƠNG TÁC</span>
-          <h2>Đọc sách theo cách của bạn</h2>
-          <p>Mở sách để đọc hai trang, trò chuyện cùng AI, làm bài tập và ghi chú trực tiếp.</p>
-        </div>
-        {geminiKey
-          ? <button className="libx-hero-action" onClick={() => document.getElementById("libx-book-catalog")?.scrollIntoView({ behavior: "smooth", block: "start" })}>Chọn sách <ChevronRight size={15} /></button>
-          : <button className="libx-hero-action" onClick={onOpenSettings}>Cấu hình AI <ChevronRight size={15} /></button>}
-      </div>
-
-      {/* Toolbar */}
-      <div className="libx-toolbar" id="libx-book-catalog">
-        <div className="libx-trow">
-          <div className={`libx-search ${isSearching ? "is-searching" : ""}`}>
-              <Search className="search-icon" size={16} aria-hidden="true" />
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Tìm sách theo tên, môn, lớp..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Tìm sách"
-                aria-busy={isSearching}
-              />
-              {isSearching && <span className="search-busy" aria-hidden="true"><span className="spinner spinner-sm" style={{width:14,height:14,borderWidth:2}}/></span>}
-              {searchQuery && !isSearching && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  title="Xóa tìm kiếm"
-                  aria-label="Xóa tìm kiếm"
-                  className="search-clear"
-                >
-                  <X size={14} />
-                </button>
-              )}
-              {searchQuery && isSearching && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  title="Xóa tìm kiếm"
-                  aria-label="Xóa tìm kiếm"
-                  className="search-clear"
-                  style={{right:28}}
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-            <div className="toolbar-sort">
-              <ArrowUpDown size={14} aria-hidden="true" />
-              <select
-                className="sort-select"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                aria-label="Sắp xếp"
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="libx-seg" role="group" aria-label="Kiểu hiển thị">
-              <button
-                className={viewMode === "grid" ? "active" : ""}
-                onClick={() => setViewMode("grid")}
-                aria-label="Xem lưới"
-                aria-pressed={viewMode === "grid"}
-              >
-                <LayoutGrid size={14} />
-              </button>
-              <button
-                className={viewMode === "list" ? "active" : ""}
-                onClick={() => setViewMode("list")}
-                aria-label="Xem danh sách"
-                aria-pressed={viewMode === "list"}
-              >
-                <List size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="libx-trow">
-            <div className="filter-group compact">
-              <span className="filter-label hide-mobile">Lớp:</span>
-              <button
-                className={`libx-fbtn lib-grade-btn ${gradeFilter === null ? "active" : ""}`}
-                onClick={() => setGradeFilter(null)}
-                aria-label="Tất cả lớp"
-              >
-                Tất cả
-              </button>
-              {[1, 2, 3, 4, 5].map((g) => (
-                <button
-                  key={g}
-                  className={`libx-fbtn lib-grade-btn ${gradeFilter === g ? "active" : ""}`}
-                  onClick={() => setGradeFilter(g)}
-                  aria-label={`Lớp ${g}`}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-            <div className="lib-subject-anchor filter-group compact">
-              <span className="filter-label hide-mobile">Môn:</span>
-              <button
-                className="libx-fbtn lib-subject-trigger"
-                onClick={() => { if (!showSubjectPicker) setSubjectQuery(""); setShowSubjectPicker((v) => !v); }}
-                aria-expanded={showSubjectPicker}
-                aria-haspopup="dialog"
-              >
-                <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {subjectFilter ?? "Tất cả"}
-                </span>
-                <ChevronDown size={13} style={{ transform: showSubjectPicker ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
-              </button>
-              {showSubjectPicker && (
-                <div className="lib-subject-panel" role="dialog" aria-modal="false" aria-label="Chọn môn học">
-                  <div className="lib-subject-panel-head">
-                    <span>Chọn môn học • {subjectQuery.trim() === "" ? subjectCatalog.length + 1 : filteredSubjectCatalog.length + (normVi("Tất cả").includes(normVi(subjectQuery.trim())) ? 1 : 0)} kết quả</span>
-                    <button className="lib-subject-close" onClick={() => setShowSubjectPicker(false)} aria-label="Đóng">
-                      <X size={12} />
-                    </button>
-                  </div>
-                  <div style={{ position: "relative", marginBottom: 8 }}>
-                    <Search size={14} aria-hidden="true" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
-                    <input
-                      type="text"
-                      value={subjectQuery}
-                      onChange={(e) => setSubjectQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && subjectQuery.trim() !== "") {
-                          if (filteredSubjectCatalog.length > 0) {
-                            setSubjectFilter(filteredSubjectCatalog[0]);
-                            setShowSubjectPicker(false);
-                          } else if (normVi("Tất cả").includes(normVi(subjectQuery.trim()))) {
-                            setSubjectFilter(null);
-                            setShowSubjectPicker(false);
-                          }
-                        } else if (e.key === "Escape") {
-                          setShowSubjectPicker(false);
-                        }
-                      }}
-                      placeholder="Gõ để lọc nhanh (vd: toan)..."
-                      aria-label="Lọc môn học"
-                      autoFocus
-                      style={{ width: "100%", padding: "7px 28px 7px 30px", borderRadius: 9, border: "1px solid #e2e8f0", fontSize: "0.7813rem", background: "#fff", color: "#334155", outline: "none" }}
-                    />
-                    {subjectQuery && (
-                      <button
-                        onClick={() => setSubjectQuery("")}
-                        aria-label="Xóa lọc môn"
-                        title="Xóa lọc môn"
-                        style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", cursor: "pointer", color: "#94a3b8", display: "inline-flex", padding: 2 }}
-                      >
-                        <X size={13} />
-                      </button>
-                    )}
-                  </div>
-                  <div className="lib-subject-grid">
-                    {(subjectQuery.trim() === "" || normVi("Tất cả").includes(normVi(subjectQuery.trim()))) && (
-                      <button
-                        className={`libx-fbtn ${subjectFilter === null ? "active" : ""}`}
-                        onClick={() => {
-                          setSubjectFilter(null);
-                          setShowSubjectPicker(false);
-                        }}
-                      >
-                        Tất cả
-                      </button>
-                    )}
-                    {filteredSubjectCatalog.map((s) => (
-                      <button
-                        key={s}
-                        className={`libx-fbtn ${subjectFilter === s ? "active" : ""}`}
-                        onClick={() => {
-                          setSubjectFilter(s);
-                          setShowSubjectPicker(false);
-                        }}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                  {filteredSubjectCatalog.length === 0 && !normVi("Tất cả").includes(normVi(subjectQuery.trim())) && (
-                    <div style={{ padding: "10px 4px 2px", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                      Không tìm thấy môn phù hợp “{subjectQuery.trim()}”. <button className="btn btn-ghost btn-xs" onClick={() => setSubjectQuery("")}>Xóa lọc</button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="filter-group compact">
-              <span className="filter-label hide-mobile">Tập:</span>
-              <button
-                className={`libx-fbtn ${termFilter === null ? "active" : ""}`}
-                onClick={() => setTermFilter(null)}
-              >
-                Tất cả
-              </button>
-              {[1, 2].map((t) => (
-                <button
-                  key={t}
-                  className={`libx-fbtn ${termFilter === t ? "active" : ""}`}
-                  onClick={() => setTermFilter(t)}
-                >
-                  tập {t}
-                </button>
-              ))}
-            </div>
-            <div className="filter-group compact">
-              <span className="filter-label hide-mobile">Tiến độ:</span>
-              <button
-                className={`libx-fbtn ${readingStatusFilter === null ? "active" : ""}`}
-                onClick={() => setReadingStatusFilter(null)}
-              >
-                Tất cả
-              </button>
-              <button
-                className={`libx-fbtn ${readingStatusFilter === "reading" ? "active" : ""}`}
-                onClick={() =>
-                  setReadingStatusFilter(
-                    readingStatusFilter === "reading" ? null : "reading",
-                  )
-                }
-              >
-                Đang đọc
-              </button>
-              <button
-                className={`libx-fbtn ${readingStatusFilter === "completed" ? "active" : ""}`}
-                onClick={() =>
-                  setReadingStatusFilter(
-                    readingStatusFilter === "completed" ? null : "completed",
-                  )
-                }
-              >
-                Đã đọc
-              </button>
-              <button
-                className={`libx-fbtn ${readingStatusFilter === "unread" ? "active" : ""}`}
-                onClick={() =>
-                  setReadingStatusFilter(
-                    readingStatusFilter === "unread" ? null : "unread",
-                  )
-                }
-              >
-                Chưa đọc
-              </button>
-            </div>
-            <div className="filter-group compact lib-fav-row">
-              <span className="filter-label hide-mobile" style={{ visibility: "hidden" }} aria-hidden="true">
-                Yêu thích:
-              </span>
-              <button
-                className={`libx-fbtn ${favOnly ? "active" : ""}`}
-                onClick={() => setFavOnly((v) => !v)}
-                aria-pressed={favOnly}
-                title="Chỉ hiển thị sách yêu thích"
-              >
-                <span className="ui-s-24cad3">
-                  <Star size={13} fill={favOnly ? "currentColor" : "none"} /> Yêu thích
-                </span>
-              </button>
-            </div>
-          </div>
-        <div className="libx-trow" style={{ alignItems: "center" }}>
-          <span className="libx-count" aria-live="polite" aria-atomic="true">
-            <strong>{books.length}</strong> cuốn
-            {hasActiveFilters ? <span> • đã lọc trên {booksAll?.length ?? books.length}</span> : null}
-          </span>
-          <span className="sr-only" aria-live="polite">Hiển thị {books.length} trên {booksAll?.length ?? books.length} cuốn</span>
-          {hasActiveFilters && (
-            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
-              <X size={12} /> Xóa lọc
-            </button>
-          )}
-        </div>
-      </div>
-
-      {(uploadNotice || uploadError) && (
-        <div
-          className={"upload-notice " + (uploadError ? "error" : "ok")}
-          role="status"
-          aria-live="polite"
-        >
-          <span>{uploadError || uploadNotice}</span>
-          {!uploadError && noticeUndo && noticeUndo.text === uploadNotice && (
-            <button
-              className="btn btn-primary btn-xs"
-              onClick={() => { try { noticeUndo.run(); } catch (e) { console.warn("undo failed:", e); } }}
-              style={{ marginLeft: 8 }}
-            >
-              <RotateCcw size={13} /> {noticeUndo.label || "Hoàn tác"}
-            </button>
-          )}
-          <button className="btn btn-ghost btn-xs" onClick={onDismissNotice} aria-label="Đóng thông báo" style={{marginLeft:8}}><X size={14}/></button>
-        </div>
-      )}
-
-      {uploadDraft && (
-        <div
-          className="upload-preview-card"
-          onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); if (!hasFilesInDataTransfer(e)) return; dragCounterRef.current += 1; setDragActive(true); }}
-          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; } catch {} }}
-          onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); dragCounterRef.current = Math.max(0, dragCounterRef.current - 1); if (dragCounterRef.current === 0) setDragActive(false); }}
-          onDrop={(e) => {
-            e.preventDefault(); e.stopPropagation();
-            dragCounterRef.current = 0;
-            setDragActive(false);
-            const file = e.dataTransfer.files?.[0];
-            if (file) onFileSelect(file);
-          }}
-        >
-          <div className="upload-preview-icon" aria-hidden="true">
-            {uploadThumb ? <img src={uploadThumb} alt="preview" style={{width:52,height:52,objectFit:"cover",borderRadius:6,border:"1px solid var(--border-color)"}}/> : "📕"}
-          </div>
-          <div className="upload-preview-info">
-            <div className="upload-preview-label">Xem trước trước khi lưu</div>
-            <div className="upload-preview-name">{uploadDraft.name}</div>
-            <div className="upload-preview-meta">
-              {(uploadDraft.size / (1024 * 1024)).toFixed(2)} MB •{" "}
-              {uploadDraft.title}
-            </div>
-            {String(uploadDraft.name || "").toLowerCase().endsWith(".doc") && !String(uploadDraft.name || "").toLowerCase().endsWith(".docx") && (
-              <div className="upload-preview-meta" style={{ marginTop: 4, color: "var(--warning, #b45309)", fontWeight: 600 }}>
-                File .doc (Word cũ): hãy mở bằng Word và Lưu thành .docx rồi mới nhập để giữ nguyên định dạng.
-              </div>
-            )}
-          </div>
-          <div className="upload-preview-actions">
-            {isDocxDraft ? (
-              <div className="docx-choice">
-                <div role="radiogroup" aria-label="Cách lưu file Word" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <label className={`docx-opt ${docxMode === "import" ? "active" : ""}`}>
-                    <input
-                      type="radio"
-                      name="docx-mode"
-                      checked={docxMode === "import"}
-                      onChange={() => setDocxMode("import")}
-                      disabled={uploadingBook}
-                    />
-                    <span>
-                      <strong>📥 Nhập thành Sách Word <em className="docx-rec">khuyên dùng</em></strong>
-                      <small>Giữ nguyên định dạng — đọc dạng sách, sửa như Word, xuất lại .docx.</small>
-                    </span>
-                  </label>
-                  <label className={`docx-opt ${docxMode === "keep" ? "active" : ""}`}>
-                    <input
-                      type="radio"
-                      name="docx-mode"
-                      checked={docxMode === "keep"}
-                      onChange={() => setDocxMode("keep")}
-                      disabled={uploadingBook}
-                    />
-                    <span>
-                      <strong>Lưu file gốc</strong>
-                      <small>Chỉ đọc/tải xuống, không chuyển dạng sách.</small>
-                    </span>
-                  </label>
-                </div>
-                <div className="docx-confirm-row">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={docxMode === "import" ? onImportDocx : onUploadSubmit}
-                    disabled={uploadingBook}
-                  >
-                    {uploadingBook
-                      ? (docxMode === "import" ? "Đang nhập..." : "Đang lưu...")
-                      : (docxMode === "import" ? "📥 Nhập thành Sách Word" : "Lưu file gốc")}
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={onClearUpload}
-                    disabled={false}
-                    title={uploadingBook ? "Hủy và bỏ qua kết quả đang lưu" : "Hủy"}
-                  >
-                    Hủy
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={onUploadSubmit}
-                  disabled={uploadingBook}
-                >
-                  {uploadingBook ? "Đang lưu..." : "Lưu vào thư viện"}
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={onClearUpload}
-                  disabled={false}
-                  title={uploadingBook ? "Hủy và bỏ qua kết quả đang lưu" : "Hủy"}
-                >
-                  Hủy
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {!uploadDraft && (
-        <div
-          className={"upload-dropzone " + (isDragActive ? "active" : "")}
-          onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); if (!hasFilesInDataTransfer(e)) return; dragCounterRef.current += 1; setDragActive(true); }}
-          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); try { if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; } catch {} }}
-          onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); dragCounterRef.current = Math.max(0, dragCounterRef.current - 1); if (dragCounterRef.current === 0) setDragActive(false); }}
-          onDrop={(e) => {
-            e.preventDefault(); e.stopPropagation();
-            dragCounterRef.current = 0;
-            setDragActive(false);
-            const file = e.dataTransfer.files?.[0];
-            if (file) onFileSelect(file);
-          }}
-          onClick={onAddBook}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              onAddBook();
-            }
-          }}
-          aria-label="Kéo file PDF vào đây hoặc nhấn để chọn sách"
-        >
-          <div className="upload-dropzone-icon" aria-hidden="true">
-            <Upload size={18} />
-          </div>
-          <div className="upload-dropzone-title">Kéo & thả file PDF vào đây</div>
-          <div className="upload-dropzone-subtitle">
-            hoặc nhấn để chọn sách mới • hỗ trợ PDF, DOCX, EPUB, ảnh
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="loading-state" aria-busy="true" aria-label="Đang tải">
-          <div className="skeleton-grid">
-            {Array.from({length:8}).map((_,i)=>(
-              <div key={i} className="skeleton-card">
-                <div className="skeleton-cover" />
-                <div className="skeleton-line" style={{width:"70%"}}/>
-                <div className="skeleton-line" style={{width:"50%"}}/>
-              </div>
-            ))}
-          </div>
-          <p className="loading-hint">Đang tải danh sách sách giáo khoa...</p>
-        </div>
-      ) : backendStatus === "error" && !loading ? (
-        <div className="empty-state error-state" role="alert">
-          <div className="empty-icon">🔌</div>
-          <h3>Không thể kết nối máy chủ</h3>
-          <p>
-            {error || "Hãy chắc chắn máy chủ backend đang chạy trên cổng 5000."}
-          </p>
-          <button className="btn btn-primary" onClick={onRetry}>
-            <RefreshCw size={14} /> Thử lại
-          </button>
-        </div>
-      ) : books.length === 0 && !loading ? (
-        hasActiveFilters ? (
-          <div className="empty-state">
-            <div className="empty-icon">🔍</div>
-            <h3>Không tìm thấy sách phù hợp</h3>
-            <p>Thử nới lỏng bộ lọc hoặc từ khóa tìm kiếm.</p>
-            <button className="btn btn-secondary" onClick={clearFilters}>
-              <RefreshCw size={14} /> Xóa bộ lọc
-            </button>
-          </div>
-        ) : (
-          <div className="empty-state">
-            <div className="empty-icon">📚</div>
-            <h3>Thư viện đang trống</h3>
-            <p>Thêm sách PDF để bắt đầu nhé.</p>
-            <button className="btn btn-primary" onClick={onAddBook}>
-              <Plus size={14} /> Thêm sách
-            </button>
-          </div>
-        )
-      ) : (
-        <>
-          {viewMode === "grid" ? (
-            <div className="libx-grid">
-              {pagedBooks.map((book) => (
-                <BookCard
-                  key={book.filename}
-                  book={book}
-                  lastPage={lastPageMap[book.filename] || 0}
-                  numPages={lastTotalMap[book.filename] || 0}
-                  fav={favs.includes(book.filename)}
-                  onToggleFav={() => onToggleFav(book.filename)}
-                  onOpen={() => onOpenBook(book)}
-                  onDelete={() => onDeleteBook(book)}
-                  onRename={() => onRenameBook(book)}
-                  onEditText={() => onEditTextBook?.(book)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="libx-list">
-              {pagedBooks.map((row) => {
-                const { page, total, pct } = bookProgress(row.filename, lastPageMap, lastTotalMap);
-                const last = lastPageMap[row.filename] || 0;
-                const isFav = favs.includes(row.filename);
-                const _ext = String(row.filename || "").toLowerCase().match(/(\.[a-z0-9]+)$/)?.[1] || "";
-                return (
-                  <div key={row.filename} className="libx-row" role="button" tabIndex={0}
-                    onClick={() => onOpenBook(row)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenBook(row); } }}
-                    aria-label={`Mở sách ${row.title}`}>
-                    <span className="libx-row-cover">
-                      <BookCover book={row} lastPage={last} numPages={total} height={56} />
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span className="libx-cont-t" title={row.title}>{row.title}</span><br />
-                      <span className="libx-cont-m">Lớp {row.grade} • {row.subject} • Tập {row.term}</span>
-                      {row.isLinkedBook && (
-                        <a
-                          className="libx-drive-link"
-                          href={row.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={row.sourceUrl}
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >Mở link sách ↗</a>
-                      )}
-                      {page > 0 && total > 0
-                        ? <span className="libx-bar" style={{ maxWidth: 220 }}><i style={{ width: pct + "%" }} /></span>
-                        : <span className="libx-cont-m">Chưa đọc</span>}
-                    </span>
-                    <button className="libx-icobtn libx-hide-mobile" style={isFav ? { color: "#f59e0b", borderColor: "#fde68a", background: "#fffbeb" } : undefined}
-                      onClick={(e) => { e.stopPropagation(); onToggleFav(row.filename); }}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
-                      aria-label={isFav ? "Bộ yêu thích" : "Thêm yêu thích"} title={isFav ? "Bộ yêu thích" : "Thêm yêu thích"}>
-                      <Star size={14} fill={isFav ? "currentColor" : "none"} />
-                    </button>
-                    {[".txt", ".md"].includes(_ext) && (
-                      <button className="libx-icobtn libx-hide-mobile" onClick={(e) => { e.stopPropagation(); onEditTextBook?.(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }} aria-label="Sửa nội dung" title="Sửa nội dung (chỉ .txt/.md)"><Edit3 size={14} /></button>
-                    )}
-                    <button className="libx-icobtn libx-hide-mobile" onClick={(e) => { e.stopPropagation(); onRenameBook(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }} aria-label="Sửa thông tin sách" title="Sửa thông tin sách"><Pencil size={14} /></button>
-                    <button className="libx-icobtn danger libx-hide-mobile" onClick={(e) => { e.stopPropagation(); onDeleteBook(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }} aria-label="Xóa" title="Xóa"><Trash2 size={14} /></button>
-                    <span className="libx-rowmenu-anchor">
-                      <button
-                        className="libx-icobtn libx-rowmenu-btn"
-                        onClick={(e) => { e.stopPropagation(); setOpenRowMenu((cur) => (cur === row.filename ? null : row.filename)); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
-                        aria-label={`Tùy chọn cho sách ${row.title}`}
-                        aria-expanded={openRowMenu === row.filename}
-                        aria-haspopup="menu"
-                        title="Tùy chọn"
-                      >
-                        <MoreHorizontal size={15} />
-                      </button>
-                      {openRowMenu === row.filename && (
-                        <div
-                          className="libx-rowmenu"
-                          role="menu"
-                          aria-label={`Tùy chọn cho sách ${row.title}`}
-                        >
-                          <button
-                            className="libx-rowmenu-item"
-                            role="menuitem"
-                            onClick={(e) => { e.stopPropagation(); onToggleFav(row.filename); setOpenRowMenu(null); }}
-                          >
-                            <Star size={14} fill={isFav ? "currentColor" : "none"} /> {isFav ? "Bỏ yêu thích" : "Thêm yêu thích"}
-                          </button>
-                          {[".txt", ".md"].includes(_ext) && (
-                            <button
-                              className="libx-rowmenu-item"
-                              role="menuitem"
-                              onClick={(e) => { e.stopPropagation(); onEditTextBook?.(row); setOpenRowMenu(null); }}
-                            >
-                              <Edit3 size={14} /> Sửa nội dung
-                            </button>
-                          )}
-                          <button
-                            className="libx-rowmenu-item"
-                            role="menuitem"
-                            onClick={(e) => { e.stopPropagation(); onRenameBook(row); setOpenRowMenu(null); }}
-                          >
-                            <Pencil size={14} /> Sửa thông tin sách
-                          </button>
-                          <button
-                            className="libx-rowmenu-item danger"
-                            role="menuitem"
-                            onClick={(e) => { e.stopPropagation(); onDeleteBook(row); setOpenRowMenu(null); }}
-                          >
-                            <Trash2 size={14} /> Xóa
-                          </button>
-                        </div>
-                      )}
-                    </span>
-                    <button className="libx-open" style={{ flex: "0 0 auto" }} onClick={(e) => { e.stopPropagation(); onOpenBook(row); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}><BookOpen size={13} /> Mở</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {totalLibPages > 1 && (
-            <nav className="libx-pager" aria-label="Phân trang thư viện">
-              <button
-                className="libx-fbtn"
-                disabled={libPage <= 1}
-                onClick={() => { setLibPage(1); document.querySelector(".libx-grid, .libx-list")?.scrollIntoView({ block: "start", behavior: "smooth" }); }}
-                aria-label="Về trang đầu"
-                title="Trang đầu"
-              >
-                <ChevronsLeft size={13} />
-              </button>
-              <button
-                className="libx-fbtn"
-                disabled={libPage <= 1}
-                onClick={() => { setLibPage((p) => Math.max(1, p - 1)); document.querySelector(".libx-grid, .libx-list")?.scrollIntoView({ block: "start", behavior: "smooth" }); }}
-                aria-label="Trang trước"
-              >
-                <ChevronLeft size={13} /> Trước
-              </button>
-              <span className="libx-count" aria-live="polite">
-                Trang <strong>{libPage}/{totalLibPages}</strong> • {libPageFrom}–{libPageTo}/{(books?.length || 0)} cuốn
-              </span>
-              <button
-                className="libx-fbtn"
-                disabled={libPage >= totalLibPages}
-                onClick={() => { setLibPage((p) => Math.min(totalLibPages, p + 1)); document.querySelector(".libx-grid, .libx-list")?.scrollIntoView({ block: "start", behavior: "smooth" }); }}
-                aria-label="Trang sau"
-              >
-                Sau <ChevronRight size={13} />
-              </button>
-              <button
-                className="libx-fbtn"
-                disabled={libPage >= totalLibPages}
-                onClick={() => { setLibPage(totalLibPages); document.querySelector(".libx-grid, .libx-list")?.scrollIntoView({ block: "start", behavior: "smooth" }); }}
-                aria-label="Tới trang cuối"
-                title="Trang cuối"
-              >
-                <ChevronsRight size={13} />
-              </button>
-            </nav>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function BookCard({
-  book,
-  lastPage,
-  numPages = 0,
-  fav,
-  onToggleFav,
-  onOpen,
-  onDelete,
-  onRename,
-  onEditText,
-}) {
-  const { page, pct } = progressFromPages(lastPage, numPages);
-  return (
-    <div
-      className="libx-book"
-      role="button"
-      tabIndex={0}
-      aria-label={`Mở sách ${book.title}`}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-    >
-      <div className="libx-cover">
-        <BookCover book={book} lastPage={lastPage} numPages={numPages} />
-        <button
-          className={`libx-fav ${fav ? "on" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFav();
-          }}
-          aria-label={fav ? "Bộ yêu thích" : "Thêm yêu thích"}
-          title={fav ? "Bộ yêu thích" : "Thêm yêu thích"}
-        >
-          <Star size={14} fill={fav ? "currentColor" : "none"} />
-        </button>
-        <span className="libx-grade">Lớp {book.grade} • {book.subject}</span>
-      </div>
-      <div className="libx-body">
-        <h4 className="libx-title" title={book.title}>
-          {book.title}
-        </h4>
-        <div className="libx-meta">
-          <span>Tập {book.term}</span>
-          <span>—</span>
-          <span>{book.isLinkedBook ? (book.sourceLabel || "Google Drive") : `${(book.size / (1024 * 1024)).toFixed(1)} MB`}</span>
-        </div>
-        {book.isLinkedBook && (
-          <a
-            className="libx-drive-link"
-            href={book.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={book.sourceUrl}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            Mở link sách ↗
-          </a>
-        )}
-        {page > 0 && numPages > 0 ? (
-          <>
-            <div className="libx-bar" aria-label={`Tiến để ${pct}%`}>
-              <i style={{ width: pct + "%" }} />
-            </div>
-            <span className="libx-meta">Trang {page}/{numPages} • {pct}%</span>
-          </>
-        ) : (
-          <span className="libx-meta">Chưa đọc</span>
-        )}
-        <div className="libx-foot">
-          <button
-            className="libx-open"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen();
-            }}
-            aria-label={`Mở sách ${book.title}`}
-          >
-            <BookOpen size={13} /> {page > 0 ? "Tiếp tục" : "Mở sách"}
-          </button>
-          <button
-            className="libx-icobtn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRename?.();
-            }}
-            aria-label={`Sửa thông tin sách ${book.title}`}
-            title="Sửa thông tin sách"
-          >
-            <Pencil size={14} />
-          </button>
-          {(() => {
-            const _ext = String(book.filename || "").toLowerCase().match(/(\.[a-z0-9]+)$/)?.[1] || "";
-            if ([".txt", ".md"].includes(_ext)) {
-              return (
-                <button
-                  className="libx-icobtn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEditText?.();
-                  }}
-                  aria-label={`Sửa nội dung ${book.title}`}
-                  title="Sửa nội dung van bản"
-                >
-                  <Edit3 size={14} />
-                </button>
-              );
-            }
-            return null;
-          })()}
-          <button
-            className="libx-icobtn danger"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete?.();
-            }}
-            aria-label={`Xóa sách ${book.title}`}
-            title="Xóa sách"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------
-// CONTINUE VIEW
-// ------------------------------------------------------------------
-const CONTINUE_VIEW_KEY = "sgk_continue_view";
-
-// Thời gian tương đối tiếng Việt cho "Tiếp tục đọc"
-function relTime(ts) {
-  const t = Number(ts) || 0;
-  if (!t) return "";
-  const diff = Date.now() - t;
-  if (diff < 60000) return "Vừa xong";
-  const min = Math.floor(diff / 60000);
-  if (min < 60) return `${min} phút trước`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} giờ trước`;
-  const day = Math.floor(hr / 24);
-  if (day === 1) return "Hôm qua";
-  if (day < 8) return `${day} ngày trước`;
-  return new Date(t).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "2-digit" });
-}
-
-function ContinueView({
-  books,
-  history,
-  lastPageMap,
-  lastTotalMap,
-  onOpenBook,
-  onClear,
-  onRemoveEntry,
-}) {
-  // Fix 6 • tìm + lọc lịch sử đọc (trước đây toolbar chỉ đếm + Xóa)
-  const [cq, setCq] = useState("");
-  const [cGrade, setCGrade] = useState(null);
-  const [cSubject, setCSubject] = useState(null);
-  // Tinh tế (mới): chế độ xem Thẻ/Bảng, lọc trạng thái đọc, sắp xếp — ghi nhớ lựa chọn
-  const [cView, setCView] = useState(() => {
-    try { return safeGetString(CONTINUE_VIEW_KEY, null) === "table" ? "table" : "cards"; }
-    catch { return "cards"; }
-  });
-  const [cStatus, setCStatus] = useState("all"); // all | reading | done | unread
-  const [cSort, setCSort] = useState("recent"); // recent | progress | title
-
-  useEffect(() => {
-    try { safeSetString(CONTINUE_VIEW_KEY, cView); }
-    catch (e) { console.warn("[ContinueView] lưu chế độ xem thất bại", e); }
-  }, [cView]);
-
-  const byFilename = useMemo(
-    () => new Map(books.map((b) => [b.filename, b])),
-    [books],
-  );
-  const entries = useMemo(
-    () => history
-      .map((h) => ({ at: h.at, book: byFilename.get(h.filename) }))
-      .filter((e) => e.book)
-      .sort((a, b) => b.at - a.at),
-    [history, byFilename],
-  );
-  const cGrades = useMemo(
-    () => [...new Set(entries.map((e) => e.book.grade))].sort((a, b) => a - b),
-    [entries],
-  );
-  const cSubjects = useMemo(
-    () => [...new Set(entries.map((e) => e.book.subject).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "vi")),
-    [entries],
-  );
-
-  if (!entries.length) {
-    return (
-      <div className="dash-empty">
-        <Clock size={46} />
-        <p>
-          Thầy/cô chưa mở cuốn sách nào. Hãy chọn một cuốn trong Thư viện để bắt
-          đầu!
-        </p>
-      </div>
-    );
-  }
-
-  // Tiến độ lấy từ helper chuẩn (readingProgress.js) → đồng bộ Thư viện/Bảng điều khiển
-  const rows = entries.map(({ book, at }) => {
-    const { last, total, page, pct, status } = bookProgress(book.filename, lastPageMap, lastTotalMap);
-    return {
-      filename: book.filename,
-      book,
-      at,
-      title: book.title,
-      grade: book.grade,
-      subject: book.subject,
-      term: book.term,
-      last,
-      page,
-      total,
-      pct,
-      status,
-    };
-  });
-
-  const cQuery = cq.trim().toLowerCase();
-  const hasContinueFilter = cQuery !== "" || cGrade !== null || cSubject !== null || cStatus !== "all";
-  const filteredTableData = rows.filter((r) => {
-    if (cGrade !== null && r.grade !== cGrade) return false;
-    if (cSubject !== null && r.subject !== cSubject) return false;
-    if (cStatus !== "all" && r.status !== cStatus) return false;
-    if (cQuery && !(String(r.title || "").toLowerCase().includes(cQuery) || String(r.subject || "").toLowerCase().includes(cQuery))) return false;
-    return true;
-  });
-
-  const sorters = {
-    recent: (a, b) => b.at - a.at,
-    progress: (a, b) => b.pct - a.pct || b.at - a.at,
-    title: (a, b) => String(a.title).localeCompare(String(b.title), "vi"),
-  };
-  const sorted = [...filteredTableData].sort(sorters[cSort] || sorters.recent);
-  const hero = sorted[0] || null;
-  const rest = sorted.slice(1);
-
-  const clearContinueFilter = () => { setCq(""); setCGrade(null); setCSubject(null); setCStatus("all"); };
-
-  // Mở đúng trang đang đọc (lastPage = trang PDF) để "đọc tiếp" liền mạch
-  const resumeLabel = (r) => (r.page > 0 ? (r.status === READ_STATUS.DONE ? "Đọc lại" : "Đọc tiếp") : "Bắt đầu đọc");
-  const openResume = (r) => onOpenBook(r.book, r.last > 0 ? r.last : null);
-  const statusChips = [
-    ["all", "Tất cả"],
-    ["reading", "Đang đọc"],
-    ["done", "Đã xong"],
-    ["unread", "Chưa mở"],
-  ];
-
-  return (
-    <div className="ctv-root">
-      <style>{`
-        .ctv-root { display:flex; flex-direction:column; gap:12px; }
-        .ctv-hero { display:flex; gap:16px; align-items:center; flex-wrap:wrap; border-radius:16px; padding:16px 18px; color:#fff; position:relative; overflow:hidden;
-          background:linear-gradient(120deg, var(--color-action-strong, #1e3a8a), var(--color-action, #2563eb) 58%, var(--color-action-active, #1e40af)); box-shadow:0 10px 26px rgba(15,23,42,0.16); }
-        .ctv-hero::after { content:""; position:absolute; right:-40px; top:-70px; width:230px; height:230px; border-radius:50%; background:rgba(255,255,255,0.10); pointer-events:none; }
-        .ctv-hero-cover { width:104px; flex-shrink:0; border-radius:10px; overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,0.28); border:1px solid rgba(255,255,255,0.4); z-index:1; }
-        .ctv-hero-cover .book-cover { width:100% !important; padding:0 !important; border:none !important; }
-        .ctv-hero-main { flex:1 1 240px; min-width:200px; z-index:1; }
-        .ctv-hero-eyebrow { display:inline-flex; align-items:center; gap:5px; font-size: 0.6875rem; font-weight:800; letter-spacing:0.03em; text-transform:uppercase; opacity:0.94; }
-        .ctv-hero-title { margin:5px 0 2px; font-size:1.15rem; font-weight:800; color:#fff; line-height:1.3; }
-        .ctv-hero-meta { margin:0; font-size: 0.75rem; opacity:0.9; }
-        .ctv-hero-bar { height:7px; border-radius:99px; background:rgba(255,255,255,0.28); overflow:hidden; margin:10px 0 5px; max-width:440px; }
-        .ctv-hero-bar > i { display:block; height:100%; border-radius:99px; background:#fff; }
-        .ctv-hero-progress { font-size: 0.7188rem; font-weight:700; opacity:0.95; }
-        .ctv-hero-actions { display:flex; flex-direction:column; gap:7px; align-items:stretch; z-index:1; }
-        .ctv-resume { display:inline-flex; align-items:center; justify-content:center; gap:7px; font-size: 0.8125rem; font-weight:800; padding:11px 16px; border-radius:11px; border:none; cursor:pointer; background:#fff; color:var(--color-action-strong, #1e3a8a); box-shadow:0 4px 12px rgba(0,0,0,0.18); transition:transform 0.12s ease; }
-        .ctv-resume:hover { transform:translateY(-1px); }
-        .ctv-hero-remove { display:inline-flex; align-items:center; justify-content:center; gap:5px; font-size: 0.7188rem; font-weight:700; padding:7px 10px; border-radius:9px; border:1px solid rgba(255,255,255,0.5); background:rgba(255,255,255,0.12); color:#fff; cursor:pointer; }
-        .ctv-hero-remove:hover { background:rgba(255,255,255,0.22); }
-        .ctv-search { position:relative; display:inline-flex; align-items:center; }
-        .ctv-search input { padding:7px 26px 7px 30px; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); font-size: 0.7813rem; background:var(--surface, #fff); color:var(--text-dark, #334155); outline:none; min-width:180px; }
-        .ctv-search input:focus { border-color:var(--color-action, #2563eb); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-action, #2563eb) 16%, transparent); }
-        .ctv-search-ic { position:absolute; left:9px; color:var(--text-muted, #94a3b8); pointer-events:none; }
-        .ctv-search-x { position:absolute; right:5px; border:none; background:transparent; cursor:pointer; color:var(--text-muted, #94a3b8); display:inline-flex; padding:2px; }
-        .ctv-sel { padding:7px 9px; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); font-size: 0.7813rem; background:var(--surface, #fff); color:var(--text-dark, #334155); max-width:170px; }
-        .ctv-chips { display:inline-flex; gap:5px; flex-wrap:wrap; }
-        .ctv-chip { font-size: 0.7188rem; font-weight:700; padding:5px 10px; border-radius:999px; border:1px solid var(--border-color, #e2e8f0); background:var(--surface, #fff); color:var(--text-muted, #475569); cursor:pointer; }
-        .ctv-chip:hover { border-color:var(--color-action, #2563eb); color:var(--color-action-strong, #2563eb); }
-        .ctv-chip.on { background:var(--color-action, #2563eb); border-color:var(--color-action, #2563eb); color:#fff; }
-        .ctv-seg { display:inline-flex; border:1px solid var(--border-color, #e2e8f0); border-radius:9px; overflow:hidden; }
-        .ctv-seg button { border:none; background:var(--surface, #fff); padding:7px 10px; cursor:pointer; color:var(--text-muted, #64748b); display:inline-flex; align-items:center; }
-        .ctv-seg button.on { background:var(--color-action, #2563eb); color:#fff; }
-        .ctv-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:12px; }
-        .ctv-card { background:var(--surface, #fff); border:1px solid var(--border-color, #e2e8f0); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease; }
-        .ctv-card:hover { transform:translateY(-3px); box-shadow:0 12px 26px rgba(15,23,42,0.12); border-color:var(--color-action, #2563eb); }
-        .ctv-card-cover { position:relative; border:none; padding:0; cursor:pointer; background:linear-gradient(135deg, var(--color-action-soft, #dbeafe), #ede9fe); display:flex; align-items:center; justify-content:center; }
-        .ctv-card-cover .book-cover { width:100% !important; height:100% !important; min-height:100%; padding:0 !important; border:none !important; }
-        .ctv-card-body { padding:10px 12px 11px; display:flex; flex-direction:column; gap:6px; flex:1; }
-        .ctv-card-title { margin:0; font-size:0.85rem; font-weight:800; color:var(--text-dark, #0f172a); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:2.35em; }
-        .ctv-card-meta { font-size: 0.6875rem; color:var(--text-muted, #64748b); }
-        .ctv-bar { height:6px; border-radius:99px; background:var(--surface-soft, #f1f5f9); border:1px solid var(--border-color, #e2e8f0); overflow:hidden; }
-        .ctv-bar > i { display:block; height:100%; border-radius:99px; background:var(--color-action, #2563eb); }
-        .ctv-card-progress { display:flex; justify-content:space-between; gap:6px; font-size: 0.6563rem; color:var(--text-muted, #64748b); }
-        .ctv-card-foot { display:flex; gap:6px; align-items:center; margin-top:auto; padding-top:7px; border-top:1px dashed var(--border-color, #e2e8f0); }
-        .ctv-card-resume { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.7813rem; font-weight:800; padding:8px 10px; border-radius:10px; border:none; background:var(--color-action, #2563eb); color:#fff; cursor:pointer; }
-        .ctv-card-resume:hover { filter:brightness(1.08); }
-        .ctv-icobtn { width:32px; height:32px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid var(--border-color, #e2e8f0); background:var(--surface, #fff); color:var(--text-muted, #64748b); cursor:pointer; }
-        .ctv-icobtn:hover { border-color:#fca5a5; color:#dc2626; background:#fef2f2; }
-        .ctv-single-hint { font-size: 0.7813rem; color:var(--text-muted, #64748b); text-align:center; padding:14px; }
-        @media (max-width: 640px) {
-          .ctv-hero { padding:13px; gap:12px; }
-          .ctv-hero-cover { width:84px; }
-          .ctv-hero-actions { flex-direction:row; width:100%; }
-          .ctv-resume { flex:1; }
-          .ctv-grid { grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); }
-        }
-      `}</style>
-
-      {/* Hero — cuốn gần đây nhất, đọc tiếp ngay */}
-      {hero && (
-        <section className="ctv-hero" aria-label={`Đọc tiếp ${hero.title}`}>
-          <span className="ctv-hero-cover">
-            <BookCover book={hero.book} lastPage={hero.last} numPages={hero.total} height={150} />
-          </span>
-          <div className="ctv-hero-main">
-            <span className="ctv-hero-eyebrow"><Sparkles size={12} /> {hero.at ? relTime(hero.at) : "Đọc tiếp"}</span>
-            <h2 className="ctv-hero-title" title={hero.title}>{hero.title}</h2>
-            <p className="ctv-hero-meta">Lớp {hero.grade} • {hero.subject} • Tập {hero.term}</p>
-            <div className="ctv-hero-bar" role="progressbar" aria-valuenow={hero.pct} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${hero.pct}%` }} /></div>
-            <span className="ctv-hero-progress">
-              {hero.page > 0 && hero.total > 0 ? `Trang ${hero.page}/${hero.total} • ${hero.pct}%` : "Chưa bắt đầu đọc"}
-            </span>
-          </div>
-          <div className="ctv-hero-actions">
-            <button className="ctv-resume" onClick={() => openResume(hero)}>
-              <BookOpenCheck size={15} /> {resumeLabel(hero)}{hero.page > 0 ? ` · Tr.${hero.page}` : ""}
-            </button>
-            {onRemoveEntry && (
-              <button className="ctv-hero-remove" onClick={() => onRemoveEntry(hero.filename)} title="Bỏ khỏi lịch sử đọc">
-                <X size={13} /> Bỏ khỏi lịch sử
-              </button>
-            )}
-          </div>
-        </section>
-      )}
-
-      <div className="data-table-toolbar">
-        <div className="data-table-toolbar-left">
-          <span className="ctv-search">
-            <Search size={14} aria-hidden="true" className="ctv-search-ic" />
-            <input
-              type="text"
-              value={cq}
-              onChange={(e) => setCq(e.target.value)}
-              placeholder="Tìm trong lịch sử đọc..."
-              aria-label="Tìm trong lịch sử đọc"
-            />
-            {cq && (
-              <button onClick={() => setCq("")} aria-label="Xóa tìm kiếm" title="Xóa tìm kiếm" className="ctv-search-x">
-                <X size={13} />
-              </button>
-            )}
-          </span>
-          <select
-            value={cGrade === null ? "" : cGrade}
-            onChange={(e) => setCGrade(e.target.value === "" ? null : Number(e.target.value))}
-            aria-label="Lọc theo lớp"
-            className="ctv-sel"
-          >
-            <option value="">Tất cả lớp</option>
-            {cGrades.map((g) => (
-              <option key={g} value={g}>Lớp {g}</option>
-            ))}
-          </select>
-          <select
-            value={cSubject === null ? "" : cSubject}
-            onChange={(e) => setCSubject(e.target.value === "" ? null : e.target.value)}
-            aria-label="Lọc theo môn"
-            className="ctv-sel"
-          >
-            <option value="">Tất cả môn</option>
-            {cSubjects.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <div className="ctv-chips" role="group" aria-label="Lọc trạng thái đọc">
-            {statusChips.map(([val, label]) => (
-              <button key={val} type="button" className={`ctv-chip${cStatus === val ? " on" : ""}`} onClick={() => setCStatus(val)}>{label}</button>
-            ))}
-          </div>
-          <span className="ui-s-a80a05" aria-live="polite">
-            {hasContinueFilter ? `${filteredTableData.length}/${entries.length} cuốn` : `${entries.length} cuốn đã mở gần đây`}
-          </span>
-          {hasContinueFilter && (
-            <button className="btn btn-ghost btn-xs" onClick={clearContinueFilter}>
-              <X size={12} /> Xóa lọc
-            </button>
-          )}
-        </div>
-        <div className="data-table-toolbar-right">
-          <select value={cSort} onChange={(e) => setCSort(e.target.value)} aria-label="Sắp xếp" className="ctv-sel">
-            <option value="recent">Gần đây nhất</option>
-            <option value="progress">Tiến độ</option>
-            <option value="title">Tiêu đề</option>
-          </select>
-          <div className="ctv-seg" role="group" aria-label="Chế độ xem">
-            <button type="button" className={cView === "cards" ? "on" : ""} onClick={() => setCView("cards")} title="Xem dạng thẻ" aria-label="Xem dạng thẻ"><LayoutGrid size={14} /></button>
-            <button type="button" className={cView === "table" ? "on" : ""} onClick={() => setCView("table")} title="Xem dạng bảng" aria-label="Xem dạng bảng"><List size={14} /></button>
-          </div>
-          <button className="btn btn-secondary btn-xs" onClick={onClear}>
-            <Trash2 size={13} /> Xóa lịch sử
-          </button>
-        </div>
-      </div>
-
-      {sorted.length === 0 ? (
-        <div className="data-table-empty">
-          <div className="data-table-empty-icon"><Search size={22} /></div>
-          <p>Không tìm thấy sách phù hợp</p>
-          <span className="ctv-single-hint">Thử nới lỏng từ khóa hoặc bộ lọc.</span>
-        </div>
-      ) : rest.length === 0 ? (
-        <p className="ctv-single-hint">Đây là cuốn gần đây nhất. Mở thêm sách để thấy danh sách.</p>
-      ) : cView === "cards" ? (
-        <div className="ctv-grid">
-          {rest.map((r) => (
-            <article key={r.filename} className="ctv-card">
-              <div
-                className="ctv-card-cover"
-                role="button"
-                tabIndex={0}
-                onClick={() => openResume(r)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openResume(r); } }}
-                aria-label={`Đọc tiếp ${r.title}`}
-              >
-                <BookCover book={r.book} lastPage={r.last} numPages={r.total} height={150} />
-              </div>
-              <div className="ctv-card-body">
-                <h3 className="ctv-card-title" title={r.title}>{r.title}</h3>
-                <div className="ctv-card-meta">{r.subject} • Tập {r.term}</div>
-                <div className="ctv-bar"><i style={{ width: `${r.pct}%` }} /></div>
-                <div className="ctv-card-progress">
-                  <span>{r.page > 0 && r.total > 0 ? `Tr.${r.page}/${r.total} • ${r.pct}%` : "Chưa đọc"}</span>
-                  <span>{r.at ? relTime(r.at) : ""}</span>
-                </div>
-                <div className="ctv-card-foot">
-                  <button className="ctv-card-resume" onClick={() => openResume(r)}><BookOpenCheck size={13} /> {resumeLabel(r)}</button>
-                  {onRemoveEntry && (
-                    <button className="ctv-icobtn" onClick={() => onRemoveEntry(r.filename)} title="Bỏ khỏi lịch sử đọc" aria-label={`Bỏ "${r.title}" khỏi lịch sử đọc`}><X size={13} /></button>
-                  )}
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      ) : (
-        <DataTable
-          columns={[
-            {
-              key: "title",
-              label: "Sách",
-              sortable: true,
-              render: (v, row) => (
-                <div className="ui-s-c932cc">
-                  <div
-                    style={{
-                      width: 52,
-                      flexShrink: 0,
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      border: "1px solid var(--border-color)",
-                    }}
-                  >
-                    <BookCover
-                      book={row.book}
-                      lastPage={row.last}
-                      numPages={row.total}
-                      height={56}
-                    />
-                  </div>
-                  <div>
-                    <div className="ui-s-0dbc82 cell-clamp" title={row.title}>
-                      {row.title}
-                    </div>
-                    <div className="ui-s-300269">
-                      Lớp {row.grade} • {row.subject} • Tập {row.term}
-                    </div>
-                  </div>
-                </div>
-              ),
-            },
-            {
-              key: "page",
-              label: "Trang hiện tải",
-              width: "120px",
-              align: "right",
-              sortable: true,
-              render: (v, row) => (row.page > 0 ? `${row.page}` : "—"),
-            },
-            {
-              key: "total",
-              label: "Tổng trang",
-              width: "110px",
-              align: "right",
-              hideOnMobile: true,
-              render: (v) => v || "?",
-            },
-            {
-              key: "pct",
-              label: "Tiến để",
-              width: "140px",
-              render: (_, row) =>
-                row.page > 0 && row.total > 0 ? (
-                  <div>
-                    <div className="progress-mini">
-                      <div
-                        className="progress-mini-fill"
-                        style={{ width: row.pct + "%" }}
-                      ></div>
-                    </div>
-                    <div className="ui-s-eb441c">{row.pct}%</div>
-                  </div>
-                ) : (
-                  <span className="text-muted">—</span>
-                ),
-            },
-            {
-              key: "at",
-              label: "Lần đọc gần nhất",
-              width: "160px",
-              sortable: true,
-              hideOnMobile: true,
-              render: (v) => formatDateTime(v),
-            },
-            {
-              key: "_actions",
-              label: "Thao tác",
-              width: "175px",
-              align: "right",
-              render: (_, row) => (
-                <span className="data-table-actions">
-                  <button
-                    className="btn btn-primary btn-xs"
-                    onClick={() => openResume(row)}
-                  >
-                    <BookOpenCheck size={12} /> {resumeLabel(row)}
-                  </button>
-                  {onRemoveEntry && (
-                    <button
-                      className="btn btn-ghost btn-xs"
-                      onClick={() => onRemoveEntry(row.filename)}
-                      aria-label={`Bỏ "${row.title}" khỏi lịch sử đọc`}
-                      title="Bỏ khỏi lịch sử đọc"
-                    >
-                      <X size={13} />
-                    </button>
-                  )}
-                </span>
-              ),
-            },
-          ]}
-          data={rest}
-          keyField="filename"
-          emptyText={hasContinueFilter ? "Không tìm thấy sách phù hợp" : "Chưa có lịch sử"}
-          emptyHint={hasContinueFilter ? "Thử nới lỏng từ khóa hoặc bộ lọc." : ""}
-          onRowClick={(row) => openResume(row)}
-        />
-      )}
-    </div>
-  );
-}
-
-function StatsView({
-  books,
-  counts,
-  lastPageMap,
-  lastTotalMap,
-  favs,
-  quizHistory,
-  onReset,
-  onOpenBook,
-  onSampleQuiz,
-  vocabCount = 0,
-  onNavigate,
-}) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterSubject, setFilterSubject] = useState("all");
-  const [filterGrade, setFilterGrade] = useState("all");
-  const [filterFav, setFilterFav] = useState(false);
-  const [filterProgress, setFilterProgress] = useState("all");
-  const [rowSort, setRowSort] = useState("count"); // count | pct | title | quizAvg
-
-  const totalBooks = books.length;
-  const totalOpened = Object.values(counts).reduce((a, b) => a + (b || 0), 0);
-  const totalPagesRead = books.reduce(
-    (a, b) => a + bookProgress(b.filename, lastPageMap, lastTotalMap).page,
-    0,
-  );
-  const totalFavs = favs.length;
-
-  // Tính toán thống kê luyện tập theo từng cuốn sách
-  const quizStatsByBook = quizHistory.reduce((acc, r) => {
-    if (!acc[r.file]) {
-      acc[r.file] = { count: 0, totalScore: 0, totalQuestions: 0 };
-    }
-    acc[r.file].count += 1;
-    acc[r.file].totalScore += r.score || 0;
-    acc[r.file].totalQuestions += r.total || 0;
-    return acc;
-  }, {});
-
-  // Dữ liệu bảng thống kê tổng hợp (sách + luyện tập) • theo chuẩn readingProgress.js
-  const allRows = books
-    .map((b) => {
-      const { page: lp, total, pct } = bookProgress(b.filename, lastPageMap, lastTotalMap);
-      const c = counts[b.filename] || 0;
-      const isFav = favs.includes(b.filename);
-
-      // Thống kê luyện tập cho cuốn sách này
-      const quizStats = quizStatsByBook[b.filename] || {
-        count: 0,
-        totalScore: 0,
-        totalQuestions: 0,
-      };
-      const quizAvg =
-        quizStats.totalQuestions > 0
-          ? Math.round((quizStats.totalScore / quizStats.totalQuestions) * 100)
-          : 0;
-
-      return {
-        book: b,
-        count: c,
-        lastPage: lp,
-        totalPages: total,
-        pct,
-        status: pct >= 100 ? READ_STATUS.DONE : pct > 0 ? READ_STATUS.READING : READ_STATUS.UNREAD,
-        isFav,
-        quizCount: quizStats.count,
-        quizAvg: quizAvg,
-        totalCorrect: quizStats.totalScore,
-      };
-    })
-    .sort((a, b) => b.count - a.count || b.lastPage - a.lastPage);
-
-  // Lọc dữ liệu theo các tiêu chí
-  const filteredRows = allRows.filter((row) => {
-    // Tìm kiếm theo tên sách, môn học
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch =
-      !searchQuery ||
-      row.book.subject.toLowerCase().includes(searchLower) ||
-      row.book.title.toLowerCase().includes(searchLower) ||
-      `${row.book.grade}. ${row.book.subject}`
-        .toLowerCase()
-        .includes(searchLower);
-
-    // Lọc theo môn học
-    const matchesSubject =
-      filterSubject === "all" || row.book.subject === filterSubject;
-
-    // Lọc theo lớp
-    const matchesGrade =
-      filterGrade === "all" || row.book.grade === filterGrade;
-
-    // Lọc theo yêu thích
-    const matchesFav = !filterFav || row.isFav;
-
-    // Lọc theo tiến để (chuẩn readingProgress.js)
-    let matchesProgress = true;
-    if (filterProgress === "notStarted") matchesProgress = row.status === READ_STATUS.UNREAD;
-    else if (filterProgress === "inProgress") matchesProgress = row.status === READ_STATUS.READING;
-    else if (filterProgress === "completed") matchesProgress = row.status === READ_STATUS.DONE;
-
-    return (
-      matchesSearch &&
-      matchesSubject &&
-      matchesGrade &&
-      matchesFav &&
-      matchesProgress
-    );
-  });
-
-  // Lấy danh sách môn học và lớp để lọc
-  const subjects = [...new Set(books.map((b) => b.subject))].sort();
-  const grades = [...new Set(books.map((b) => b.grade))].sort((a, b) => a - b);
-
-  // tổng hợp luyện tập toàn kho + Sắp xếp hàng theo chặn lựa
-  const quizTotals = useMemo(() => quizHistory.reduce(
-    (s, r) => ({ n: s.n + 1, score: s.score + (r.score || 0), total: s.total + (r.total || 0) }),
-    { n: 0, score: 0, total: 0 },
-  ), [quizHistory]);
-  const quizAvgAll = quizTotals.total > 0 ? Math.round((quizTotals.score / quizTotals.total) * 100) : 0;
-  const statusCounts = useMemo(() => {
-    const c = { notStarted: 0, reading: 0, completed: 0 };
-    allRows.forEach((r) => {
-      if (r.status === READ_STATUS.DONE) c.completed += 1;
-      else if (r.status === READ_STATUS.READING) c.reading += 1;
-      else c.notStarted += 1;
-    });
-    return c;
-  }, [allRows]);
-  const sortedRows = useMemo(() => {
-    const arr = [...filteredRows];
-    if (rowSort === "pct") arr.sort((a, b) => b.pct - a.pct);
-    else if (rowSort === "title") arr.sort((a, b) => String(a.book.title || "").localeCompare(String(b.book.title || ""), "vi"));
-    else if (rowSort === "quizAvg") arr.sort((a, b) => b.quizAvg - a.quizAvg);
-    else arr.sort((a, b) => b.count - a.count || b.lastPage - a.lastPage);
-    return arr;
-  }, [filteredRows, rowSort]);
-  return (
-    <div className="stx-root">
-      <style>{`
-        .stx-root { display:flex; flex-direction:column; gap:13px; }
-        .stx-head { background:linear-gradient(135deg, rgba(45,115,255,0.09), rgba(139,92,246,0.07)); border:1px solid var(--border-color); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:11px; }
-        .stx-title-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-        .stx-title { margin:0; font-size:1.05rem; font-weight:800; color:var(--text-dark); display:flex; align-items:center; gap:9px; }
-        .stx-title-ic { width:32px; height:32px; border-radius:10px; background:var(--color-action, var(--primary, #2d73ff)); color:#fff; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 4px 12px color-mix(in srgb, var(--color-action, #2d73ff) 35%, transparent); }
-        .stx-actions { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; align-items:center; }
-        .stx-kpis { display:grid; grid-template-columns:repeat(auto-fit, minmax(128px, 1fr)); gap:9px; }
-        .stx-kpi { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; border:1px solid var(--border-color); background:var(--surface); }
-        .stx-kpi-ic { width:37px; height:37px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; font-size: 1.0625rem; flex-shrink:0; background:var(--color-action-soft, var(--primary-light)); }
-        .stx-kpi-val { font-size:1.12rem; font-weight:800; color:var(--text-dark); line-height:1.1; }
-        .stx-kpi-label { font-size: 0.6563rem; color:var(--text-muted); font-weight:600; }
-        .stx-toolbar { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:11px 13px; display:flex; flex-direction:column; gap:9px; }
-        .stx-trow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .stx-search { flex:1 1 200px; min-width:170px; position:relative; }
-        .stx-search input { width:100%; padding:8px 30px 8px 32px; border-radius:10px; border:1px solid #e2e8f0; font-size: 0.8125rem; background:#fff; }
-        .stx-search > svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8; }
-        .stx-search-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; display:inline-flex; }
-        .stx-toolbar select { padding:8px 10px; border-radius:10px; border:1px solid #e2e8f0; font-size: 0.7813rem; background:#fff; color:#334155; }
-        .stx-check { display:inline-flex; align-items:center; gap:6px; font-size: 0.7813rem; font-weight:700; color:#475569; cursor:pointer; border:1px solid #e2e8f0; border-radius:999px; padding:6px 12px; background:#fff; }
-        .stx-check.on { background:var(--color-action-soft, #eff6ff); border-color:var(--color-action, #2d73ff); color:var(--color-action-strong, #1d4ed8); }
-        .stx-count { font-size: 0.75rem; color:var(--text-muted); }
-        .stx-count strong { color:var(--text-dark); }
-        .stx-charts { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; }
-        .stx-card { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:13px 14px; }
-        .stx-card h4 { margin:0 0 10px; font-size:0.9rem; color:var(--text-dark); display:flex; align-items:center; gap:7px; }
-        .stx-bar-row { display:grid; grid-template-columns:110px 1fr 34px; gap:9px; align-items:center; font-size: 0.75rem; margin-bottom:7px; }
-        .stx-track { height:9px; border-radius:99px; background:var(--surface-soft); border:1px solid var(--border-color); overflow:hidden; }
-        .stx-fill { height:100%; border-radius:99px; min-width:3px; }
-        .stx-bar-val { font-weight:800; color:var(--text-dark); text-align:right; }
-        .stx-segbar { display:flex; height:12px; border-radius:99px; overflow:hidden; border:1px solid var(--border-color); margin:10px 0 4px; }
-        .stx-segbar i { display:block; height:100%; }
-        .stx-legend { display:flex; gap:12px; flex-wrap:wrap; font-size: 0.7188rem; color:var(--text-muted); }
-        .stx-legend b { color:var(--text-dark); }
-        .stx-dot { display:inline-block; width:9px; height:9px; border-radius:99px; margin-right:5px; }
-        .stx-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px; }
-        .stx-book { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:11px 12px; cursor:pointer; transition:border-color 0.14s ease, box-shadow 0.14s ease; }
-        .stx-book:hover { border-color:var(--color-action, var(--primary)); box-shadow:0 8px 20px rgba(15,23,42,0.09); }
-        .stx-book-top { display:flex; gap:9px; align-items:flex-start; }
-        .stx-book-cover { width:44px; flex-shrink:0; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); }
-        .stx-book-cover .book-cover { overflow:hidden; }
-        .stx-book-cover .book-cover div { font-size:0; }
-        .stx-book-t { margin:0; font-size:0.85rem; font-weight:800; color:var(--text-dark); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-        .stx-book-m { font-size: 0.6875rem; color:var(--text-muted); }
-        .stx-pbar { height:8px; border-radius:99px; background:var(--surface-soft); border:1px solid var(--border-color); overflow:hidden; margin-top:8px; }
-        .stx-pbar > i { display:block; height:100%; border-radius:99px; background:var(--color-action, var(--primary)); }
-        .stx-book-stats { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-        .stx-chip { font-size: 0.6563rem; font-weight:800; padding:2px 8px; border-radius:999px; background:#f8fafc; border:1px solid #e2e8f0; color:#475569; display:inline-flex; align-items:center; gap:4px; }
-        .stx-chip.good { background:#f0fdf4; border-color:#bbf7d0; color:#15803d; }
-        .stx-chip.warn { background:#fffbeb; border-color:#fde68a; color:#b45309; }
-        .stx-chip.act { background:var(--color-action-soft, #eff6ff); border-color:var(--color-action-soft, #dbeafe); color:var(--color-action-strong, #1d4ed8); }
-        .stx-book-foot { display:flex; gap:6px; margin-top:9px; align-items:center; }
-        .stx-open { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size: 0.75rem; font-weight:800; padding:7px 10px; border-radius:9px; border:none; background:var(--color-action, var(--primary)); color:#fff; cursor:pointer; }
-        .stx-icobtn { width:31px; height:31px; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; }
-        .stx-icobtn:hover { border-color:#fca5a5; color:#dc2626; background:#fef2f2; }
-        .stx-empty { text-align:center; padding:34px 16px; border:1px dashed var(--border-color); border-radius:14px; color:var(--text-muted); background:var(--surface); }
-      `}</style>
-
-      {/* Header + KPI */}
-      <div className="stx-head">
-        <div className="stx-title-row">
-          <h3 className="stx-title"><span className="stx-title-ic">📊</span> Thống kê tổng quan</h3>
-          <div className="stx-actions">
-            <SampleButton label="Tự động làm" size="xs" onRun={onSampleQuiz}
-              hint="Thêm 2 kết quả luyện tập trắc nghiệm mẫu để xem thống kê hoạt động." />
-            <button className="btn btn-secondary btn-xs" onClick={onReset}><Trash2 size={13} /> Đặt lại</button>
-          </div>
-        </div>
-        <div className="stx-kpis">
-          <div className="stx-kpi"><span className="stx-kpi-ic">📚</span><span><span className="stx-kpi-val">{totalBooks}</span><br /><span className="stx-kpi-label">Sách</span></span></div>
-          <div className="stx-kpi"><span className="stx-kpi-ic">📖</span><span><span className="stx-kpi-val">{totalOpened}</span><br /><span className="stx-kpi-label">Lượt mở</span></span></div>
-          <div className="stx-kpi"><span className="stx-kpi-ic">📄</span><span><span className="stx-kpi-val">{totalPagesRead}</span><br /><span className="stx-kpi-label">Trang đã đọc</span></span></div>
-          <div className="stx-kpi"><span className="stx-kpi-ic">❤️</span><span><span className="stx-kpi-val">{totalFavs}</span><br /><span className="stx-kpi-label">Yêu thích</span></span></div>
-          <div className="stx-kpi"><span className="stx-kpi-ic">📝</span><span><span className="stx-kpi-val">{quizTotals.n}</span><br /><span className="stx-kpi-label">Bài luyện tập</span></span></div>
-          <div className="stx-kpi"><span className="stx-kpi-ic">⭐</span><span><span className="stx-kpi-val">{quizAvgAll}%</span><br /><span className="stx-kpi-label">Điểm TB</span></span></div>
-          <button
-            type="button"
-            className="stx-kpi"
-            onClick={() => onNavigate && onNavigate("vocab")}
-            title="Mở Sổ tay từ vựng"
-            style={{ cursor: onNavigate ? "pointer" : "default", textAlign: "left" }}
-          >
-            <span className="stx-kpi-ic">📓</span><span><span className="stx-kpi-val">{vocabCount}</span><br /><span className="stx-kpi-label">Từ vựng →</span></span>
-          </button>
-        </div>
-      </div>
-
-          {/* Bộ lọc và tìm kiếm */}
-      <div className="stx-toolbar">
-        <div className="stx-trow">
-          <div className="stx-search">
-            <Search size={15} />
-            <input type="text" placeholder="Tìm tên sách, môn…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} aria-label="Tìm sách" />
-            {searchQuery && <button className="stx-search-clear" onClick={() => setSearchQuery("")} aria-label="Xóa tìm kiếm"><X size={13} /></button>}
-          </div>
-          <select value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)} aria-label="Lọc môn">
-            <option value="all">Mọi môn</option>
-            {subjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
-          </select>
-          <select value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)} aria-label="Lọc lớp">
-            <option value="all">Mọi lớp</option>
-            {grades.map((grade) => <option key={grade} value={grade}>Lớp {grade}</option>)}
-          </select>
-          <select value={filterProgress} onChange={(e) => setFilterProgress(e.target.value)} aria-label="Lọc tiến để">
-            <option value="all">Mọi tiến độ</option>
-            <option value="notStarted">Chưa bắt đầu</option>
-            <option value="inProgress">Đang đọc</option>
-            <option value="completed">Đã hoàn thành</option>
-          </select>
-          <select value={rowSort} onChange={(e) => setRowSort(e.target.value)} aria-label="Sắp xếp" title="Sắp xếp">
-            <option value="count">Lượt mở ?</option>
-            <option value="pct">Tiến để ?</option>
-            <option value="quizAvg">Điểm TB ?</option>
-            <option value="title">Tên A→Z</option>
-          </select>
-          <button className={`stx-check${filterFav ? " on" : ""}`} onClick={() => setFilterFav((v) => !v)} aria-pressed={filterFav}>
-            {filterFav ? <Check size={13} /> : <Star size={13} />} Yêu thích
-          </button>
-        </div>
-        <div className="stx-count">Hiển thị <strong>{filteredRows.length}/{allRows.length}</strong> sách</div>
-      </div>
-
-          {/* Biểu đồ thống kê */}
-      <div className="stx-charts">
-        <div className="stx-card">
-          <h4>📊 Lượt mở theo môn học</h4>
-          {subjects.slice(0, 6).map((subject) => {
-            const totalReads = allRows
-              .filter((row) => row.book.subject === subject)
-              .reduce((sum, row) => sum + row.count, 0);
-            const maxReads = Math.max(
-              1,
-              ...subjects.map((s) =>
-                allRows
-                  .filter((row) => row.book.subject === s)
-                  .reduce((sum, row) => sum + row.count, 0),
-              ),
-            );
-            return (
-              <div key={subject} className="stx-bar-row">
-                <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>{subject}</span>
-                <span className="stx-track"><span className="stx-fill" style={{ width: `${(totalReads / maxReads) * 100}%`, background: "var(--color-action, var(--primary))" }} /></span>
-                <span className="stx-bar-val">{totalReads}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="stx-card">
-          <h4>📈 Tiến độ đọc (đồng bộ toàn app)</h4>
-          <div className="stx-legend">
-            <span><i className="stx-dot" style={{ background: "#cbd5e1" }} />Chưa bắt đầu <b>{statusCounts.notStarted}</b></span>
-            <span><i className="stx-dot" style={{ background: "var(--color-action, var(--primary))" }} />Đang đọc <b>{statusCounts.reading}</b></span>
-            <span><i className="stx-dot" style={{ background: "#16a34a" }} />hoàn thành <b>{statusCounts.completed}</b></span>
-          </div>
-          {allRows.length > 0 && (
-            <div className="stx-segbar" role="img" aria-label={`Chưa bắt đầu ${statusCounts.notStarted}, đang đọc ${statusCounts.reading}, hoàn thành ${statusCounts.completed}`}>
-              <i style={{ width: `${(statusCounts.notStarted / allRows.length) * 100}%`, background: "#cbd5e1" }} />
-              <i style={{ width: `${(statusCounts.reading / allRows.length) * 100}%`, background: "var(--color-action, var(--primary))" }} />
-              <i style={{ width: `${(statusCounts.completed / allRows.length) * 100}%`, background: "#16a34a" }} />
-            </div>
-          )}
-          <div style={{ fontSize: "0.7188rem", color: "var(--text-muted)" }}>
-            {totalPagesRead} trang đã đọc • {totalOpened} Lượt mở sách
-          </div>
-        </div>
-      </div>
-
-      {/* Thứ tự từng sách */}
-      {sortedRows.length === 0 ? (
-        <div className="stx-empty">
-          <p style={{ margin: "0 0 4px", fontWeight: 700 }}>Không tìm thấy sách phù hợp</p>
-          <p style={{ margin: 0, fontSize: "0.75rem" }}>Hãy thay đổi bộ lọc hoặc tìm kiếm.</p>
-        </div>
-      ) : (
-        <div className="stx-grid">
-          {sortedRows.map((row) => (
-            <article key={row.book.filename} className="stx-book" role="button" tabIndex={0}
-              onClick={() => onOpenBook(row.book)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenBook(row.book); } }}
-              title={`Mở sách ${row.book.title}`} aria-label={`Mở sách ${row.book.title}`}>
-              <div className="stx-book-top">
-                <span className="stx-book-cover">
-                  <BookCover book={row.book} lastPage={lastPageMap[row.book.filename] || 0} numPages={lastTotalMap[row.book.filename] || 0} height={62} />
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span className="stx-book-t" title={row.book.title}>
-                    {row.isFav && <Star size={12} style={{ color: "#f59e0b", verticalAlign: -1 }} fill="#f59e0b" />} {row.book.title}
-                  </span><br />
-                  <span className="stx-book-m">Lớp {row.book.grade} • {row.book.subject} • Tập {row.book.term}</span>
-                </span>
-              </div>
-              <div className="stx-pbar" aria-label={`Tiến độ ${row.pct}%`}>
-                <i style={{ width: `${row.pct}%`, background: row.pct >= 100 ? "#16a34a" : "var(--color-action, var(--primary))" }} />
-              </div>
-              <div className="stx-book-stats">
-                <span className="stx-chip act">📖 {row.pct}% • Tr.{row.lastPage}/{row.totalPages}</span>
-                <span className="stx-chip">📚 {row.count} Lượt mở</span>
-                {row.quizCount > 0
-                  ? <span className={`stx-chip ${row.quizAvg >= 60 ? "good" : "warn"}`}>📝 {row.quizCount} bài • TB {row.quizAvg}%</span>
-                  : <span className="stx-chip">Chưa luyện tập</span>}
-              </div>
-              <div className="stx-book-foot">
-                <button className="stx-open" onClick={(e) => { e.stopPropagation(); onOpenBook(row.book); }}><BookOpen size={13} /> Mở sách</button>
-                <button className="stx-icobtn" onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm(`Đặt lại thống kê cho "${row.book.title}"?`)) {
-                      const newCounts = { ...counts };
-                      newCounts[row.book.filename] = 0;
-                      try {
-                        const res = safeSetJSON("sgk_counts", newCounts);
-                        if (!res.ok && res.quota) { alert("Không thể lưu dữ liệu vì bộ nhớ trình duyệt đã đầy"); console.warn("Quota sgk_counts"); }
-                        else if (!res.ok) { console.warn("[App] safeSetJSON failed sgk_counts:", res.error); }
-                      } catch (e) { console.warn("[App] safeSetJSON exception sgk_counts:", e); }
-                      window.location.reload();
-                    }
-                  }} title="Đặt lại thống kê cuốn này" aria-label="Đặt lại thống kê"><RotateCcw size={13} /></button>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// HelpView moved to src/HelpView.jsx • interactive, module-by-module guide

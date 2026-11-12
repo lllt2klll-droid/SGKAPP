@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const PORT = Number(process.env.E2E_BOARD_PORT || 5324);
 const BASE = `http://127.0.0.1:${PORT}`;
+const APP_BASE = `${BASE}/?app=1`;
 const BOOK_FILE = "01-e2e-sach-thu.pdf";
 
 /** PDF 1 trang hợp lệ: header + objects + xref có offset đúng. */
@@ -80,7 +81,7 @@ async function waitFor(fn, { timeout = 15000, interval = 250, message = "" } = {
 }
 
 async function gotoViewByLabel(label) {
-  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".app-shell", { timeout: 20000 });
   await page.evaluate((t) => {
     const btn = [...document.querySelectorAll("aside button")].find((b) =>
@@ -330,6 +331,35 @@ test("G6 • Quét vùng này → modal mở + ảnh đã lưu vào sgk_scans_v1
   const item = scans[scans.length - 1];
   assert.ok(item.book?.filename === BOOK_FILE || item.bookId, "mục scan phải gắn với sách");
   assert.ok(item.dataUrl?.startsWith("data:image/"), "mục scan phải có dataUrl ảnh crop");
+});
+
+test("G6b • chỉnh crop dùng đúng ảnh đã chọn và Escape chỉ đóng lớp crop", async () => {
+  await page.locator('button[aria-label="Điều chỉnh vùng ảnh"]').click();
+  const cropShell = page.locator(".scanm-crop-shell");
+  await cropShell.waitFor({ state: "visible", timeout: 10000 });
+  await page.locator(".cropd-image").evaluate((img) =>
+    img.decode().then(() => true),
+  );
+
+  const cropBounds = await page.locator(".cropd-stage").evaluate((stage) => {
+    const selection = stage.querySelector(".cropd-selection");
+    return {
+      stageWidth: stage.clientWidth,
+      stageHeight: stage.clientHeight,
+      selectionWidth: Number.parseFloat(selection.style.width),
+      selectionHeight: Number.parseFloat(selection.style.height),
+    };
+  });
+  assert.ok(Math.abs(cropBounds.stageWidth - cropBounds.selectionWidth) <= 1);
+  assert.ok(Math.abs(cropBounds.stageHeight - cropBounds.selectionHeight) <= 1);
+
+  await page.keyboard.press("Escape");
+  await cropShell.waitFor({ state: "detached", timeout: 5000 });
+  assert.equal(
+    await page.locator('div[role="dialog"][aria-label="Tạo học liệu từ vùng SGK"]').count(),
+    1,
+    "Escape trong crop không được đóng modal tạo học liệu",
+  );
 });
 
 test("G7 • Escape đóng modal quét, overlay biến mất", async () => {

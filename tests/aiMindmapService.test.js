@@ -49,6 +49,26 @@ test("parsePlanJSON: rác → null", () => {
   assert.equal(svc.parsePlanJSON(""), null);
 });
 
+test("normalizeAIWhiteboardArrangement: chấp nhận thứ tự đủ ID và kiểu bố cục hợp lệ", () => {
+  const objects = [{ id: "a" }, { id: "b" }];
+  assert.deepEqual(svc.normalizeAIWhiteboardArrangement({ mode: "grid", order: ["b", "a"] }, objects), {
+    mode: "grid",
+    order: ["b", "a"],
+  });
+});
+
+test("normalizeAIWhiteboardArrangement: từ chối thiếu, lặp hoặc ID lạ", () => {
+  const objects = [{ id: "a" }, { id: "b" }];
+  for (const raw of [
+    { mode: "grid", order: ["a"] },
+    { mode: "grid", order: ["a", "a"] },
+    { mode: "unknown", order: ["a", "b"] },
+    { mode: "grid", order: ["a", "other"] },
+  ]) {
+    assert.throws(() => svc.normalizeAIWhiteboardArrangement(raw, objects));
+  }
+});
+
 // ── normalizePlan ──
 test("normalizePlan: cắt caps 200/10/8/120", () => {
   const raw = {

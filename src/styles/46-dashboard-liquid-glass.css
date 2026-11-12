@@ -38,7 +38,7 @@
   padding: 26px 28px 20px;
   border: 1px solid rgba(255,255,255,.26);
   background:
-    linear-gradient(115deg, rgba(20, 74, 180, .96), rgba(91, 45, 205, .88) 58%, rgba(125, 72, 235, .92)),
+    linear-gradient(115deg, rgba(29, 78, 216, .97), rgba(67, 56, 202, .92) 58%, rgba(79, 70, 229, .95)),
     radial-gradient(circle at 85% 20%, rgba(255,255,255,.27), transparent 30%);
   box-shadow: 0 24px 54px rgba(37, 76, 182, .25), inset 0 1px 0 rgba(255,255,255,.28);
 }

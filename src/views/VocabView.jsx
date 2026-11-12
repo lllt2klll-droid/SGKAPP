@@ -32,7 +32,7 @@ import { loadSettings } from "../services/settingsStore.js";
 import { exportCsv, exportWord } from "../services/exportDoc.js";
 import { addQuestion } from "../data/teachingDB.js";
 import { moveToTrash, TRASH_TYPE } from "../data/trashStore.js";
-import { restoreVocabEntries, formatDateTime } from "../data/userdata.js";
+import { restoreVocabEntries } from "../data/userdata.js";
 import { fillSampleVocab } from "../data/sampleData.js";
 import {
   filterVocabEntries,
@@ -52,6 +52,10 @@ import {
   tagsToString,
   chunked,
 } from "../services/vocabService.js";
+import createVocabTableColumns from "./vocabTableColumns.jsx";
+import VocabStatsPanel from "./VocabStatsPanel.jsx";
+import VocabTableToolbar from "./VocabTableToolbar.jsx";
+import VocabHeader from "./VocabHeader.jsx";
 
 const AI_BATCH_SIZE = 10;
 const AI_QUESTION_MAX = 20;
@@ -587,534 +591,81 @@ export default function VocabView({
     say(`Đã xuất ${filtered.length} từ ra Word.`);
   };
 
-  // ── Cột bảng ──────────────────────────────────────────────────
-  const columns = [
-    {
-      key: "_sel",
-      label: "Chọn",
-      width: "54px",
-      align: "center",
-      render: (_, row) => (
-        <button
-          className={`vocab-select-btn${selectedIds.has(row.id) ? " on" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleSelect(row.id);
-          }}
-          aria-label={selectedIds.has(row.id) ? "Bỏ chọn" : "Chọn"}
-          aria-pressed={selectedIds.has(row.id)}
-        >
-          {selectedIds.has(row.id) ? <Check size={13} /> : <Square size={13} />}
-        </button>
-      ),
-    },
-    {
-      key: "word",
-      label: "Từ",
-      sortable: true,
-      render: (v) => <span className="vocab-word-cell">{v}</span>,
-    },
-    {
-      key: "meaning",
-      label: "Nghĩa / ghi chú",
-      sortable: true,
-      render: (v, row) =>
-        editingMeaningId === row.id ? (
-          <textarea
-            className="form-control vocab-meaning-edit"
-            value={meaningDraft}
-            autoFocus
-            rows={2}
-            onChange={(e) => setMeaningDraft(e.target.value)}
-            onBlur={() => saveMeaningInline(row.id)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                saveMeaningInline(row.id);
-              } else if (e.key === "Escape") setEditingMeaningId(null);
-            }}
-            aria-label="Sửa nghĩa"
-          />
-        ) : v ? (
-          <span
-            className="cell-clamp vocab-meaning-cell"
-            title="Double-click để sửa"
-            onDoubleClick={() => {
-              setEditingMeaningId(row.id);
-              setMeaningDraft(v);
-            }}
-          >
-            {v}
-          </span>
-        ) : (
-          <button
-            className="vocab-missing-cell"
-            title={
-              geminiKey
-                ? "Chưa có nghĩa — bấm để AI giải nghĩa chi tiết (chuẩn sinh viên đại học & cao học)"
-                : "Chưa có nghĩa (cần Gemini key)"
-            }
-            onClick={() => explainOne(row)}
-            disabled={!geminiKey || aiRunning}
-          >
-            <Sparkles size={12} /> Chưa có nghĩa
-          </button>
-        ),
-    },
-    {
-      key: "tags",
-      label: "Thẻ",
-      width: "150px",
-      hideOnMobile: true,
-      render: (_, row) => {
-        const list = normalizeTags(row.tags);
-        if (!list.length) return <span className="text-muted">—</span>;
-        return (
-          <span className="vocab-tag-row">
-            {list.map((t) => (
-              <button
-                key={t}
-                className={`vocab-tag-chip${tagFilter?.toLowerCase() === t.toLowerCase() ? " on" : ""}`}
-                onClick={() => setTagFilter(tagFilter && tagFilter.toLowerCase() === t.toLowerCase() ? null : t)}
-                title={`Lọc thẻ "${t}"`}
-              >
-                {t}
-              </button>
-            ))}
-          </span>
-        );
-      },
-    },
-    {
-      key: "file",
-      label: "Sách",
-      hideOnMobile: true,
-      render: (v) =>
-        v ? (
-          <span className="ui-s-ec599c" title={byFilename.get(v)?.title || v}>
-            {(byFilename.get(v)?.title || v).slice(0, 24)}
-          </span>
-        ) : (
-          "—"
-        ),
-    },
-    {
-      key: "page",
-      label: "Trang",
-      width: "76px",
-      align: "right",
-      sortable: true,
-      hideOnMobile: true,
-      render: (v) => (v ? String(Math.max(1, v - 1)) : "—"),
-    },
-    {
-      key: "at",
-      label: "Ngày lưu",
-      width: "120px",
-      sortable: true,
-      hideOnMobile: true,
-      render: (v) => (v ? formatDateTime(v) : "—"),
-    },
-    {
-      key: "_actions",
-      label: "Thao tác",
-      width: "224px",
-      align: "right",
-      render: (_, row) => (
-        <span className="data-table-actions">
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={() => {
-              const b = byFilename.get(row.file);
-              if (b) onOpenBook(b, row.page || 1);
-            }}
-            title={row.file ? "Mở sách tại trang này" : "Từ vựng thủ công • chưa gắn sách"}
-            disabled={!row.file}
-          >
-            <BookOpen size={12} />
-          </button>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={() => explainOne(row)}
-            disabled={!geminiKey || aiRunning}
-            title={geminiKey ? "AI giải nghĩa chuẩn học thuật (đại học & cao học)" : "Cần cấu hình Gemini"}
-          >
-            {aiRunning ? "…" : <Sparkles size={12} />}
-          </button>
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={() => openEditForm(row)}
-            title="Sửa từ này"
-            aria-label="Sửa"
-          >
-            <Pencil size={12} />
-          </button>
-          <button
-            className="btn btn-danger btn-xs"
-            onClick={() => removeOne(row)}
-            title="Xóa (có thể hoàn tác)"
-            aria-label="Xóa"
-          >
-            <Trash2 size={12} />
-          </button>
-        </span>
-      ),
-    },
-  ];
+  const columns = createVocabTableColumns({
+    selectedIds,
+    toggleSelect,
+    editingMeaningId,
+    meaningDraft,
+    setMeaningDraft,
+    saveMeaningInline,
+    setEditingMeaningId,
+    geminiKey,
+    aiRunning,
+    explainOne,
+    tagFilter,
+    setTagFilter,
+    byFilename,
+    onOpenBook,
+    openEditForm,
+    removeOne,
+  });
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
-
-  const toolbar = (
-    <div className="data-table-toolbar vocab-toolbar">
-      <div className="data-table-toolbar-left">
-        <div className="search-input-wrapper vocab-search">
-          <Search className="search-icon" size={14} />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Tìm từ / nghĩa / thẻ…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Tìm từ vựng"
-          />
-          {query && (
-            <button className="search-clear" onClick={() => setQuery("")} aria-label="Xóa tìm kiếm">
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <button
-          className={`vocab-filter-chip${missingOnly ? " on" : ""}${stats.missingMeaning && !missingOnly ? " warn" : ""}`}
-          onClick={() => setMissingOnly((v) => !v)}
-          title="Chỉ hiện các từ chưa có nghĩa"
-        >
-          <Sparkles size={12} /> Chưa có nghĩa {stats.missingMeaning ? `(${stats.missingMeaning})` : ""}
-        </button>
-        {fileFilter && (
-          <button className="vocab-filter-chip on" onClick={() => setFileFilter(null)} title="Bỏ lọc sách">
-            {(byFilename.get(fileFilter)?.title || fileFilter).slice(0, 22)} <X size={11} />
-          </button>
-        )}
-        {tagFilter && (
-          <button className="vocab-filter-chip on" onClick={() => setTagFilter(null)} title="Bỏ lọc thẻ">
-            <Tag size={11} /> {tagFilter} <X size={11} />
-          </button>
-        )}
-        <span className="vocab-count">
-          {filtered.length}/{vocab.length} từ
-        </span>
-      </div>
-      <div className="data-table-toolbar-right">
-        <button className="btn btn-secondary btn-xs" onClick={openAddForm} title="Thêm từ mới vào sổ tay">
-          <Plus size={12} /> Thêm từ
-        </button>
-        <button
-          className="btn btn-secondary btn-xs"
-          onClick={selectAllFiltered}
-          disabled={!filtered.length}
-          title="Chọn/bỏ chọn tất cả dòng đang hiển thị"
-        >
-          <ListChecks size={12} /> {allFilteredSelected ? "Bỏ chọn" : "Chọn tất cả"}
-        </button>
-        <button
-          className="vocab-ai-btn"
-          onClick={runBatchExplain}
-          disabled={!geminiKey || aiRunning || aiQuestionRunning}
-          title={
-            geminiKey
-              ? `AI giải nghĩa học thuật (10 từ/lần)${selected.length ? ` cho ${selected.length} từ đã chọn` : " cho các từ đang lọc"}`
-              : "Cần cấu hình Gemini ở Cài đặt AI"
-          }
-        >
-          <Sparkles size={13} /> AI giải nghĩa
-        </button>
-        <button
-          className="btn btn-secondary btn-xs"
-          onClick={createMcQuestions}
-          title="Tạo câu trắc nghiệm nhanh từ các dòng đã chọn (không cần AI)"
-        >
-          <ListChecks size={12} /> Tạo câu hỏi
-        </button>
-        <button
-          className="btn btn-secondary btn-xs"
-          onClick={createAiQuestions}
-          disabled={!geminiKey || aiQuestionRunning || aiRunning}
-          title={geminiKey ? "AI soạn câu hỏi theo ngữ cảnh sách (tối đa 20 từ đã chọn)" : "Cần cấu hình Gemini"}
-        >
-          {aiQuestionRunning ? <Loader2 size={12} className="vocab-spin" /> : <Wand2 size={12} />} AI soạn câu
-        </button>
-        <button className="btn btn-secondary btn-xs" onClick={doExportCsv} title="Xuất danh sách đang lọc ra CSV/Excel">
-          <FileSpreadsheet size={12} /> CSV
-        </button>
-        <button className="btn btn-secondary btn-xs" onClick={doExportWord} title="Xuất phiếu ôn tập Word">
-          <FileText size={12} /> Word
-        </button>
-        <button
-          className="btn btn-danger btn-xs"
-          onClick={removeSelected}
-          disabled={!selected.length}
-          title={selected.length ? `Xóa ${selected.length} từ đã chọn` : "Chưa chọn dòng nào"}
-        >
-          <Trash2 size={12} /> Xóa đã chọn{selected.length ? ` (${selected.length})` : ""}
-        </button>
-        <button
-          className="btn btn-danger btn-xs"
-          onClick={clearAll}
-          disabled={!vocab.length}
-          title="Xóa toàn bộ sổ tay (vào Thùng rác)"
-        >
-          <Trash2 size={12} /> Xóa hết
-        </button>
-      </div>
-    </div>
-  );
-
-  // Thanh thao tác nhanh khi đang chọn nhiều dòng (AI giải nghĩa / câu hỏi / xuất)
-  const selbar =
-    selected.length > 0 ? (
-      <div className="vocab-selbar">
-        <Check size={14} /> Đã chọn <b>{selected.length}</b> từ
-        <button
-          className="vocab-ai-btn"
-          onClick={runBatchExplain}
-          disabled={!geminiKey || aiRunning || aiQuestionRunning}
-          title={geminiKey ? "AI giải nghĩa các từ đã chọn" : "Cần cấu hình Gemini ở Cài đặt AI"}
-        >
-          <Sparkles size={13} /> AI giải nghĩa
-        </button>
-        <button className="btn btn-secondary btn-xs" onClick={createMcQuestions}>
-          <ListChecks size={12} /> Tạo câu hỏi
-        </button>
-        <button
-          className="btn btn-secondary btn-xs"
-          onClick={createAiQuestions}
-          disabled={!geminiKey || aiQuestionRunning || aiRunning}
-        >
-          <Wand2 size={12} /> AI soạn câu
-        </button>
-        <button className="btn btn-secondary btn-xs" onClick={doExportWord}>
-          <FileText size={12} /> Xuất Word
-        </button>
-        <button className="btn btn-danger btn-xs" onClick={removeSelected}>
-          <Trash2 size={12} /> Xóa
-        </button>
-        <button className="btn btn-ghost btn-xs" onClick={() => setSelectedIds(new Set())}>
-          Bỏ chọn hết
-        </button>
-      </div>
-    ) : null;
-
-  const progress =
-    aiRunning || aiProgress ? (
-      <div className="vocab-progress" role="status" aria-live="polite">
-        <Loader2 size={13} className="vocab-spin" />
-        <span className="vocab-progress-text">
-          {aiProgress
-            ? `Đang giải nghĩa ${aiProgress.done}/${aiProgress.total} từ (văn phong học thuật, chuẩn đại học & cao học)…`
-            : "Đang xử lý bằng AI…"}
-        </span>
-        {aiProgress && (
-          <span className="vocab-progress-track" aria-hidden="true">
-            <i style={{ width: `${aiProgress.total ? Math.round((aiProgress.done / aiProgress.total) * 100) : 0}%` }} />
-          </span>
-        )}
-        {aiRunning && (
-          <button
-            className="btn btn-secondary btn-xs"
-            onClick={cancelActiveAi}
-          >
-            Dừng
-          </button>
-        )}
-      </div>
-    ) : null;
+  const allFilteredSelected = filtered.length > 0 && filtered.every((entry) => selectedIds.has(entry.id));
 
   const statsTab = (
-    <div className="vocab-stats">
-      <div className="vocab-kpis">
-        <div className="vocab-kpi">
-          <span className="vocab-kpi-ic"><BookMarked size={16} /></span>
-          <span className="vocab-kpi-value">{stats.total}</span>
-          <span className="vocab-kpi-label">Tổng từ</span>
-        </div>
-        <div className="vocab-kpi ok">
-          <span className="vocab-kpi-ic"><CheckCircle2 size={16} /></span>
-          <span className="vocab-kpi-value">{stats.withMeaning}</span>
-          <span className="vocab-kpi-label">Đã có nghĩa</span>
-        </div>
-        <button
-          className="vocab-kpi warn clickable"
-          onClick={() => {
-            setMissingOnly(true);
-            setTab("table");
-          }}
-          title="Lọc các từ chưa có nghĩa"
-        >
-          <span className="vocab-kpi-ic"><Sparkles size={16} /></span>
-          <span className="vocab-kpi-value">{stats.missingMeaning}</span>
-          <span className="vocab-kpi-label">Chưa có nghĩa</span>
-        </button>
-        <div className="vocab-kpi violet">
-          <span className="vocab-kpi-ic"><Tags size={16} /></span>
-          <span className="vocab-kpi-value">{tags.length}</span>
-          <span className="vocab-kpi-label">Thẻ phân loại</span>
-        </div>
-        <div className="vocab-kpi">
-          <span className="vocab-kpi-ic"><BookOpen size={16} /></span>
-          <span className="vocab-kpi-value">{stats.byFile.filter((b) => b.file).length}</span>
-          <span className="vocab-kpi-label">Sách nguồn</span>
-        </div>
-      </div>
-
-      <section className="vocab-panel">
-        <div className="vocab-panel-head">
-          <h4><BookOpenCheck size={15} /> Độ phủ nghĩa</h4>
-          <span className="vocab-coverage-pct">{coverage}%</span>
-        </div>
-        <div className="vocab-coverage" role="progressbar" aria-valuenow={coverage} aria-valuemin={0} aria-valuemax={100}>
-          <i style={{ width: `${coverage}%` }} />
-        </div>
-        <p className="vocab-panel-note">
-          {stats.missingMeaning
-            ? `Còn ${stats.missingMeaning} từ chưa có nghĩa — dùng AI giải nghĩa để hoàn thiện sổ tay (văn phong học thuật, đạt chuẩn sinh viên đại học & cao học).`
-            : "Tuyệt vời — mọi từ trong sổ tay đều đã có nghĩa."}
-        </p>
-        {stats.missingMeaning > 0 && (
-          <div className="vocab-panel-actions">
-            <button
-              className="vocab-ai-btn"
-              onClick={runBatchExplain}
-              disabled={!geminiKey || aiRunning || aiQuestionRunning}
-              title={geminiKey ? "AI giải nghĩa các từ còn thiếu" : "Cần cấu hình Gemini ở Cài đặt AI"}
-            >
-              <Sparkles size={13} /> AI giải nghĩa {stats.missingMeaning} từ còn thiếu
-            </button>
-          </div>
-        )}
-      </section>
-
-      <section className="vocab-panel">
-        <h4 className="vocab-panel-title"><BookOpen size={15} /> Theo sách</h4>
-        {stats.byFile.length ? (
-          <div className="vocab-bars">
-            {stats.byFile.map((b) => {
-              const max = stats.byFile[0].count || 1;
-              return (
-                <button
-                  key={b.file || "(none)"}
-                  className="vocab-bar-row"
-                  onClick={() => {
-                    setFileFilter(b.file || null);
-                    setTab("table");
-                  }}
-                  title={`Lọc bảng theo "${b.title}"`}
-                >
-                  <span className="vocab-bar-label">{b.title.slice(0, 34)}</span>
-                  <span className="vocab-bar-track">
-                    <span className="vocab-bar-fill" style={{ width: `${Math.round((b.count / max) * 100)}%` }} />
-                  </span>
-                  <span className="vocab-bar-value">{b.count}</span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-muted">Chưa có dữ liệu.</p>
-        )}
-      </section>
-
-      <section className="vocab-panel">
-        <h4 className="vocab-panel-title"><GraduationCap size={15} /> Theo lớp</h4>
-        {stats.byGrade.length ? (
-          <div className="vocab-bars">
-            {stats.byGrade.map((g) => {
-              const max = Math.max(...stats.byGrade.map((x) => x.count)) || 1;
-              return (
-                <div className="vocab-bar-row" key={g.grade}>
-                  <span className="vocab-bar-label">{g.grade ? `Lớp ${g.grade}` : "Không rõ lớp"}</span>
-                  <span className="vocab-bar-track">
-                    <span className="vocab-bar-fill alt" style={{ width: `${Math.round((g.count / max) * 100)}%` }} />
-                  </span>
-                  <span className="vocab-bar-value">{g.count}</span>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-muted">Chưa có dữ liệu.</p>
-        )}
-      </section>
-
-      <section className="vocab-panel">
-        <div className="vocab-panel-head">
-          <h4><BarChart3 size={15} /> Từ mới theo ngày</h4>
-          <div className="vocab-range">
-            {[7, 30].map((d) => (
-              <button
-                key={d}
-                className={`vocab-filter-chip${dayRange === d ? " on" : ""}`}
-                onClick={() => setDayRange(d)}
-              >
-                {d} ngày
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="vocab-days">
-          {daySeries.map((d) => {
-            const max = Math.max(...daySeries.map((x) => x.count), 1);
-            return (
-              <div className="vocab-day-col" key={d.date} title={`${d.label}: ${d.count} từ`}>
-                <div className="vocab-day-bar" style={{ height: `${Math.max(4, Math.round((d.count / max) * 100))}%` }}>
-                  {d.count > 0 && <span>{d.count}</span>}
-                </div>
-                <span className="vocab-day-label">{d.label}</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {tags.length > 0 && (
-        <section className="vocab-panel">
-          <h4 className="vocab-panel-title"><Tags size={15} /> Thẻ phổ biến</h4>
-          <div className="vocab-tagcloud">
-            {tags.map((t) => (
-              <button
-                key={t.tag}
-                className="vocab-tag-chip"
-                onClick={() => {
-                  setTagFilter(t.tag);
-                  setTab("table");
-                }}
-                title={`Lọc bảng theo thẻ "${t.tag}"`}
-              >
-                {t.tag} <b>{t.count}</b>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <div className="vocab-stat-actions">
-        <button className="btn btn-secondary btn-xs" onClick={() => setTab("table")}>
-          <Table2 size={12} /> Xem bảng
-        </button>
-        <button className="btn btn-secondary btn-xs" onClick={doExportCsv}>
-          <FileSpreadsheet size={12} /> Xuất CSV thống kê
-        </button>
-        <button className="btn btn-secondary btn-xs" onClick={doExportWord}>
-          <FileText size={12} /> Xuất Word
-        </button>
-      </div>
-    </div>
+    <VocabStatsPanel
+      stats={stats}
+      coverage={coverage}
+      tags={tags}
+      daySeries={daySeries}
+      dayRange={dayRange}
+      setDayRange={setDayRange}
+      geminiKey={geminiKey}
+      aiRunning={aiRunning}
+      aiQuestionRunning={aiQuestionRunning}
+      runBatchExplain={runBatchExplain}
+      setMissingOnly={setMissingOnly}
+      setTab={setTab}
+      setFileFilter={setFileFilter}
+      setTagFilter={setTagFilter}
+      doExportCsv={doExportCsv}
+      doExportWord={doExportWord}
+    />
   );
 
   const tableTab = (
     <>
-      {toolbar}
-      {selbar}
-      {progress}
+      <VocabTableToolbar
+        query={query}
+        setQuery={setQuery}
+        missingOnly={missingOnly}
+        setMissingOnly={setMissingOnly}
+        stats={stats}
+        fileFilter={fileFilter}
+        setFileFilter={setFileFilter}
+        byFilename={byFilename}
+        tagFilter={tagFilter}
+        setTagFilter={setTagFilter}
+        filtered={filtered}
+        vocab={vocab}
+        openAddForm={openAddForm}
+        selectAllFiltered={selectAllFiltered}
+        allFilteredSelected={allFilteredSelected}
+        runBatchExplain={runBatchExplain}
+        geminiKey={geminiKey}
+        selected={selected}
+        aiRunning={aiRunning}
+        aiQuestionRunning={aiQuestionRunning}
+        createMcQuestions={createMcQuestions}
+        createAiQuestions={createAiQuestions}
+        doExportCsv={doExportCsv}
+        doExportWord={doExportWord}
+        removeSelected={removeSelected}
+        clearAll={clearAll}
+        setSelectedIds={setSelectedIds}
+        aiProgress={aiProgress}
+        cancelActiveAi={cancelActiveAi}
+      />
       {error && (
         <div className="util-error vocab-error">
           {error}{" "}
@@ -1165,77 +716,15 @@ export default function VocabView({
 
   return (
     <div className="vocab-view">
-      {/* ── Hero header: tiêu đề + số liệu nhanh + tab ── */}
-      <div className="vocab-head">
-        <div className="vocab-title-row">
-          <h2 className="vocab-title">
-            <span className="vocab-title-ic"><NotebookPen size={17} /></span>
-            Sổ tay từ vựng
-          </h2>
-          <span
-            className="vocab-level-badge"
-            title="AI giải nghĩa chi tiết: từ loại, định nghĩa, ví dụ, thuật ngữ liên quan — văn phong học thuật, chuẩn đại học & cao học"
-          >
-            <GraduationCap size={12} /> AI giải nghĩa chuẩn đại học & cao học
-          </span>
-          <div className="vocab-pills">
-            <span className="vocab-pill">
-              <BookMarked size={12} /> {stats.total} từ
-            </span>
-            <span className="vocab-pill ok">
-              <CheckCircle2 size={12} /> {stats.withMeaning} có nghĩa
-            </span>
-            <button
-              className={`vocab-pill warn${stats.missingMeaning ? "" : " calm"}`}
-              onClick={() => {
-                setMissingOnly(true);
-                setTab("table");
-              }}
-              title="Lọc các từ chưa có nghĩa"
-            >
-              <Sparkles size={12} /> {stats.missingMeaning} chưa nghĩa
-            </button>
-            <span className="vocab-pill">
-              <Tags size={12} /> {tags.length} thẻ
-            </span>
-            {selected.length > 0 && (
-              <span className="vocab-pill hot">
-                <Check size={12} /> {selected.length} đã chọn
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="vocab-tabs" role="tablist" aria-label="Sổ tay từ vựng">
-          <button
-            role="tab"
-            aria-selected={tab === "table"}
-            className={`vocab-tab${tab === "table" ? " active" : ""}`}
-            onClick={() => setTab("table")}
-          >
-            <Table2 size={14} /> Bảng
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === "stats"}
-            className={`vocab-tab${tab === "stats" ? " active" : ""}`}
-            onClick={() => setTab("stats")}
-          >
-            <BarChart3 size={14} /> Thống kê
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === "lookup"}
-            className={`vocab-tab${tab === "lookup" ? " active" : ""}`}
-            onClick={() => setTab("lookup")}
-          >
-            <BookOpen size={14} /> Tra cứu
-          </button>
-          <span className="vocab-tabs-spacer" />
-          <span className="vocab-total">
-            <NotebookPen size={13} /> {vocab.length} từ trong sổ tay
-          </span>
-        </div>
-      </div>
+      <VocabHeader
+        stats={stats}
+        tags={tags}
+        selectedCount={selected.length}
+        vocabCount={vocab.length}
+        tab={tab}
+        setTab={setTab}
+        setMissingOnly={setMissingOnly}
+      />
 
       {tab === "table" ? tableTab : tab === "stats" ? statsTab : (
         <GlossaryPanel geminiKey={geminiKey} inline />

@@ -16,6 +16,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const PORT = Number(process.env.E2E_BACKUP_PORT || 5323);
 const BASE = `http://127.0.0.1:${PORT}`;
+const APP_BASE = `${BASE}/?app=1`;
 const BOOK_FILE = "01-e2e-sach-thu.pdf";
 
 const MIN_PDF = Buffer.from(
@@ -140,11 +141,11 @@ async function waitForAppReady() {
 }
 
 async function gotoView(navText) {
-  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
   await waitForAppReady();
   await page.evaluate((t) => {
     const btn = [...document.querySelectorAll("aside button")].find((b) =>
-      (b.getAttribute("aria-label") || "").includes(t),
+      (b.getAttribute("aria-label") || "").toLocaleLowerCase().includes(t.toLocaleLowerCase()),
     );
     if (btn) btn.click();
   }, navText);
@@ -157,15 +158,15 @@ async function gotoLibrary() {
 
 async function gotoDataTools() {
   await gotoView("Sao lưu");
-  await page.waitForSelector(".dt-card", { timeout: 20000 });
+  await page.waitForSelector("#data-restore", { timeout: 20000 });
 }
 
 function backupCard() {
-  return page.locator(".dt-card").filter({ hasText: "Xuất file sao lưu" });
+  return page.locator(".storage-primary-card");
 }
 
 function restoreCard() {
-  return page.locator(".dt-restore-card");
+  return page.locator("#data-restore");
 }
 
 /** Chờ có điều kiện — thay cho waitForTimeout cố định (tránh flaky). */
@@ -253,7 +254,7 @@ test("F2 • Xuất file sao lưu → tải về JSON hợp lệ, có sgk_favs",
   await gotoDataTools();
   const [download] = await Promise.all([
     page.waitForEvent("download", { timeout: 20000 }),
-    backupCard().locator("button", { hasText: "Xuất file sao lưu" }).click(),
+    backupCard().locator("button", { hasText: "Tạo file sao lưu" }).click(),
   ]);
 
   assert.match(download.suggestedFilename(), /^hanhtrang-backup-\d{4}-\d{2}-\d{2}\.json$/);
@@ -279,17 +280,18 @@ test("F2 • Xuất file sao lưu → tải về JSON hợp lệ, có sgk_favs",
   assert.ok(fs.statSync(src).size > 1024 * 1024, "fixture dữ liệu lớn phải có mặt trong file sao lưu");
 
   await page.waitForSelector(".dt-msg.ok", { timeout: 10000 });
-  assert.match(await page.locator(".dt-msg.ok").textContent(), /Đã tải xuống file sao lưu/);
+  assert.match(await page.locator(".dt-msg.ok").textContent(), /Đã tải file sao lưu/);
 });
 
 test("F3 • Xóa toàn bộ dữ liệu: yêu cầu sao lưu, xác nhận hai lần, sgk_favs sạch", async () => {
   await gotoDataTools();
 
-  const wipeBtn = page.locator(".dt-wipe-card button", { hasText: "Xóa toàn bộ dữ liệu" });
+  await page.locator(".storage-danger-card > summary").click();
+  const wipeBtn = page.locator(".storage-danger-card button", { hasText: "Xóa toàn bộ dữ liệu" });
   // F2 đã tạo backup thủ công; thao tác xóa yêu cầu bấm xác nhận hai lần.
   await wipeBtn.click();
   await page.waitForSelector(".dt-msg.err", { timeout: 10000 });
-  const armedBtn = page.locator(".dt-wipe-card button", { hasText: "Bấm lần nữa để xác nhận" });
+  const armedBtn = page.locator(".storage-danger-card button", { hasText: "Bấm lần nữa để xác nhận" });
   assert.equal(await armedBtn.count(), 1, "bấm lần 1 phải chuyển nút sang trạng thái armed");
 
   const navP = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20000 });
@@ -320,7 +322,7 @@ test("F4 • Khôi phục từ file vừa xuất: preview → tick → xác nh�
 
   await page.waitForSelector("#preview-title", { timeout: 15000 });
   const previewText = await page.locator(".dt-import-review").textContent();
-  assert.match(previewText, /LocalStorage/, "preview phải nêu số key localStorage");
+  assert.match(previewText, /\d+ mục/, "preview phải nêu số mục localStorage");
 
   // Không tick thì nút xác nhận bị disabled
   const confirmBtn = page.locator(".dt-import-review button", { hasText: "Xác nhận khôi phục" });

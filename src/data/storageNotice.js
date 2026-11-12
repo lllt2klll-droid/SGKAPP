@@ -23,7 +23,7 @@ export function storageNoticeLevel(usage, quota) {
 /** Nội dung cảnh báo theo mức — giữ 1 chỗ để banner và test dùng chung. */
 export function storageNoticeText(level, pct) {
   if (level === "danger") {
-    return `Bộ nhớ trình duyệt sắp hết (${pct}%). Dữ liệu bạn giao có thể bị mất - hãy bấm "Sao lưu ngay" rồi vào Sao lưu & Khôi phục để dọn cache.`;
+    return `Bộ nhớ trình duyệt sắp hết (${pct}%). Dữ liệu bạn làm có thể bị mất — hãy bấm "Sao lưu ngay", sau đó vào Dữ liệu & sao lưu để dọn cache.`;
   }
   if (level === "warn") {
     return `Bộ nhớ trình duyệt đã dùng ${pct}%. Hãy sao lưu sớm để tránh mất ghi chú/giáo án.`;

@@ -21,6 +21,40 @@ export function clampRect(rect, maxX, maxY) {
   return { x: clampedX, y: clampedY, w: clampedW, h: clampedH };
 }
 
+export function getInitialCropRect(imageWidth, imageHeight, initialCrop) {
+  if (!Number.isFinite(imageWidth) || !Number.isFinite(imageHeight) || imageWidth <= 0 || imageHeight <= 0) {
+    return { x: 0, y: 0, w: 0, h: 0 };
+  }
+
+  if (initialCrop?.srcRect) {
+    return { x: 0, y: 0, w: imageWidth, h: imageHeight };
+  }
+
+  if (!initialCrop) {
+    const padding = Math.min(imageWidth, imageHeight) * 0.1;
+    return {
+      x: padding,
+      y: padding,
+      w: imageWidth - padding * 2,
+      h: imageHeight - padding * 2,
+    };
+  }
+
+  const { x, y, w, h } = initialCrop;
+  if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) {
+    return { x: 0, y: 0, w: imageWidth, h: imageHeight };
+  }
+
+  const boundedX = Math.max(0, Math.min(x, imageWidth));
+  const boundedY = Math.max(0, Math.min(y, imageHeight));
+  const boundedW = Math.min(w, imageWidth - boundedX);
+  const boundedH = Math.min(h, imageHeight - boundedY);
+  if (boundedW <= 0 || boundedH <= 0) {
+    return { x: 0, y: 0, w: imageWidth, h: imageHeight };
+  }
+  return { x: boundedX, y: boundedY, w: boundedW, h: boundedH };
+}
+
 /**
  * Convert a selection rect (in viewportContainer client coords) to canvas pixel coords.
  * 

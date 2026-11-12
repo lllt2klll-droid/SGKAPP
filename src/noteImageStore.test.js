@@ -71,6 +71,9 @@ describe("safeStorage quota retry — tự dọn cache cứu ghi chú", () => {
     localStorage.setItem("notes_book.pdf_1", JSON.stringify([{ id: 1 }]));
     localStorage.setItem("sgk_marks_book.pdf", "{}");
     localStorage.setItem("sgk_teacherNotes_book.pdf", "{}");
+    localStorage.setItem("chat_book.pdf", JSON.stringify({ messages: [{ role: "user", content: "Keep me" }] }));
+    localStorage.setItem("assistant_history", JSON.stringify([{ prompt: "Keep me" }]));
+    localStorage.setItem("sgk_textbook_draft_current", JSON.stringify({ title: "Keep me" }));
     localStorage.setItem("ai_image_cache", JSON.stringify({ big: "x".repeat(1000) }));
     localStorage.setItem("ocr_book.pdf_1", "cache-ocr");
     localStorage.setItem("__corrupted__notes_x_123", "{bad");
@@ -79,6 +82,9 @@ describe("safeStorage quota retry — tự dọn cache cứu ghi chú", () => {
     assert.ok(localStorage.getItem("notes_book.pdf_1") !== null);
     assert.ok(localStorage.getItem("sgk_marks_book.pdf") !== null);
     assert.ok(localStorage.getItem("sgk_teacherNotes_book.pdf") !== null);
+    assert.ok(localStorage.getItem("chat_book.pdf") !== null);
+    assert.ok(localStorage.getItem("assistant_history") !== null);
+    assert.ok(localStorage.getItem("sgk_textbook_draft_current") !== null);
     assert.equal(localStorage.getItem("ai_image_cache"), null);
     assert.equal(localStorage.getItem("ocr_book.pdf_1"), null);
   });

@@ -68,6 +68,8 @@ export default function ScanModal({ scan, onClose, onSaved }) {
   const [analysisEditOpen, setAnalysisEditOpen] = useState(false);
   const overlayRef = useRef(null);
   const closeBtnRef = useRef(null);
+  const showCropPreviewRef = useRef(showCropPreview);
+  showCropPreviewRef.current = showCropPreview;
 
   // Dừng AI của màn hình quét — scanAIService cấp requestId bắt đầu bằng "scan-"
   const stopScanAi = () => {
@@ -89,20 +91,14 @@ export default function ScanModal({ scan, onClose, onSaved }) {
 
   // ESC + focus trap
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    const onKey = (e) => {
+      if (e.key === "Escape" && !showCropPreviewRef.current) onClose?.();
+    };
     window.addEventListener("keydown", onKey);
     // focus close button for a11y
     setTimeout(() => closeBtnRef.current?.focus(), 80);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  // Step 1: auto analyze
-  useEffect(() => {
-    if (step === 1 && scan && !analysis && !loading) {
-      runAnalyze();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, scan]);
 
   const runAnalyze = useCallback(async () => {
     setLoading(true); setLoadingLabel("✨ AI đang đọc vùng SGK…"); setError("");
@@ -116,6 +112,11 @@ export default function ScanModal({ scan, onClose, onSaved }) {
       setError(e?.code === "CANCELLED" ? "Đã dừng phân tích." : e.message || "AI phân tích lỗi");
     } finally { setLoading(false); setLoadingLabel(""); }
   }, [scan, adjustedScan]);
+
+  // Step 1: auto analyze the active (possibly adjusted) crop.
+  useEffect(() => {
+    if (step === 1 && scan && !analysis && !loading) runAnalyze();
+  }, [step, scan, adjustedScan, analysis, loading, runAnalyze]);
 
   const handleGenerate = async () => {
     if (!materialType) { setError("Hãy chọn loại học liệu trước."); return; }
@@ -139,7 +140,8 @@ export default function ScanModal({ scan, onClose, onSaved }) {
     setRegenIdx(idx);
     try {
       const scanToUse = adjustedScan || scan;
-      const fresh = await regenerateQuestion({ scan: { ...scanToUse, analysis }, analysis, materialType, config, existingQuestion: qs[idx], index: idx });
+      const effectiveAnalysis = analysis ? { ...analysis, content: (analysisEdit?.trim() || analysis.content) } : analysis;
+      const fresh = await regenerateQuestion({ scan: { ...scanToUse, analysis: effectiveAnalysis }, analysis: effectiveAnalysis, materialType, config, existingQuestion: qs[idx], index: idx });
       const nextQs = [...qs];
       // merge fresh into shape
       const mapped = {
@@ -476,23 +478,25 @@ export default function ScanModal({ scan, onClose, onSaved }) {
                   position: "absolute",
                   top: 8,
                   left: 8,
-                  background: "color-mix(in srgb, var(--color-action, #2d73ff) 82%, transparent)",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "6px 10px",
+                  background: "color-mix(in srgb, var(--surface) 92%, transparent)",
+                  color: "var(--text-dark)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: 8,
+                  padding: "6px 9px",
                   cursor: "pointer",
                   fontSize: "0.6875rem",
                   fontWeight: 700,
                   display: "flex",
                   alignItems: "center",
                   gap: 4,
-                  backdropFilter: "blur(4px)"
+                  backdropFilter: "blur(10px)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,.18)"
                 }}
                 title="Điều chỉnh vùng crop"
+                aria-label="Điều chỉnh vùng ảnh"
               >
-                <Crop size={14} />
-                Crop
+                <Crop size={13} />
+                Chỉnh vùng
               </button>
             </div>
             <p style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: 6, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
@@ -530,7 +534,7 @@ export default function ScanModal({ scan, onClose, onSaved }) {
           {(loading || regenIdx !== null) && (
             <div role="status" aria-live="polite" style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", padding: 12, color: "var(--primary)", background: "var(--primary-light)", border: "1px solid var(--primary)", borderRadius: 10 }}>
               <Loader2 size={18} className="aia-spin-svg" style={{ animation: "spin 0.9s linear infinite" }} /> <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>{regenIdx !== null ? "🧠 AI đang tạo lại câu hỏi…" : (loadingLabel || "Đang xử lý…")}</span>
-              <button className="btn btn-danger btn-xs" style={{ marginLeft: "auto", flexShrink: 0 }} onClick={stopScanAi} title="Dừng AI" aria-label="Dừng AI"><Square size={11} fill="currentColor" /> Dừng</button>
+              <button className="btn btn-secondary btn-xs" style={{ marginLeft: "auto", flexShrink: 0 }} onClick={stopScanAi} title="Dừng AI" aria-label="Dừng AI"><Square size={11} fill="currentColor" /> Dừng</button>
             </div>
           )}
           {error && (
@@ -988,22 +992,25 @@ export default function ScanModal({ scan, onClose, onSaved }) {
             className="modal-content scanm-crop-shell"
             onClick={(e) => e.stopPropagation()}
             style={{
-              maxWidth: "min(1120px, calc(100vw - 20px))",
-              width: "min(1120px, calc(100vw - 20px))",
-              maxHeight: "92vh",
+              maxWidth: "min(1240px, calc(100vw - 24px))",
+              width: "min(1240px, calc(100vw - 24px))",
+              maxHeight: "92dvh",
               display: "flex",
               flexDirection: "column",
-              overflow: "auto",
-              borderRadius: 16,
+              overflow: "hidden",
+              borderRadius: 14,
             }}
           >
             <CropPreview
-              dataUrl={scan.dataUrl}
-              initialCrop={scan.crop}
+              dataUrl={(adjustedScan || scan).dataUrl}
+              initialCrop={adjustedScan
+                ? { x: 0, y: 0, w: adjustedScan.width, h: adjustedScan.height }
+                : scan.crop}
               onCancel={() => setShowCropPreview(false)}
               onConfirm={(result) => {
+                stopScanAi();
                 const croppedScan = {
-                  ...scan,
+                  ...(adjustedScan || scan),
                   dataUrl: result.dataUrl,
                   width: result.width,
                   height: result.height,

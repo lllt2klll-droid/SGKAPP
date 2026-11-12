@@ -25,7 +25,7 @@ function treeFixture() {
   ];
 }
 
-for (const mode of ["tree-tb", "tree-lr", "tree-rl", "tree-bt", "radial"]) {
+for (const mode of ["tree-tb", "tree-lr", "tree-rl", "tree-bt", "radial", "grid"]) {
   test(`autoLayout ${mode}: rừng + node bự — không chèn, đủ node, giữ parentId`, async () => {
     const eng = await import("../src/whiteboard/mindmapEngine.js");
     const out = eng.autoLayout(treeFixture(), [], mode);
@@ -36,6 +36,21 @@ for (const mode of ["tree-tb", "tree-lr", "tree-rl", "tree-bt", "radial"]) {
     assert.equal(byId.get("m1").parentId, "r2");
   });
 }
+
+test("autoLayout grid: khối nhiều kích thước không chèn và giữ dữ liệu", async () => {
+  const eng = await import("../src/whiteboard/mindmapEngine.js");
+  const src = [
+    { id: "a", x: 90, y: 0, width: 240, height: 60, text: "A", parentId: null },
+    { id: "b", x: 0, y: 0, width: 120, height: 90, text: "B", parentId: "a" },
+    { id: "c", x: 0, y: 10, width: 180, height: 50, text: "C", parentId: null },
+    { id: "d", x: 0, y: 20, width: 100, height: 72, text: "D", parentId: null },
+  ];
+  const out = eng.autoLayout(src, [], "grid");
+  assertNoOverlap(out, "grid");
+  assert.deepEqual(out.map((o) => o.id), ["b", "a", "c", "d"]);
+  assert.equal(out.find((o) => o.id === "b").parentId, "a");
+  assert.deepEqual(src.map((o) => [o.x, o.y]), [[90, 0], [0, 0], [0, 10], [0, 20]]);
+});
 
 test("autoLayout tree-tb: cha nằm giữa các con (không chéo)", async () => {
   const eng = await import("../src/whiteboard/mindmapEngine.js");

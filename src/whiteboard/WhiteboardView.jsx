@@ -10,6 +10,7 @@ import {
   ArrowRight, Lightbulb
 } from "lucide-react";
 import WhiteboardCanvas from "./WhiteboardCanvas.jsx";
+import WhiteboardAIModal from "./WhiteboardAIModal.jsx";
 import ConfirmDialog from "../ui/ConfirmDialog.jsx";
 import {
   uid, blankBoard, blankObject, listBoards, loadBoard, persistBoard, createBoard,
@@ -186,6 +187,9 @@ export default function WhiteboardView() {
   const [aiTab, setAiTab] = useState("text");
   const [aiBusy, setAiBusy] = useState(false);
   const [aiProgress, setAiProgress] = useState(""); // H6: nhãn tiến trình gen/validate/retry
+  const [wbAiSortBusy, setWbAiSortBusy] = useState(false);
+  const [wbAiSortNotice, setWbAiSortNotice] = useState(null);
+  const wbAiSortBusyRef = useRef(false);
   const [aiStage, setAiStage] = useState("form"); // "form" | "preview"
   const [aiPlan, setAiPlan] = useState(null); // {topic, branches:[{label,children[]}]}
   const [aiMeta, setAiMeta] = useState(null); // {mode, warnings[], checked}
@@ -1043,6 +1047,51 @@ export default function WhiteboardView() {
     setBoard((prev) => { const nb = { ...prev, objects: laid, connectors: anchored }; pushHistory(nb); return nb; });
     notify(`Đã sắp xếp: ${mode}`);
   }, [board.objects, board.connectors, checkpoint, pushHistory, notify]);
+
+  const handleAISort = useCallback(async () => {
+    const sourceBoardId = board?.id || activeId;
+    if (!sourceBoardId || !(board.objects || []).length || wbAiSortBusyRef.current) return;
+    wbAiSortBusyRef.current = true;
+    setWbAiSortNotice({ kind: "working", text: `Đang phân tích ${board.objects.length} khối và chọn bố cục phù hợp…` });
+    setWbAiSortBusy(true);
+    try {
+      const { arrangeWhiteboardWithAI } = await import("./aiMindmapService.js");
+      const arrangement = await arrangeWhiteboardWithAI(board.objects);
+      if (activeIdRef.current !== sourceBoardId || boardRef.current !== board) {
+        setWbAiSortNotice({ kind: "error", text: "Bảng đã thay đổi trong lúc AI xử lý. Kết quả chưa áp dụng để tránh ghi đè chỉnh sửa." });
+        return;
+      }
+      const rank = new Map(arrangement.order.map((id, i) => [id, i]));
+      const ordered = board.objects.map((o) => ({ ...o, x: 0, y: rank.get(o.id) }));
+      let viewCenter = null;
+      try {
+        const svg = svgRef.current;
+        const vw = svg?.clientWidth || 900, vh = svg?.clientHeight || 600;
+        viewCenter = { cx: (-board.pan.x + vw / 2) / board.zoom, cy: (-board.pan.y + vh / 2) / board.zoom };
+      } catch {}
+      const laid = autoLayout(ordered, board.connectors, arrangement.mode, viewCenter || {});
+      const anchored = applyLayoutAnchors(board.connectors, arrangement.mode);
+      setBoard((prev) => {
+        if (prev.id !== sourceBoardId || prev !== board) return prev;
+        const next = { ...prev, objects: laid, connectors: anchored };
+        checkpoint();
+        pushHistory(next);
+        return next;
+      });
+      setShowCanvasOpts(false);
+      setWbAiSortNotice({
+        kind: "success",
+        text: `Đã sắp xếp ${arrangement.order.length} khối · ${LAYOUT_OPTS.find((o) => o.id === arrangement.mode)?.label || arrangement.mode}. Có thể dùng Hoàn tác nếu chưa ưng ý.`,
+      });
+    } catch (e) {
+      const message = e?.message || "AI sắp xếp thất bại. Hãy thử lại.";
+      setWbAiSortNotice({ kind: "error", text: message });
+      notify(message);
+    } finally {
+      wbAiSortBusyRef.current = false;
+      setWbAiSortBusy(false);
+    }
+  }, [board, activeId, checkpoint, pushHistory, notify]);
 
   // ── Group / Ungroup ──
   const handleGroup = useCallback(() => {
@@ -2539,6 +2588,15 @@ export default function WhiteboardView() {
         </div>
         <div className="wb-uni-right">
           {collapsedCount > 0 && <span className="whiteboard-check wb-hidden-badge" title="Số node đang ẩn">{collapsedCount}</span>}
+          <button
+            className="btn btn-primary btn-sm wb-ai-sort-trigger"
+            type="button"
+            onClick={handleAISort}
+            disabled={wbAiSortBusy || !(board.objects || []).length}
+            title="AI dùng Gemini API Key đã cấu hình để đọc nhãn và sắp xếp các khối trên bảng"
+          >
+            <Sparkles size={14} /> {wbAiSortBusy ? "Đang sắp xếp…" : "Sắp xếp bằng AI"}
+          </button>
           <div className="whiteboard-canvasopts-wrap">
             <button className={`btn btn-ghost btn-sm wb-hbtn ${board.grid || board.snap || board.smartAlign || board.smartSpacing ? "is-on" : ""}`} onClick={() => setShowCanvasOpts((v) => !v)} title="Tùy chọn canvas: lưới, bắt lưới, căn thông minh…"><SlidersHorizontal size={15} /></button>
             {showCanvasOpts && (
@@ -3561,151 +3619,35 @@ export default function WhiteboardView() {
         </div>
       )}
 
-      {showAI && (
-        <div className="modal-overlay whiteboard-ai-overlay" onClick={closeAIModal}>
-          <div className="modal-content whiteboard-ai-panel" role="dialog" aria-modal="true" aria-labelledby="whiteboard-ai-title" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header whiteboard-ai-header">
-              <div className="whiteboard-ai-heading">
-                <span className="whiteboard-ai-mark"><Sparkles size={17} /></span>
-                <div>
-                  <h2 id="whiteboard-ai-title">{aiStage === "preview" ? "Xem trước sơ đồ" : "AI tạo sơ đồ"}</h2>
-                  {aiStage !== "preview" && <p>Dán nội dung hoặc chọn ảnh để bắt đầu</p>}
-                </div>
-              </div>
-              <button className="btn btn-ghost btn-xs whiteboard-ai-close" onClick={closeAIModal} aria-label="Đóng cửa sổ"><X size={16} /></button>
-            </div>
-
-            {aiStage === "preview" && aiPlan ? (
-              <div className="wb-ai-preview">
-                <div className="wb-ai-preview-meta">
-                  <span className={`wb-ai-badge wb-ai-badge--${aiMeta?.mode === "local" ? "local" : "ai"}`}>
-                    {aiMeta?.mode === "local" ? "📄 Từ văn bản của bạn" : aiMeta?.checked ? "✓ AI — đã đối chiếu nguồn" : "✦ AI"}
-                  </span>
-                  {(aiMeta?.warnings || []).map((w, wi) => (
-                    <span key={`${wi}-${w}`} className="wb-ai-warn">{w}</span>
-                  ))}
-                </div>
-                <div className="wb-ai-preview-topic">
-                  <span className="wb-ai-preview-topic-label">Chủ đề</span>
-                  <input className="form-control" value={aiPlan.topic} onChange={(e) => editAiPlan((p) => ({ ...p, topic: e.target.value }))} style={{ fontSize: "0.875rem", fontWeight: 700 }} />
-                </div>
-                <div className="wb-ai-preview-branches">
-                  {aiPlan.branches.map((b, i) => (
-                    <div className="wb-ai-branch" key={b._k || i}>
-                      <div className="wb-ai-branch-row">
-                        <span className="wb-ai-branch-dot" style={{ background: `hsl(${(i * 47) % 360} 65% 50%)` }} />
-                        <input className="form-control wb-ai-branch-input" value={b.label} onChange={(e) => editAiPlan((p) => { p.branches[i].label = e.target.value; return p; })} />
-                        <button className="btn btn-ghost btn-xs" title="Xóa nhánh" onClick={() => editAiPlan((p) => ({ ...p, branches: p.branches.filter((_, j) => j !== i) }))}><Trash2 size={13} /></button>
-                      </div>
-                      <div className="wb-ai-branch-children">
-                        {b.children.map((c, j) => (
-                          <div className="wb-ai-child-row" key={j}>
-                            <span className="wb-ai-child-line" />
-                            <input className="form-control wb-ai-child-input" value={c} onChange={(e) => editAiPlan((p) => { p.branches[i].children[j] = e.target.value; return p; })} />
-                            <button className="btn btn-ghost btn-xs" onClick={() => editAiPlan((p) => { p.branches[i].children.splice(j, 1); return p; })}><X size={12} /></button>
-                          </div>
-                        ))}
-                        <button className="btn btn-ghost btn-xs wb-ai-add-child" onClick={() => editAiPlan((p) => { p.branches[i].children.push(""); return p; })}>+ Ý con</button>
-                      </div>
-                    </div>
-                  ))}
-                  <button className="btn btn-secondary btn-xs" style={{ alignSelf: "flex-start" }} onClick={() => editAiPlan((p) => ({ ...p, branches: [...p.branches, { label: "Nhánh mới", children: [] }] }))}>+ Thêm nhánh</button>
-                </div>
-                {aiError && <div className="wb-ai-error">{aiError}</div>}
-                <div className="wb-ai-preview-actions">
-                  <button className="btn btn-ghost" onClick={() => { setAiStage("form"); setAiError(""); }}>← Sửa nguồn</button>
-                  <button className="btn btn-ghost" onClick={handleAIRegenerate} disabled={aiBusy}>{aiBusy ? "Đang tạo…" : "↻ Tạo lại"}</button>
-                  <button className="btn btn-primary" onClick={handleAIApply} disabled={aiBusy} title={aiBusy ? "Đang tạo lại — chờ xong rồi đưa lên" : "Đưa sơ đồ lên bảng"} style={{ minWidth: 130 }}>✓ Đưa lên bảng</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="whiteboard-ai-tabs" role="tablist" aria-label="Cách nhập nội dung">
-                  <button type="button" role="tab" aria-selected={aiTab === "text"} className={`whiteboard-ai-tab ${aiTab === "text" ? "active" : ""}`} onClick={() => setAiTab("text")}><Type size={15} /> Văn bản</button>
-                  <button type="button" role="tab" aria-selected={aiTab === "image"} className={`whiteboard-ai-tab ${aiTab === "image" ? "active" : ""}`} onClick={() => setAiTab("image")}><ImageIcon size={15} /> Ảnh</button>
-                  <button type="button" role="tab" aria-selected={aiTab === "suggest"} className={`whiteboard-ai-tab ${aiTab === "suggest" ? "active" : ""}`} onClick={() => setAiTab("suggest")}><Lightbulb size={15} /> Gợi ý</button>
-                </div>
-                <div className="wb-ai-form">
-                  {aiTab === "text" && (
-                    <div className="wb-ai-source">
-                      <div className="wb-ai-section-heading">
-                        <label htmlFor="wb-ai-source-text">Văn bản nguồn</label>
-                        <span>Mỗi dòng là một ý</span>
-                      </div>
-                      <textarea id="wb-ai-source-text" className="form-control wb-ai-source-text" rows={5} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder={"Dán nội dung từ SGK, ví dụ:\nQuang hợp là quá trình...\n- Điều kiện: ánh sáng, diệp lục\n- Sản phẩm: tinh bột, oxy"} />
-                      <div className="wb-ai-source-caption">
-                        <span className={aiText.length > 12000 ? "is-over-limit" : ""}>{aiText.length}/12000 ký tự{aiText.length > 12000 ? " — nội dung dài sẽ được rút gọn" : ""}</span>
-                        <span>AI bám sát nguồn và giữ nguyên thuật ngữ; thụt lề hoặc gạch đầu dòng sẽ được dùng làm cấp ý.</span>
-                      </div>
-                    </div>
-                  )}
-                  {aiTab === "image" && (
-                    <div className="wb-ai-source">
-                      <div className="wb-ai-section-heading"><label>Ảnh nguồn</label><span>JPG, PNG hoặc WebP · tối đa 8 MB</span></div>
-                      <div className="whiteboard-ai-drop" role="button" tabIndex={0} aria-label="Chọn ảnh nguồn" onClick={() => document.getElementById("wb-ai-image-input")?.click()} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); document.getElementById("wb-ai-image-input")?.click(); } }}>
-                        {aiImagePreview ? <img src={aiImagePreview} alt="Xem trước ảnh nguồn" className="wb-ai-image-preview" /> : <span className="wb-ai-image-placeholder"><ImageIcon size={22} /></span>}
-                        <div className="wb-ai-drop-copy">
-                          <strong>{aiImageFile ? aiImageFile.name : "Chọn ảnh để AI đọc"}</strong>
-                          <span>AI nhận diện nội dung trong ảnh (cần API Key).</span>
-                        </div>
-                        <span className="btn btn-secondary btn-xs">Chọn ảnh</span>
-                      </div>
-                      <input id="wb-ai-image-input" type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setAiImageFile(f); e.target.value = ""; }} />
-                      {aiImageFile && <button type="button" className="btn btn-ghost btn-xs wb-ai-remove-image" onClick={() => { setAiImageFile(null); setAiImagePreview(""); }}>Gỡ ảnh</button>}
-                      <label className="wb-ai-notes-label" htmlFor="wb-ai-image-notes">Ghi chú thêm <span>(không bắt buộc)</span></label>
-                      <textarea id="wb-ai-image-notes" className="form-control wb-ai-image-notes" rows={3} value={aiText} onChange={(e) => setAiText(e.target.value)} placeholder="Thêm bối cảnh hoặc nội dung cần chú ý trong ảnh…" />
-                    </div>
-                  )}
-                  {aiTab === "suggest" && (
-                    <div className="wb-ai-source wb-ai-suggestions">
-                      <div className="wb-ai-section-heading"><label>Chọn một gợi ý</label><span>Gợi ý sẽ điền vào chủ đề</span></div>
-                      <div className="wb-ai-suggestion-list">
-                        {["Tóm tắt bài học", "So sánh 2 khái niệm", "Sơ đồ tư duy Quang hợp", "Phân loại thực vật", "Timeline lịch sử", "Sơ đồ lớp 4 — Vòng đời cây"].map((g) => (
-                          <button type="button" key={g} className={`wb-ai-suggestion ${aiTopic === g ? "is-selected" : ""}`} onClick={() => setAiTopic(g)}>{g}</button>
-                        ))}
-                      </div>
-                      <p className="wb-ai-help">Sau khi chọn, bạn có thể chỉnh chủ đề và bổ sung các ý nhỏ bên dưới.</p>
-                    </div>
-                  )}
-                  <section className="wb-ai-ideas">
-                    <div className="wb-ai-section-heading wb-ai-ideas-heading">
-                      <label>Ý cần có trong sơ đồ</label>
-                      <span>Tùy chọn · AI chỉ dùng các ý có trong nguồn</span>
-                    </div>
-                    {aiSmallIdeas.map((v, i) => (
-                      <div key={i} className="wb-ai-idea-row">
-                        <input className="form-control" aria-label={`Ý bắt buộc ${i + 1}`} value={v} onChange={(e) => { const a = [...aiSmallIdeas]; a[i] = e.target.value; setAiSmallIdeas(a); }} placeholder={`Ý ${i + 1} — ví dụ: Diệp lục`} />
-                        <button type="button" className="wb-ai-remove-idea" aria-label={`Xóa ý ${i + 1}`} onClick={() => setAiSmallIdeas((a) => a.filter((_, j) => j !== i))} disabled={aiSmallIdeas.length <= 1}><X size={15} /></button>
-                      </div>
-                    ))}
-                    <button type="button" className="wb-ai-add-idea" onClick={() => setAiSmallIdeas((a) => (a.length >= 12 ? a : [...a, ""]))} disabled={aiSmallIdeas.length >= 12} title={aiSmallIdeas.length >= 12 ? "Tối đa 12 ý" : "Thêm ý"}><Plus size={14} /> Thêm ý{aiSmallIdeas.length >= 12 ? " (tối đa 12)" : ""}</button>
-                  </section>
-                  <div className="wb-ai-topic">
-                    <div className="wb-ai-section-heading">
-                      <label htmlFor="wb-ai-topic">Chủ đề trung tâm</label>
-                      <span>Không bắt buộc</span>
-                    </div>
-                    <input id="wb-ai-topic" className="form-control" value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} placeholder="VD: Quang hợp ở thực vật" />
-                    {!aiText.trim() && !aiImageFile && !aiSmallIdeas.some((s) => s.trim()) && (
-                      <div className="wb-ai-source-warning"><Lightbulb size={15} /><span>Chỉ có chủ đề thì AI phải tự mở rộng, kết quả có thể kém chính xác. Nên thêm văn bản, ảnh hoặc ý nhỏ.</span></div>
-                    )}
-                    <p className="wb-ai-help">Bạn sẽ xem trước và chỉnh sơ đồ trước khi đưa lên bảng. Có thể tạo từ văn bản ngay cả khi chưa cấu hình API Key.</p>
-                  </div>
-                  {aiError && <div className="wb-ai-error">{aiError}</div>}
-                </div>
-                <div className="wb-ai-form-actions">
-                  <span className="wb-ai-action-hint" aria-live="polite">{aiBusy && aiProgress ? aiProgress : "Có thể xem lại và chỉnh sửa trước khi đưa lên bảng."}</span>
-                  <div className="wb-ai-action-buttons">
-                    <button type="button" className="btn btn-ghost" onClick={closeAIModal}>Đóng</button>
-                    {aiBusy && <button type="button" className="btn btn-ghost" onClick={handleAICancel}>Hủy tạo</button>}
-                    <button type="button" className="btn btn-primary wb-ai-generate" onClick={handleAIGenerate} disabled={aiBusy}><Sparkles size={15} /> {aiBusy ? "Đang tạo…" : "Tạo sơ đồ"}</button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <WhiteboardAIModal
+        open={showAI}
+        closeAIModal={closeAIModal}
+        aiStage={aiStage}
+        aiPlan={aiPlan}
+        aiMeta={aiMeta}
+        editAiPlan={editAiPlan}
+        aiError={aiError}
+        setAiStage={setAiStage}
+        setAiError={setAiError}
+        handleAIRegenerate={handleAIRegenerate}
+        aiBusy={aiBusy}
+        handleAIApply={handleAIApply}
+        aiTab={aiTab}
+        setAiTab={setAiTab}
+        aiText={aiText}
+        setAiText={setAiText}
+        aiImagePreview={aiImagePreview}
+        aiImageFile={aiImageFile}
+        setAiImageFile={setAiImageFile}
+        setAiImagePreview={setAiImagePreview}
+        aiSmallIdeas={aiSmallIdeas}
+        setAiSmallIdeas={setAiSmallIdeas}
+        aiTopic={aiTopic}
+        setAiTopic={setAiTopic}
+        aiProgress={aiProgress}
+        handleAICancel={handleAICancel}
+        handleAIGenerate={handleAIGenerate}
+      />
 
       {/* ── Tour 30 giây ── */}
       {showTour && (

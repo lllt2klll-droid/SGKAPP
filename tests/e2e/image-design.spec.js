@@ -63,6 +63,7 @@ test("crop preview offers image design and sends crop plus references to Gemini"
 
   const port = await unusedPort();
   const baseUrl = `http://127.0.0.1:${port}`;
+  const appUrl = `${baseUrl}/?app=1`;
   const booksDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "sgk-image-design-e2e-"));
   fs.writeFileSync(path.join(booksDirectory, BOOK_FILE), buildPdf());
 
@@ -141,7 +142,7 @@ test("crop preview offers image design and sends crop plus references to Gemini"
       });
     });
 
-    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.goto(appUrl, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".app-shell", { timeout: 20000 });
     const libraryButton = page.locator("aside button").filter({ hasText: "Thư viện sách" }).first();
     await libraryButton.click();

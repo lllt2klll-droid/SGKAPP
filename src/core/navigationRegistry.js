@@ -57,7 +57,7 @@ export const VIEWS = {
   ideas:       { id:"ideas",       label:"Ý tưởng",             icon:Lightbulb,      section:"CÔNG VIỆC", sectionId:"cong-viec", subsection:null,            order:51, mobile:true, desktop:true },
   stats:       { id:"stats",       label:"Thống kê",            icon:BarChart3,      section:"CÔNG VIỆC", sectionId:"cong-viec", subsection:null,            order:52, mobile:true, desktop:true },
   webtools:    { id:"webtools",    label:"Kho Công cụ Web",     icon:AppWindow,      section:"KHO CÔNG CỤ", sectionId:"kho-cong-cu",subsection:null,           order:60, mobile:true, desktop:true, large:true, promo:true },
-  datatools:   { id:"datatools",   label:"Sao lưu & Khôi phục", icon:DatabaseBackup, section:"TIỆN ÍCH", sectionId:"tien-ich",  subsection:null,            order:70, mobile:true, desktop:true },
+  datatools:   { id:"datatools",   label:"Dữ liệu & sao lưu", icon:DatabaseBackup, section:"TIỆN ÍCH", sectionId:"tien-ich",  subsection:null,            order:70, mobile:true, desktop:true },
   help:        { id:"help",        label:"Trợ giúp",            icon:HelpCircle,     section:"TIỆN ÍCH", sectionId:"tien-ich",  subsection:null,            order:71, mobile:true, desktop:true },
   // P1 • view Từ điển đã gộp vào Từ vựng (tab Tra cứu) — không còn mục nav riêng
 };
@@ -87,7 +87,7 @@ export const NAVIGATION_CONFIG = [
 
 export const FOOTER_NAV = [
   { id:"settings", label:"Cài đặt", icon:Settings, hasAction:true },
-  { id:"datatools", label:"Sao lưu & Khôi phục", icon:DatabaseBackup, view:"datatools" },
+  { id:"datatools", label:"Dữ liệu & sao lưu", icon:DatabaseBackup, view:"datatools" },
   { id:"help", label:"Trợ giúp", icon:HelpCircle, view:"help" },
 ];
 

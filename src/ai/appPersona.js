@@ -139,7 +139,7 @@ export const APP_VIEWS = [
   { id: "glossary", label: "Từ điển", icon: "🎓", desc: "Tra thuật ngữ khi đọc (phím g)" },
   { id: "internship", label: "Thực tập", icon: "🏫", desc: "Nhật ký + phản ánh sau giờ dạy" },
   { id: "webtools", label: "Kho công cụ Web", icon: "🧰", desc: "Lưu link hay như desktop" },
-  { id: "datatools", label: "Sao lưu & Khôi phục", icon: "💾", desc: "Xuất JSON, thùng rác" },
+  { id: "datatools", label: "Dữ liệu & sao lưu", icon: "💾", desc: "Sao lưu, khôi phục, kiểm tra" },
   { id: "help", label: "Trợ giúp", icon: "❓", desc: "Cầm tay chỉ việc từng module" },
 ];
 

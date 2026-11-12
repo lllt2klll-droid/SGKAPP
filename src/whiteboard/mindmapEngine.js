@@ -2,246 +2,11 @@
 // Mọi hàm trả về {objects, connectors} với toạ độ x/y thật, parentId thật.
 
 import { uid, blankObject } from "./whiteboardStore.js";
-
-// ─── Kiểu gạch đầu dòng cho text trong node (bullets) ───
-// bullets lưu trong object: false | true (cũ = "dot") | "dot" | "dash" | "num" | "square" | "arrow" | "check"
-export const BULLET_STYLES = [
-  { id: "", label: "— Tắt" },
-  { id: "dot", label: "• Chấm" },
-  { id: "dash", label: "– Gạch" },
-  { id: "num", label: "1. Số thứ tự" },
-  { id: "square", label: "▪ Vuông" },
-  { id: "arrow", label: "➤ Mũi tên" },
-  { id: "check", label: "✓ Tích" },
-];
-const BULLET_MARKS = { dot: "•", dash: "–", square: "▪", arrow: "➤", check: "✓" };
-export function normalizeBulletStyle(v) {
-  if (v === true) return "dot"; // tương thích board cũ
-  return BULLET_STYLES.some((s) => s.id === v) ? v : "";
-}
-// Bỏ marker cũ (kể cả số "1. ") để khỏi chồng "• 1. " khi đổi kiểu
-export function stripBulletMark(s) {
-  return String(s || "").replace(/^(\d+[.)]\s*|[-*•▪◦➤✓✔»]\s*)+/, "");
-}
-export function bulletPrefix(style, n) {
-  const s = normalizeBulletStyle(style);
-  if (!s) return "";
-  if (s === "num") return `${Math.max(1, n || 1)}. `;
-  return `${BULLET_MARKS[s]} `;
-}
-// Chừa chỗ thụt lề khi xuống dòng (số "12. " rộng hơn chấm)
-export function bulletIndentPx(fontSize, style) {
-  const s = normalizeBulletStyle(style);
-  if (!s) return 0;
-  return (Number(fontSize) || 15) * (s === "num" ? 1.8 : 1.1);
-}
-
-// ─── Chữ mẫu của template/AI (Nhánh 1, Chủ đề...) — mở sửa là bôi đen sẵn để gõ đè ───
-const PLACEHOLDER_RE = /^\s*(nhánh(\s+\d+)?|nhánh mới|nhánh con|chủ đề(\s+chính)?|khối|hình|văn bản mới|ghi chú…?|nhấn đúp để sửa|ý tưởng(\s+\d+)?|loại \d+|giai đoạn \d+|bước \d+|đối tượng [ab]|điểm chung|nhóm lớn|tên bài học|mục tiêu|hoạt động|luyện tập|đánh giá|gốc)\s*[.:…]?\s*$/i;
-export function isPlaceholderText(t) {
-  return PLACEHOLDER_RE.test(String(t || ""));
-}
-
-// ─── Markdown-lite trong node: **đậm**, *nghiêng* (không hỗ trợ khác) ───
-// Tách đoạn thành runs [{t, bold, italic}]. Marker không đóng cặp giữ nguyên chữ.
-// 2-pass: **đậm** trước, rồi *nghiêng* trong phần còn lại (tránh nuốt marker đóng).
-export function parseRichSegments(s) {
-  const out = [];
-  const push = (t, bold, italic) => { if (t) out.push({ t, bold, italic }); };
-  const parts = String(s || "").split(/(\*\*[^*]+\*\*)/g);
-  for (const part of parts) {
-    if (!part) continue;
-    const m = part.match(/^\*\*([^*]+)\*\*$/);
-    if (m) { push(m[1], true, false); continue; }
-    const subs = part.split(/(\*[^*\n]+\*)/g);
-    for (const sub of subs) {
-      if (!sub) continue;
-      const m2 = sub.match(/^\*([^*]+)\*$/);
-      if (m2) push(m2[1], false, true);
-      else push(sub, false, false);
-    }
-  }
-  return out.length ? out : [{ t: "", bold: false, italic: false }];
-}
-
-// Xuống dòng cho runs (giữ style từng từ), mỗi đoạn \n giữ nguyên. Trả mảng dòng, mỗi dòng là mảng runs.
-export function wrapRichLines(text, maxChars) {
-  const mc = Math.max(3, Math.floor(Number(maxChars) || 20));
-  const out = [];
-  for (const para of String(text || "").split("\n")) {
-    if (!para) { out.push([]); continue; }
-    const segs = parseRichSegments(para);
-    let cur = [];
-    let len = 0;
-    const pushLine = () => { out.push(cur); cur = []; len = 0; };
-    for (const s of segs) {
-      for (const w of s.t.split(/\s+/)) {
-        if (!w) continue;
-        if (len > 0 && len + 1 + w.length > mc) pushLine();
-        cur.push({ t: (cur.length ? " " : "") + w, bold: s.bold, italic: s.italic });
-        len += (cur[cur.length - 1].t.length);
-      }
-    }
-    pushLine();
-    if (out.length >= 48) break;
-  }
-  return out.slice(0, 48);
-}
-
-// ─── Hình học connector dùng chung (canvas render + hit-test menu chuột phải) ───
-export function centerOf(o) {
-  return { x: o.x + o.width / 2, y: o.y + o.height / 2 };
-}
-
-// Điểm neo trên biên node — hỗ trợ anchor top/right/bottom/left/auto
-export function edgePoint(node, tx, ty, anchor = "auto") {
-  const c = centerOf(node);
-  const hw = node.width / 2;
-  const hh = node.height / 2;
-  if (anchor === "top") return { x: c.x, y: c.y - hh };
-  if (anchor === "bottom") return { x: c.x, y: c.y + hh };
-  if (anchor === "left") return { x: c.x - hw, y: c.y };
-  if (anchor === "right") return { x: c.x + hw, y: c.y };
-  const dx = tx - c.x;
-  const dy = ty - c.y;
-  if (dx === 0 && dy === 0) return c;
-  if (Math.abs(dx) / (hw || 1) > Math.abs(dy) / (hh || 1)) {
-    return { x: c.x + (dx > 0 ? hw : -hw), y: c.y };
-  }
-  return { x: c.x, y: c.y + (dy > 0 ? hh : -hh) };
-}
-
-export function connectorGeom(a, b, type, sourceAnchor = "auto", targetAnchor = "auto", bendOpt, routeOffsetOpt, bendAlongOpt) {
-  if (!a || !b) return null;
-  const ca = centerOf(a);
-  const cb = centerOf(b);
-  const p1 = edgePoint(a, cb.x, cb.y, sourceAnchor);
-  const p2 = edgePoint(b, ca.x, ca.y, targetAnchor);
-  if (type === "elbow") {
-    const routeOffset = Number.isFinite(Number(routeOffsetOpt)) ? Number(routeOffsetOpt) : 0;
-    // Đi ngang trước khi 2 biên cách ngang ≥ cách dọc, ngược lại đi dọc trước — đỡ đè lên node
-    if (Math.abs(p2.x - p1.x) >= Math.abs(p2.y - p1.y)) {
-      const midX = (p1.x + p2.x) / 2 + routeOffset;
-      const pts = [p1, { x: midX, y: p1.y }, { x: midX, y: p2.y }, p2];
-      return { d: `M ${p1.x} ${p1.y} L ${midX} ${p1.y} L ${midX} ${p2.y} L ${p2.x} ${p2.y}`, pts, control: { x: midX, y: (p1.y + p2.y) / 2 }, controlAxis: "x", end: p2, endAngle: p2.x >= midX ? 0 : 180 };
-    }
-    const midY = (p1.y + p2.y) / 2 + routeOffset;
-    const pts = [p1, { x: p1.x, y: midY }, { x: p2.x, y: midY }, p2];
-    return { d: `M ${p1.x} ${p1.y} L ${p1.x} ${midY} L ${p2.x} ${midY} L ${p2.x} ${p2.y}`, pts, control: { x: (p1.x + p2.x) / 2, y: midY }, controlAxis: "y", end: p2, endAngle: p2.y >= midY ? 90 : -90 };
-  }
-  if (type === "curve") {
-    // Cong bezier: điểm điều khiển lệch pháp tuyến. bend=% chỉnh tay (mặc định 100 = auto),
-    // 0 = thẳng; giá trị âm uốn sang phía đối diện. Xác định để export/hit-test khớp canvas.
-    const bend = Number.isFinite(Number(bendOpt)) ? Math.max(-150, Math.min(150, Number(bendOpt))) : 100;
-    const dx = p2.x - p1.x, dy = p2.y - p1.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const k = Math.max(-160, Math.min(160, len * 0.25 * (bend / 100)));
-    const along = Number.isFinite(Number(bendAlongOpt)) ? Math.max(-150, Math.min(150, Number(bendAlongOpt))) : 0;
-    const alongOffset = Math.max(-160, Math.min(160, len * 0.25 * (along / 100)));
-    const cx = (p1.x + p2.x) / 2 + (-dy / len) * k + (dx / len) * alongOffset;
-    const cy = (p1.y + p2.y) / 2 + (dx / len) * k + (dy / len) * alongOffset;
-    const at = (t) => ({
-      x: (1 - t) * (1 - t) * p1.x + 2 * (1 - t) * t * cx + t * t * p2.x,
-      y: (1 - t) * (1 - t) * p1.y + 2 * (1 - t) * t * cy + t * t * p2.y,
-    });
-    const pts = [0, 0.25, 0.5, 0.75, 1].map(at);
-    const endAngle = (Math.atan2(p2.y - cy, p2.x - cx) * 180) / Math.PI;
-    return { d: `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`, pts, control: { x: cx, y: cy }, controlAxis: "both", end: p2, endAngle };
-  }
-  const ang = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
-  return { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`, pts: [p1, p2], control: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }, controlAxis: "both", end: p2, endAngle: ang };
-}
-
-function distToSeg(p, a, b) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len2 = dx * dx + dy * dy;
-  if (!len2) return Math.hypot(p.x - a.x, p.y - a.y);
-  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
-  t = Math.max(0, Math.min(1, t));
-  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
-}
-
-// ─── Style connector kiểu Canva: mũi 2 đầu (arrow/dot/diamond/none) + nét đứt ───
-// Model tương thích cũ: board cũ chỉ có type (line/arrow/double/elbow) vẫn render đúng
-// nhờ fallback — không cần migrate dữ liệu.
-export const CONN_HEAD_OPTS = [
-  { id: "none", label: "Không", glyph: "○" },
-  { id: "arrow", label: "Mũi tên", glyph: "➤" },
-  { id: "dot", label: "Chấm tròn", glyph: "●" },
-  { id: "diamond", label: "Hình thoi", glyph: "◆" },
-];
-export const CONN_DASH_OPTS = [
-  { id: "", label: "Liền" },
-  { id: "6 4", label: "Đứt" },
-  { id: "2 4", label: "Chấm" },
-];
-export const CONN_COLORS = ["#475569", "#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#db2777"];
-export const CONN_WIDTHS = [1, 2, 3, 4, 6, 8];
-const VALID_HEAD = new Set(["none", "arrow", "dot", "diamond"]);
-
-// Suy đầu/cuối: ưu tiên startHead/endHead tường minh, thiếu thì fallback type cũ.
-export function connHeads(c = {}) {
-  let start = VALID_HEAD.has(c.startHead) ? c.startHead : null;
-  let end = VALID_HEAD.has(c.endHead) ? c.endHead : null;
-  if (!start || !end) {
-    const t = c.type;
-    const legacy = t === "line" ? ["none", "none"] : t === "double" ? ["arrow", "arrow"] : ["none", "arrow"];
-    if (!start) start = legacy[0];
-    if (!end) end = legacy[1];
-  }
-  return { start, end };
-}
-
-export function connDash(c = {}) {
-  const d = c.dash ?? "";
-  return CONN_DASH_OPTS.some((o) => o.id === d) ? d : "";
-}
-
-// type tương thích khi user đổi đầu: giữ dáng elbow/curve, còn lại suy từ 2 đầu
-export function connTypeForHeads(c = {}, start, end) {
-  const t = c.type || "";
-  if (t === "elbow" || t === "curve") return t;
-  if (start !== "none" && end !== "none") return "double";
-  if (start !== "none" || end !== "none") return "arrow";
-  return "line";
-}
-
-// Chuyển 1 đầu nối sang node khác (giữ nguyên style) — pure, không mutate.
-// Dùng khi cầm đầu mũi tên kéo-thả sang khối khác.
-export function reconnectConn(connectors, id, end, newNodeId, anchor = "auto") {
-  return (Array.isArray(connectors) ? connectors : []).map((c) =>
-    c.id !== id ? c : (end === "to"
-      ? { ...c, toId: newNodeId, targetAnchor: anchor }
-      : { ...c, fromId: newNodeId, sourceAnchor: anchor }));
-}
-
-// Đảo chiều: đổi from/to + neo + đầu mũi (giữ nguyên dáng và style còn lại)
-export function flipConn(c = {}) {
-  const { start, end } = connHeads(c);
-  return {
-    ...c,
-    fromId: c.toId,
-    toId: c.fromId,
-    sourceAnchor: c.targetAnchor ?? "auto",
-    targetAnchor: c.sourceAnchor ?? "auto",
-    startHead: end,
-    endHead: start,
-    type: connTypeForHeads(c, end, start),
-  };
-}
-
-// Khoảng cách từ điểm tới connector (hỗ trợ elbow polyline) — dùng cho hit-test menu chuột phải
-export function distToConnector(wx, wy, a, b, type, sourceAnchor, targetAnchor, bend, routeOffset, bendAlong) {
-  const g = connectorGeom(a, b, type, sourceAnchor, targetAnchor, bend, routeOffset, bendAlong);
-  if (!g || !g.pts) return Infinity;
-  const p = { x: wx, y: wy };
-  let best = Infinity;
-  for (let i = 0; i + 1 < g.pts.length; i++) {
-    best = Math.min(best, distToSeg(p, g.pts[i], g.pts[i + 1]));
-  }
-  return best;
-}
+import { PLAN_LIMITS, planLabelOf, flattenPlanChildren } from "./mindmapPlan.js";
+export { PLAN_LIMITS, planLabelOf, flattenPlanChildren, sanitizePlanForApply } from "./mindmapPlan.js";
+export { BULLET_STYLES, normalizeBulletStyle, stripBulletMark, bulletPrefix, bulletIndentPx, isPlaceholderText, parseRichSegments, wrapRichLines } from "./mindmapText.js";
+export { centerOf, edgePoint, connectorGeom, distToConnector } from "./mindmapGeometry.js";
+export { CONN_HEAD_OPTS, CONN_DASH_OPTS, CONN_COLORS, CONN_WIDTHS, connHeads, connDash, connTypeForHeads, reconnectConn, flipConn } from "./mindmapConnectorStyles.js";
 
 const PALETTES = {
   mindmap: ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2", "#db2777", "#65a30d"],
@@ -455,6 +220,7 @@ export function applyLayoutAnchors(connectors, mode) {
 export function autoLayout(objects, connectors, mode = "tree-tb", opts = {}) {
   const objs = (Array.isArray(objects) ? objects : []).map((o) => ({ ...o }));
   if (!objs.length) return objs;
+  if (mode === "grid") return layoutGrid(objs);
   const { byId, childrenOf, roots, reachable } = buildHierarchy(objs);
   if (!roots.length) return objs;
   // Gap gọn để chụp slide đọc rõ chữ, vẫn đủ khe cho đường nối đi lọt
@@ -572,6 +338,28 @@ export function autoLayout(objects, connectors, mode = "tree-tb", opts = {}) {
   // Hàng dự phòng cho node mồ côi: xếp ngang dưới cùng, khe thoáng, không đè cây mới
   stageOrphans(objs, reachable);
   return objs;
+}
+
+function layoutGrid(objs) {
+  const ordered = [...objs].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+  const columns = Math.ceil(Math.sqrt(ordered.length));
+  const rows = Math.ceil(ordered.length / columns);
+  const columnWidths = Array(columns).fill(0);
+  const rowHeights = Array(rows).fill(0);
+  ordered.forEach((o, i) => {
+    const col = i % columns, row = Math.floor(i / columns);
+    columnWidths[col] = Math.max(columnWidths[col], laneW(o));
+    rowHeights[row] = Math.max(rowHeights[row], laneH(o));
+  });
+  const columnX = [140];
+  const rowY = [120];
+  for (let i = 1; i < columns; i++) columnX[i] = columnX[i - 1] + columnWidths[i - 1] + 48;
+  for (let i = 1; i < rows; i++) rowY[i] = rowY[i - 1] + rowHeights[i - 1] + 48;
+  return ordered.map((o, i) => ({
+    ...o,
+    x: columnX[i % columns],
+    y: rowY[Math.floor(i / columns)],
+  }));
 }
 
 // Xếp node mồ côi (cycle/self-loop, không tới được từ roots) thành hàng ngang
@@ -999,96 +787,6 @@ export function numberBranchChildren(objects, parentId) {
     const clean = String(o.text || "").replace(/^\s*\d+[.)]\s*/, "");
     return { ...o, text: `${numOf.get(o.id)}. ${clean}` };
   });
-}
-
-// ─── Chuẩn bị cho AI: ép output AI (tự do) thành nodes/connectors thật ───
-// Giới hạn dùng chung cho cả service (normalize/local) lẫn engine (graph/apply)
-export const PLAN_LIMITS = { topic: 200, branches: 10, children: 8, label: 120 };
-
-// Trích nhãn từ giá trị AI trả (string | {label/name/text} | object lạ cấp 3).
-// Không bao giờ trả "[object Object]" — object không nhãn thì ghép giá trị string con.
-export function planLabelOf(v) {
-  if (typeof v === "string") return v.trim();
-  if (v && typeof v === "object") {
-    const direct = String(v.label ?? v.name ?? v.text ?? "").trim();
-    if (direct) return direct;
-    const inner = Object.values(v)
-      .filter((x) => typeof x === "string")
-      .map((x) => x.trim())
-      .filter(Boolean);
-    return inner.slice(0, 3).join(" — ");
-  }
-  return "";
-}
-
-// Phẳng hóa children (kể cả object cấp 3) thành mảng string sạch, giữ thứ tự.
-export function flattenPlanChildren(children, max = PLAN_LIMITS.children) {
-  const out = [];
-  const push = (c) => {
-    if (out.length >= max) return;
-    if (typeof c === "string") {
-      const s = c.trim();
-      if (s) out.push(s.slice(0, PLAN_LIMITS.label));
-      return;
-    }
-    if (c && typeof c === "object") {
-      const s = planLabelOf(c);
-      if (s) out.push(s.slice(0, PLAN_LIMITS.label));
-      // cấp 3+: con của con thành nhãn riêng (giữ dữ liệu, không mất như trước)
-      const subs = Array.isArray(c.children) ? c.children : [];
-      for (const g of subs) {
-        if (out.length >= max) break;
-        const gs = typeof g === "string" ? g.trim() : planLabelOf(g);
-        if (gs) out.push(gs.slice(0, PLAN_LIMITS.label));
-      }
-    }
-  };
-  (Array.isArray(children) ? children : []).slice(0, max * 3).forEach(push);
-  return out.slice(0, max);
-}
-
-// Làm sạch plan sau khi user sửa trong preview: trim, bỏ rỗng, dedup, enforce giới hạn.
-// Trả { plan: {topic, branches} | null, warnings: [], stats } — không tự bịa nhãn.
-export function sanitizePlanForApply(plan) {
-  const stats = { branches: 0, children: 0, droppedEmpty: 0, droppedDupe: 0, droppedOverflow: 0 };
-  const warnings = [];
-  if (!plan || typeof plan !== "object") {
-    return { plan: null, warnings: ["Sơ đồ trống."], stats };
-  }
-  const topic = String(plan.topic || "").trim().slice(0, PLAN_LIMITS.topic);
-  const rawList = Array.isArray(plan.branches) ? plan.branches : [];
-  if (rawList.length > PLAN_LIMITS.branches) {
-    stats.droppedOverflow += rawList.length - PLAN_LIMITS.branches;
-  }
-  const seen = new Set();
-  const branches = [];
-  for (const b of rawList.slice(0, PLAN_LIMITS.branches)) {
-    const label = (typeof b === "string" ? b.trim() : planLabelOf(b)).slice(0, PLAN_LIMITS.label);
-    if (!label) { stats.droppedEmpty++; continue; }
-    const key = label.toLowerCase();
-    if (seen.has(key)) { stats.droppedDupe++; continue; }
-    seen.add(key);
-    const cseen = new Set([key]);
-    const children = [];
-    for (const c of flattenPlanChildren(typeof b === "object" && b ? b.children : [])) {
-      const ck = c.toLowerCase();
-      if (cseen.has(ck)) { stats.droppedDupe++; continue; }
-      cseen.add(ck);
-      children.push(c);
-    }
-    branches.push({ label, children });
-  }
-  stats.branches = branches.length;
-  stats.children = branches.reduce((s, b) => s + b.children.length, 0);
-  if (stats.droppedEmpty) warnings.push(`Đã bỏ ${stats.droppedEmpty} nhánh/con trống.`);
-  if (stats.droppedDupe) warnings.push(`Đã bỏ ${stats.droppedDupe} nhãn trùng lặp.`);
-  if (stats.droppedOverflow) warnings.push(`Sơ đồ vượt giới hạn — chỉ giữ ${PLAN_LIMITS.branches} nhánh đầu.`);
-  if (!topic) warnings.push("Chủ đề đang trống.");
-  if (!branches.length) {
-    warnings.push("Sơ đồ không còn nhánh nào có chữ sau khi làm sạch.");
-    return { plan: null, warnings, stats };
-  }
-  return { plan: { topic, branches }, warnings, stats };
 }
 
 export function aiPlanToGraph(plan, cx = 700, cy = 420) {

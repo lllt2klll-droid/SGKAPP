@@ -93,9 +93,6 @@ export const DEFAULT_SETTINGS = {
     filenameStamp: "date", // date|datetime|none — cách gắn mốc thời gian vào tên file tải về
   },
   backup: {
-    autoBackup: true,
-    autoBackupFrequency: "weekly",
-    keepBackups: 4,
     lastBackupTime: null,
   },
   behavior: {
@@ -671,25 +668,7 @@ export async function testNotification() {
   } catch (e) { return { ok: false, msg: e?.message || "Không gửi được thông báo" }; }
 }
 
-// ── Backup: xuất / nhập / dung lượng ──
-export function serializeAllSettings() {
-  return JSON.stringify({ app: "sgk-app", kind: "settings", version: 1, exportedAt: new Date().toISOString(), settings: loadSettings() }, null, 2);
-}
-export function downloadSettingsBackup() {
-  try {
-    const blob = new Blob([serializeAllSettings()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sgk-settings-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    const cur = loadSettings();
-    cur.backup = { ...(cur.backup || {}), lastBackupTime: new Date().toISOString() };
-    saveSettings(cur);
-    return true;
-  } catch { return false; }
-}
+// Kept for parsing older settings-only backup files; new backups use the full app snapshot.
 export function parseSettingsBackup(text) {
   const data = JSON.parse(text);
   const s = data.settings || data;
@@ -713,17 +692,6 @@ export function parseSettingsBackup(text) {
   merged.version = DEFAULT_SETTINGS.version;
   return merged;
 }
-export function getStorageUsage() {
-  try {
-    let total = 0;
-    for (const k of listKeys()) {
-      const v = safeGetString(k, "");
-      total += (k?.length || 0) + (v?.length || 0);
-    }
-    return { chars: total, kb: Math.round(total / 102.4) / 10 };
-  } catch { return { chars: 0, kb: 0 }; }
-}
-
 /** Phân loại localStorage theo nhóm: dữ liệu cá nhân / cache / khác (đơn vị KB, số key). */
 export function getStorageBreakdown() {
   try {
@@ -991,8 +959,6 @@ export const SETTINGS_SEARCH_INDEX = [
   { q: ["theo hệ thống", "prefers", "hệ điều hành", "theo máy"], section: "accessibility", anchor: "sec-a11y" },
   { q: ["lật trang", "lật sách", "lật 3d", "page flip"], section: "accessibility", anchor: "sec-a11y" },
   { q: ["quét a11y", "quét accessibility", "quét trợ năng", "a11y", "audit"], section: "accessibility", anchor: "sec-a11y-tools" },
-  { q: ["data", "dữ liệu", "storage", "backup", "restore", "import", "export", "sao lưu"], section: "backup", anchor: "sec-backup" },
-  { q: ["lưu trữ", "dung lượng", "phân bổ", "đĩa", "dọn cache"], section: "backup", anchor: "sec-storage" },
   { q: ["privacy", "riêng tư", "lịch sử", "dữ liệu cá nhân", "chat ai", "xoá scan", "tìm kiếm gần đây"], section: "privacy", anchor: "sec-privacy" },
   { q: ["gỡ lỗi", "debug", "log", "console", "developer"], section: "advanced", anchor: "sec-perf" },
   { q: ["diagnostics", "chẩn đoán", "version", "kiểm tra", "báo cáo"], section: "advanced", anchor: "sec-diag" },

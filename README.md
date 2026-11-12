@@ -2,6 +2,8 @@
 
 > Ứng dụng không gian làm việc dành cho giáo viên tiểu học: đọc và quản lý học liệu, soạn dạy, nghiên cứu, theo dõi công việc và tạo tài nguyên lớp học.
 
+Trang chủ là landing page giới thiệu sản phẩm, tính năng, quyền riêng tư và lựa chọn cài đặt. Nút **Dùng ứng dụng web** mở không gian làm việc tại `/?app=1`; bản PWA cũng khởi động trực tiếp vào ứng dụng. Bản desktop Electron tiếp tục mở ứng dụng thay vì landing page.
+
 SGK Teacher Workspace là ứng dụng React chạy trên trình duyệt, có backend Node.js/Express để quản lý thư viện file và một số dịch vụ tích hợp. Dữ liệu cá nhân của ứng dụng được lưu trong trình duyệt; file sách được lưu trên máy chạy backend. Ứng dụng không tự đồng bộ dữ liệu lên cloud. Các tính năng Gemini, nhập nội dung từ URL và một số tài nguyên web cần kết nối Internet.
 
 ## Tính năng
@@ -13,6 +15,7 @@ SGK Teacher Workspace là ứng dụng React chạy trên trình duyệt, có ba
 - **Quản lý công việc:** nhiệm vụ, ý tưởng, nhật ký thực tập và thống kê hoạt động.
 - **Dữ liệu và trợ giúp:** sao lưu/khôi phục dữ liệu trình duyệt, quản lý thùng rác, cài đặt, trợ giúp và kho công cụ web.
 - **PWA:** bản build có manifest và service worker; một số tài nguyên đã tải có thể dùng lại khi offline. Backend, file chưa cache và tính năng AI/Internet vẫn cần kết nối tương ứng.
+- **Website giới thiệu:** landing page responsive có hướng dẫn bắt đầu, thông tin lưu trữ dữ liệu, FAQ, nút mở ứng dụng, cài PWA và liên kết trang phát hành Windows.
 
 ## Công nghệ
 
@@ -44,6 +47,8 @@ npm run dev:all
 
 Mở địa chỉ frontend do Vite in ra, mặc định `http://127.0.0.1:5173`. Backend chạy ở cổng `5000`; Vite chuyển tiếp `/api` và `/lesson-images` tới backend. Nếu cổng mặc định đang được dùng, Vite có thể tự chọn cổng khác.
 
+Địa chỉ gốc hiển thị landing page; nhấn **Dùng ứng dụng web** để mở ứng dụng. Có thể mở thẳng giao diện ứng dụng bằng cách thêm `?app=1` vào URL. Nút **Cài đặt ứng dụng** dùng lời nhắc cài PWA của trình duyệt khi khả dụng; nút Windows dẫn tới trang phát hành được khai báo trong `version.json`.
+
 Để có sách trong thư viện, đặt file vào thư mục `books` cạnh thư mục `sgk-app` hoặc tải file qua giao diện. Backend tự tạo thư mục này nếu chưa có. Có thể đặt đường dẫn khác bằng biến `BOOKS_DIR`.
 
 Chạy frontend và backend riêng trong hai terminal:
@@ -72,11 +77,34 @@ npm rebuild electron
 npm run dist:win
 ```
 
-File cài đặt nằm trong `release/windows/` với tên `SGK Teacher Workspace Setup 1.0.0.exe`. Nhấn đúp file này, hoàn tất trình cài đặt để tạo shortcut trên Desktop/Start Menu; ứng dụng sẽ tự mở sau cài đặt. Máy cài ứng dụng không cần cài riêng Node.js. Muốn tạo thêm bản portable, chạy `npm run dist:portable`. Lệnh `npm run desktop` build giao diện rồi chạy thử bản desktop trên máy phát triển.
+File cài đặt nằm trong `release/windows/` với tên `SGK-Teacher-Workspace-Setup-<version>.exe`; bản portable có tên `SGK Teacher Workspace Portable <version>.exe`. Tên file Setup khớp với URL trong `latest.yml` để trình tự cập nhật trong app có thể tải đúng artifact. Phiên bản lấy từ `package.json`. Nhấn đúp file Setup, hoàn tất trình cài đặt để tạo shortcut trên Desktop/Start Menu; ứng dụng sẽ tự mở sau cài đặt. Bộ cài dùng chế độ **theo từng người dùng** (cài vào `%LOCALAPPDATA%\Programs`), không yêu cầu quyền quản trị nên không hiện hộp thoại UAC. Máy cài ứng dụng không cần cài riêng Node.js. Muốn tạo bản portable, chạy `npm run dist:portable`. Lệnh `npm run desktop` build giao diện rồi chạy thử bản desktop trên máy phát triển.
+
+### Bản desktop dùng ngay khi Windows chặn `.exe` (Smart App Control)
+
+Windows 11 có thể bật **Smart App Control**: khi đó mọi `.exe` chưa ký đều bị chặn, kể cả bộ cài do `electron-builder` tạo (log Code Integrity ghi `An Application Control policy has blocked this file`). Nguyên nhân: `electron-builder` phải sửa exe để gắn icon và asar integrity, làm mất chữ ký gốc của Electron.
+
+Cách chạy được trong trường hợp này là giữ nguyên `electron.exe` gốc của Electron (Windows đã biết file này) và đặt mã ứng dụng trong `resources/app.asar`:
+
+```bash
+npm run dist:local
+```
+
+Lệnh tạo thư mục `SGK Desktop` ở thư mục gốc dự án (ngang hàng `sgk-app`). Nhấn đúp `SGK Desktop\SGK Teacher Workspace.exe` — hoặc shortcut ngoài Desktop — để mở app đầy đủ tính năng, kể cả liên kết PDF gốc. Không được tách rời file `.exe` khỏi các file `.dll` trong cùng thư mục.
+
+Dự phòng: `Chay_Desktop.bat` chạy trực tiếp `electron.exe` trong `node_modules` trỏ vào mã nguồn; cách này cần giữ `node_modules` và không có tự cập nhật.
+
+Muốn bỏ hẳn việc chặn: tắt Smart App Control trong Windows Security (đã tắt thì không bật lại được nếu không cài lại Windows) hoặc ký số ứng dụng bằng chứng chỉ tin cậy; khi đó `npm run dist:win` tạo bộ cài per-user bình thường.
+
+
+Ứng dụng đóng gói kèm `version.json` để hiển thị thông tin phát hành và kiểm tra phiên bản trực tuyến tại `https://raw.githubusercontent.com/lllt2klll-droid/book-update/main/version.json`. Bản Setup Windows hỗ trợ tải cập nhật trong ứng dụng và cài đặt sau khi người dùng khởi động lại. Bản Portable không thể tự thay thế tệp đang chạy; người dùng cần tải bản Portable mới từ trang Releases.
+
+Khi phát hành phiên bản mới, đồng bộ phiên bản trong `package.json` và `version.json`. Đưa bộ cài Setup cùng `latest.yml` và các tệp `.blockmap` do `electron-builder` tạo ra vào cùng GitHub Release để trình cập nhật có thể tải và xác minh bản cài đặt. `version.json` tiếp tục cung cấp ngày phát hành và danh sách thay đổi hiển thị trong ứng dụng.
 
 Bản cài đặt bắt đầu với thư viện trống; sách và ảnh trên máy phát triển **không được đóng gói vào file `.exe`**. Thư viện sách và ảnh giáo án do người dùng thêm được lưu riêng tại `%APPDATA%\SGK Teacher Workspace\books` và `%APPDATA%\SGK Teacher Workspace\lesson-images`. Dữ liệu trình duyệt như tiến độ đọc, cài đặt và IndexedDB được lưu riêng trong hồ sơ Electron tại `%APPDATA%\SGK Teacher Workspace`. Dữ liệu được giữ lại khi gỡ ứng dụng để tránh mất nội dung; khi chuyển sang máy khác, hãy sao chép thư mục dữ liệu này nếu muốn giữ cả thư viện lẫn dữ liệu ứng dụng.
 
-Người dùng có thể thêm sách riêng sau khi cài bằng chức năng nhập trong ứng dụng.
+Người dùng có thể thêm sách riêng sau khi cài bằng chức năng nhập trong ứng dụng. Có thể chọn hoặc kéo-thả **nhiều file cùng lúc** (tối đa 60 file mỗi lần) để mở bảng thêm hàng loạt, sửa tiêu đề từng file và theo dõi tiến trình. Ở bản desktop, khi các file đã chọn đều là PDF trên máy, có thể chọn **“Chỉ liên kết file gốc”** cho cả loạt để đọc trực tiếp mà không sao chép vào `books/`; cần giữ nguyên vị trí file gốc, nếu file bị di chuyển/đổi tên thì sách sẽ không mở được.
+
+Khi đóng cửa sổ cuối cùng, ứng dụng desktop sẽ dừng máy chủ nội bộ và giải phóng cổng; máy chủ không tiếp tục chạy nền khi ứng dụng đã thoát.
 
 ## Lệnh thường dùng
 
@@ -96,7 +124,7 @@ Người dùng có thể thêm sách riêng sau khi cài bằng chức năng nh�
 | `npm test` | Chạy unit/integration tests bằng `node:test` |
 | `npm run test:e2e` | Chạy tuần tự các bài e2e trong `tests/e2e/` để tránh tranh chấp browser/server giữa spec |
 
-`npm run preview` phục vụ bản frontend đã build; khi cần API, cần chạy backend riêng. `npm start` chạy backend Express. Trong quy trình deploy GitHub Pages hiện tại, workflow chỉ build và deploy frontend tĩnh; API cần được cung cấp riêng nếu muốn bật các tính năng phụ thuộc backend.
+`npm run preview` phục vụ landing page và ứng dụng web đã build; khi cần API, cần chạy backend riêng. `npm start` chạy backend Express. Trong quy trình deploy GitHub Pages hiện tại, workflow chỉ build và deploy frontend tĩnh; API cần được cung cấp riêng nếu muốn bật các tính năng phụ thuộc backend.
 
 ## Cấu hình
 

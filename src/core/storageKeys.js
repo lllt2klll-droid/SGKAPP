@@ -103,7 +103,7 @@ export const STORAGE_KEYS = {
   SYNC_HISTORY_PREFIX: "sync_history_",
   // Migration version — v3 includes whiteboard boards IDB migration (v2 was hybrid clips/refs)
   STORAGE_MIGRATION_VERSION: "sgk_storage_migration_v3",
-  // Cache / rebuildable prefixes — lastPage/lastTotal là USER DATA, KHÔNG phải cache (TASK #9)
+  // Candidate cache prefixes; isCacheKey excludes user conversations and drafts.
   CACHE_PREFIXES: [
     "sgk_index_",
     "sgk_meta_",
@@ -192,12 +192,16 @@ export const BACKUP_KEYS = [
   STORAGE_KEYS.SYNC_STATUS_PREFIX,
   STORAGE_KEYS.SYNC_META_PREFIX,
   STORAGE_KEYS.SYNC_HISTORY_PREFIX,
+  "chat_",
+  "assistant_history",
+  "sgk_textbook_draft",
 ];
 
 export function isBackupKey(key) {
   return BACKUP_KEYS.some((p) => key === p || key.startsWith(p));
 }
 export function isCacheKey(key) {
+  if (key.startsWith("chat_") || key.startsWith("assistant_history") || key.startsWith("sgk_textbook_draft")) return false;
   return STORAGE_KEYS.CACHE_PREFIXES.some((p) => key.startsWith(p));
 }
 

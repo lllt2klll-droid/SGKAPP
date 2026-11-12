@@ -8,7 +8,7 @@
 
 ```
 ┌─ UI ─────────────────────────────────────────────────────────────────────┐
-│ App.jsx (APP SHELL, 4.167 dòng)                                         │
+│ App.jsx (APP SHELL, 5.007 dòng)                                         │
 │   nav  → core/navigationRegistry.buildNavSections() / getBreadcrumb()   │
 │   view → core/viewRegistry (25 view, lazy + Suspense)                   │
 │   bus  → core/appEvents (47 events)                                     │
@@ -39,7 +39,7 @@ module cũ được giữ làm wrapper/backward-compat có ghi chú (xem `LEGACY
 | Hạng mục | Giá trị |
 |---|---|
 | Module nguồn | `src/` **140 file** không tính test (161 file `.js/.jsx`) |
-| Test | **~40 file test** → **474 test / 72 suites** pass (verify 11/10/2026); e2e **5 spec → 37/37** |
+| Test | **601 test / 86 suites** pass (verify 2026-11-07); e2e **10 spec → 53/53** |
 | Lint | oxlint 0 warnings / 0 errors (179 file, 89 rules) |
 | View | 25 trong `VIEW_REGISTRY` (20 lazy + 5 inline `component:null`) — P1 gộp Từ điển vào Từ vựng (tab Tra cứu), tách nav "Sổ tay nghiên cứu" khỏi "Công cụ nâng cao" |
 | Event | 47 entries `AppEvents` + `DataDomains` |
@@ -119,6 +119,7 @@ Chiến lược này **không còn mô tả ở một file trung gian** — nó 
 
 - Key người dùng (`sgk_*`, `notes_*`, `ocr_*`...) nằm trong `STORAGE_KEYS`/`BACKUP_KEYS` — không viết chuỗi cứng trong view.
 - `isBackupKey` → backup/restore; `isCacheKey` → chỉ clear cache, không backup.
+- Lịch sử chat (`chat_*`, `assistant_history`) và bản nháp sách (`sgk_textbook_draft*`) là dữ liệu người dùng: được sao lưu và không bị dọn như cache. Chỉ mục, OCR/TXT và mục lục có thể dựng lại thì không nằm trong bản sao lưu.
 - View không đọc/ghi `localStorage` trực tiếp; ngoại lệ có chủ đích: probe `core/storageHealth.js`,
   chẩn đoán `SettingsCenter` (4 hit), test, comment.
 

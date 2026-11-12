@@ -14,7 +14,6 @@ import {
   Dices,
   RefreshCw,
   Save,
-  Eye,
   Sparkles,
   Tag,
   FileText,
@@ -31,10 +30,16 @@ import {
 import { makeId } from "../data/storage.js";
 import { exportWord, exportCsv, printToPdf, escapeHtml } from "../services/exportDoc.js";
 import { normalizeGeneratedQuestion, normalizeMucdo } from "../data/questionSchema.js";
-import SourceBadge from "../scan/SourceBadge.jsx";
 import SampleButton from "./SampleButton.jsx";
 import { fillSampleQuestions } from "../data/sampleData.js";
 import ImageUploadModal from "./ImageUploadModal.jsx";
+import QuestionCard from "./QuestionCard.jsx";
+import QuestionDetailModal from "./QuestionDetailModal.jsx";
+import QuestionEditorForm from "./QuestionEditorForm.jsx";
+import QuestionDrawDialog from "./QuestionDrawDialog.jsx";
+import QuestionBankStyles from "./QuestionBankStyles.jsx";
+import QuestionStatsPanel from "./QuestionStatsPanel.jsx";
+import QuestionSelectionBar from "./QuestionSelectionBar.jsx";
 
 const EMPTY = {
   type: "mc",
@@ -599,58 +604,7 @@ export default function QuestionBankView({ books, onNavigate }) {
 
   return (
     <div className="qbx-root">
-      <style>{`
-        .qbx-root { display:flex; flex-direction:column; gap:12px; }
-        .qbx-head { background:linear-gradient(135deg, rgba(22,163,74,0.10), rgba(45,115,255,0.06)); border:1px solid var(--border-color); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:11px; }
-        .qbx-title-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-        .qbx-title { margin:0; font-size:1.05rem; font-weight:800; color:var(--text-dark); display:flex; align-items:center; gap:9px; }
-        .qbx-title-ic { width:32px; height:32px; border-radius:10px; background:var(--color-action, var(--primary, #16a34a)); color:#fff; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 4px 12px color-mix(in srgb, var(--color-action, #16a34a) 35%, transparent); }
-        .qbx-stats { display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
-        .qbx-stat { font-size: 0.7188rem; font-weight:700; color:#334155; background:rgba(255,255,255,0.85); border:1px solid #e2e8f0; padding:4px 10px; border-radius:999px; display:inline-flex; align-items:center; gap:5px; }
-        .qbx-stat.hot { background:var(--color-action-soft, #eff6ff); color:var(--color-action-strong, #1d4ed8); border-color:var(--color-action-soft, #bfdbfe); }
-        .qbx-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .qbx-search { flex:1 1 200px; min-width:170px; position:relative; }
-        .qbx-search input { width:100%; padding:8px 30px 8px 32px; border-radius:10px; border:1px solid #e2e8f0; font-size: 0.8125rem; background:#fff; }
-        .qbx-search > svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#94a3b8; }
-        .qbx-search-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; display:inline-flex; }
-        .qbx-toolbar select { padding:8px 10px; border-radius:10px; border:1px solid #e2e8f0; font-size: 0.7813rem; background:#fff; color:#334155; }
-        .qbx-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
-        .qbx-hint { margin:0; font-size: 0.7188rem; color:var(--text-muted); }
-        .qbx-selbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--color-action-soft, #eff6ff); border:1px solid var(--color-action-soft, #bfdbfe); border-radius:12px; padding:8px 12px; font-size: 0.7813rem; font-weight:700; color:var(--color-action-strong, #1d4ed8); }
-        .qbx-list { display:flex; flex-direction:column; gap:9px; }
-        .qbx-card { background:var(--surface); border:1px solid var(--border-color); border-radius:13px; padding:11px 12px; display:flex; gap:10px; align-items:flex-start; transition:border-color 0.15s ease, box-shadow 0.15s ease; }
-        .qbx-card:hover { border-color:#86efac; box-shadow:0 4px 14px rgba(22,163,74,0.08); }
-        .qbx-card.sel { border-color:var(--color-action, #2d73ff); background:linear-gradient(180deg, var(--color-action-soft, rgba(45,115,255,0.05)), rgba(255,255,255,0)); box-shadow:0 4px 14px color-mix(in srgb, var(--color-action, #2d73ff) 14%, transparent); }
-        .qbx-check { width:23px; height:23px; border-radius:8px; border:2px solid #cbd5e1; background:#fff; display:inline-flex; align-items:center; justify-content:center; color:#fff; cursor:pointer; flex-shrink:0; margin-top:1px; }
-        .qbx-check.on { background:var(--color-action, #16a34a); border-color:var(--color-action, #16a34a); }
-        .qbx-num { font-size: 0.6875rem; font-weight:800; color:#94a3b8; min-width:26px; text-align:right; margin-top:4px; }
-        .qbx-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:7px; }
-        .qbx-q { margin:0; font-size:0.88rem; line-height:1.55; color:var(--text-dark); }
-        .qbx-badges { display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
-        .qbx-badge { font-size: 0.6563rem; font-weight:800; padding:2px 8px; border-radius:999px; display:inline-flex; align-items:center; gap:4px; background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
-        .qbx-badge.subj { background:var(--color-action-soft, #eff6ff); color:var(--color-action-strong, #1d4ed8); border-color:var(--color-action-soft, #dbeafe); }
-        .qbx-badge.lvl { background:#f0fdf4; color:#15803d; border-color:#bbf7d0; }
-        .qbx-badge.scan { background:#f0fdfa; color:#0f766e; border-color:#99f6e4; }
-        .qbx-opts { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; }
-        @media (max-width: 640px) { .qbx-opts { grid-template-columns:1fr; } }
-        .qbx-opt { display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:9px; padding:7px 10px; font-size:0.83rem; line-height:1.45; color:#334155; min-width:0; }
-        .qbx-opt b { width:22px; height:22px; border-radius:7px; background:#e2e8f0; color:#475569; display:inline-flex; align-items:center; justify-content:center; font-size: 0.6875rem; flex-shrink:0; }
-        .qbx-opt-tx { flex:1; min-width:0; overflow-wrap:anywhere; }
-        .qbx-opt.ok { background:#f0fdf4; border-color:#86efac; color:#14532d; font-weight:600; }
-        .qbx-opt.ok b { background:#16a34a; color:#fff; }
-        .qbx-opt-check { color:#16a34a; flex-shrink:0; }
-        .qbx-ans { font-size: 0.75rem; color:#15803d; background:#f0fdf4; border:1px dashed #86efac; border-radius:8px; padding:6px 10px; }
-        .qbx-thumb { border-radius:8px; overflow:hidden; border:1px solid var(--border-color); max-width:200px; }
-        .qbx-thumb img { width:100%; max-height:100px; object-fit:cover; display:block; }
-        .qbx-card-actions { display:flex; flex-direction:column; gap:5px; flex-shrink:0; }
-        .qbx-icobtn { width:31px; height:31px; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; border:1px solid #e2e8f0; background:#fff; color:#64748b; cursor:pointer; }
-        .qbx-icobtn:hover { border-color:var(--color-action, #16a34a); color:var(--color-action-strong, #15803d); background:var(--color-action-soft, #f0fdf4); }
-        .qbx-icobtn.pick.on { background:#16a34a; border-color:#16a34a; color:#fff; }
-        .qbx-icobtn.danger:hover { border-color:#fca5a5; color:#dc2626; background:#fef2f2; }
-        .qbx-empty { text-align:center; padding:36px 16px; border:1px dashed var(--border-color); border-radius:14px; color:var(--text-muted); background:var(--surface); }
-        .qbx-more { position:relative; }
-        .qbx-menu { position:absolute; right:0; top:calc(100% + 6px); background:var(--surface); border:1px solid var(--border-color); border-radius:10px; box-shadow:var(--shadow-md); padding:6px; display:flex; flex-direction:column; gap:5px; min-width:190px; z-index:20; }
-      `}</style>
+      <QuestionBankStyles />
       {/* ── Header + toolbar ── */}
       <div className="qbx-head">
         <div className="qbx-title-row">
@@ -716,14 +670,14 @@ export default function QuestionBankView({ books, onNavigate }) {
 
       {/* Thanh đã chọn */}
       {pickedList.length > 0 && (
-        <div className="qbx-selbar">
-          <Check size={14} /> Đã chọn {pickedList.length} câu
-          <button className="btn btn-primary btn-xs" onClick={() => exportPicked(false)}>Xuất đề</button>
-          <button className="btn btn-secondary btn-xs" onClick={() => exportPicked(true)}>Đề + đáp án</button>
-          <button className="btn btn-secondary btn-xs" onClick={printPicked}>In</button>
-          <button className="btn btn-secondary btn-xs" onClick={copyPicked}>Chép</button>
-          <button className="btn btn-ghost btn-xs" onClick={() => setPicked({})}>Bỏ chọn hết</button>
-        </div>
+        <QuestionSelectionBar
+          count={pickedList.length}
+          onExport={() => exportPicked(false)}
+          onExportWithAnswers={() => exportPicked(true)}
+          onPrint={printPicked}
+          onCopy={copyPicked}
+          onClear={() => setPicked({})}
+        />
       )}
 
       {/* Bulk Actions Panel */}
@@ -829,425 +783,48 @@ export default function QuestionBankView({ books, onNavigate }) {
 
       {/* Statistics Panel */}
       {showStats && (
-        <div className="panel-box mb-0-8">
-          <div className="flex-row gap-sm mb-0-7">
-            <h4 className="m-0 flex-1">📊 Thống kê chi tiết</h4>
-            <button className="btn btn-ghost btn-xs" onClick={() => setShowStats(false)}>
-              <X size={14} />
-            </button>
-          </div>
-          
-          <div className="tag-grid-2 mb-0-7">
-            <div className="p-sm bg-muted radius-md">
-              <strong>Tổng số câu hỏi:</strong> {questions.length}
-            </div>
-            <div className="p-sm bg-muted radius-md">
-              <strong>Trắc nghiệm:</strong> {getStatistics().byType.mc} ({Math.round(getStatistics().byType.mc / questions.length * 100)}%)
-            </div>
-            <div className="p-sm bg-muted radius-md">
-              <strong>Tự luận:</strong> {getStatistics().byType.essay} ({Math.round(getStatistics().byType.essay / questions.length * 100)}%)
-            </div>
-            <div className="p-sm bg-muted radius-md">
-              <strong>Đang hiển thị:</strong> {filtered.length} câu
-            </div>
-          </div>
-
-          <div className="tag-grid-2 mb-0-7">
-            <div>
-              <strong>Theo môn học:</strong>
-              <div className="mt-0-3">
-                {Object.entries(getStatistics().bySubject).map(([subject, count]) => (
-                  <div key={subject} className="flex-row gap-sm mb-0-2">
-                    <span className="gl-chip">{subject}</span>
-                    <span>{count} câu</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <strong>Theo lớp:</strong>
-              <div className="mt-0-3">
-                {Object.entries(getStatistics().byGrade).sort(([a], [b]) => a - b).map(([grade, count]) => (
-                  <div key={grade} className="flex-row gap-sm mb-0-2">
-                    <span className="gl-chip">Lớp {grade}</span>
-                    <span>{count} câu</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <strong>Theo mức độ:</strong>
-            <div className="mt-0-3">
-              {Object.entries(getStatistics().byMucdo).map(([mucdo, count]) => (
-                <div key={mucdo} className="flex-row gap-sm mb-0-2">
-                  <span className="gl-chip">{mucdo}</span>
-                  <span>{count} câu</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <QuestionStatsPanel
+          questionsCount={questions.length}
+          visibleCount={filtered.length}
+          statistics={getStatistics()}
+          onClose={() => setShowStats(false)}
+        />
       )}
 
       {showForm && (
-        <div className="panel-box border-primary mb-0-8">
-          <h4 className="mb-0-7 text-primary font-inherit">
-            {editId ? "✏️ Sửa câu hỏi" : "➕ Câu hỏi mới"}
-          </h4>
-          <div className="tag-grid-4">
-            <div>
-              <label className="form-label">Loại câu</label>
-              <select
-                className="form-control"
-                value={form.type}
-                onChange={(e) => {
-                  setForm((f) => ({ ...f, type: e.target.value }));
-                }}
-              >
-                <option value="mc">Trắc nghiệm (4 đáp án)</option>
-                <option value="fill">Điền khuyết</option>
-                <option value="essay">Tự luận</option>
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Môn</label>
-              <select
-                className="form-control"
-                value={form.subject}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, subject: e.target.value }))
-                }
-              >
-                <option value="">—</option>
-                {subjects.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Lớp</label>
-              <select
-                className="form-control"
-                value={form.grade}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, grade: e.target.value }))
-                }
-              >
-                <option value="">—</option>
-                {[1, 2, 3, 4, 5].map((g) => (
-                  <option key={g} value={String(g)}>
-                    Lớp {g}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Mức độ</label>
-              <select
-                className="form-control"
-                value={form.mucdo}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, mucdo: e.target.value }))
-                }
-              >
-                <option value="">—</option>
-                {MUC_DO.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <label className="form-label">Câu hỏi *</label>
-          <textarea
-            className="form-control"
-            rows={2}
-            value={form.question}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, question: e.target.value }))
-            }
-            placeholder="Nhập câu hỏi…"
-          />
-          {form.type === "mc" ? (
-            <div className="qb-opts">
-              {form.options.map((opt, oi) => (
-                <div key={oi} className="qb-opt">
-                  <button
-                    className={`btn btn-xs ${form.correctIndex === oi ? "btn-primary" : "btn-secondary"}`}
-                    title="Đặt làm đáp án đúng"
-                    onClick={() => setForm((f) => ({ ...f, correctIndex: oi }))}
-                  >
-                    {form.correctIndex === oi ? (
-                      <Check size={12} />
-                    ) : (
-                      String.fromCharCode(65 + oi)
-                    )}
-                  </button>
-                  <input
-                    className="form-control"
-                    value={opt}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        options: f.options.map((o, i) =>
-                          i === oi ? e.target.value : o,
-                        ),
-                      }))
-                    }
-                    placeholder={`Đáp án ${String.fromCharCode(65 + oi)}`}
-                  />
-                  {form.correctIndex === oi && (
-                    <span className="gl-chip text-success">đúng</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div>
-              <label className="form-label">Đáp án gợi ý</label>
-              <textarea
-                className="form-control"
-                rows={2}
-                value={form.answer}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, answer: e.target.value }))
-                }
-                placeholder="Nội dung trả lời mong đợi…"
-              />
-            </div>
-          )}
-          <div className="tag-grid-2">
-            <div>
-              <label className="form-label">Chương / Bài</label>
-              <input
-                className="form-control"
-                value={form.chapter}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, chapter: e.target.value }))
-                }
-                placeholder="VD: Bài 12 – Phép cộng phạm vi 10"
-              />
-            </div>
-            <div>
-              <label className="form-label">Yêu cầu cần đạt (tham chiếu)</label>
-              <input
-                className="form-control"
-                value={form.yccd}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, yccd: e.target.value }))
-                }
-                placeholder="Ghi tóm tắt YCCĐ liên quan…"
-              />
-            </div>
-          </div>
-          <div className="flex-row gap-sm mt-0-7">
-            <button
-              className="btn btn-primary"
-              onClick={save}
-              disabled={!form.question.trim()}
-            >
-              <Check size={14} /> Lưu câu hỏi
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                setShowForm(false);
-                setEditId(null);
-                setForm(EMPTY);
-              }}
-            >
-              Hủy
-            </button>
-          </div>
-        </div>
+        <QuestionEditorForm
+          editId={editId}
+          form={form}
+          setForm={setForm}
+          subjects={subjects}
+          onSave={save}
+          onCancel={() => {
+            setShowForm(false);
+            setEditId(null);
+            setForm(EMPTY);
+          }}
+        />
       )}
 
       {showDraw && (
-        <div className="modal-overlay" onClick={() => setShowDraw(false)}>
-          <div
-            className="modal-content max-w-640"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 className="flex-row gap-sm m-0">
-                <Dices size={17} /> Tạo đề ngẫu nhiên
-              </h3>
-              <button
-                className="util-bubble-close dark"
-                onClick={() => setShowDraw(false)}
-                aria-label="Đóng"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="tag-body">
-              <div className="seg-tabs mb-0-7">
-                <button
-                  className={`seg-tab${drawScope === "filtered" ? " on" : ""}`}
-                  onClick={() => {
-                    setDrawScope("filtered");
-                    doDrawWith(filtered, drawCount, drawBal);
-                  }}
-                >
-                  Kết quả bộ lọc ({filtered.length})
-                </button>
-                <button
-                  className={`seg-tab${drawScope === "all" ? " on" : ""}`}
-                  onClick={() => {
-                    setDrawScope("all");
-                    doDrawWith(questions, drawCount, drawBal);
-                  }}
-                >
-                  Toàn bộ ngân hàng ({questions.length})
-                </button>
-              </div>
-              <div className="tag-grid-2">
-                <div>
-                  <label className="form-label">Số câu</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    className="form-control"
-                    value={drawCount}
-                    onChange={(e) =>
-                      setDrawCount(parseInt(e.target.value, 10) || 1)
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Phân bố mức độ</label>
-                  <button
-                    className={`btn btn-xs ${drawBal ? "btn-primary" : "btn-secondary"}`}
-                    onClick={() => {
-                      const v = !drawBal;
-                      setDrawBal(v);
-                      doDrawWith(
-                        drawScope === "all" ? questions : filtered,
-                        drawCount,
-                        v,
-                      );
-                    }}
-                  >
-                    <Check size={12} />{" "}
-                    {drawBal
-                      ? "Cân bằng Nhận biết / Thông hiểu / Vận dụng"
-                      : "Ngẫu nhiên thuần túy"}
-                  </button>
-                </div>
-              </div>
-
-              {drawn.length > 0 ? (
-                <>
-                  <p className="panel-hint mt-0-7">
-                    {drawn.length} câu đã chọn:{" "}
-                    {MUC_DO.map((m) => {
-                      const c = drawn.filter((q) => q.mucdo === m).length;
-                      return (
-                        <span key={m} className="mr-md">
-                          {m}: <strong>{c}</strong>
-                        </span>
-                      );
-                    })}
-                    {drawn.filter((q) => !q.mucdo).length > 0 && (
-                      <span>
-                        Không rõ mức độ:{" "}
-                        <strong>{drawn.filter((q) => !q.mucdo).length}</strong>
-                      </span>
-                    )}
-                  </p>
-                  <div className="qb-list stack-v-sm-mt">
-                    {drawn.map((q, i) => (
-                      <div className="qb-row p-0-45-0-6" key={q.id}>
-                        <span className="font-bold text-primary min-w-1-6">
-                          {String.fromCharCode(105 + i)}.
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: "0.84rem",
-                              lineHeight: 1.45,
-                            }}
-                          >
-                            {q.question}
-                          </p>
-                          <div className="flex-row gap-sm flex-wrap mt-0-2">
-                            {q.type === "mc" ? (
-                              <span className="gl-chip">Trắc nghiệm</span>
-                            ) : (
-                              <span className="gl-chip">Tự luận</span>
-                            )}
-                            {q.mucdo && (
-                              <span className="gl-chip">{q.mucdo}</span>
-                            )}
-                            {q.subject && (
-                              <span className="gl-chip">{q.subject}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="panel-hint mt-0-7">
-                  Không có câu hỏi nào trong phạm vi đã chọn.
-                </p>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  justifyContent: "flex-end",
-                  flexWrap: "wrap",
-                  marginTop: "0.8rem",
-                }}
-              >
-                <button
-                  className="btn btn-secondary btn-xs"
-                  onClick={doDraw}
-                  disabled={!filtered.length && !questions.length}
-                >
-                  <RefreshCw size={12} /> Tạo lại
-                </button>
-                <button
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => exportDrawn(false)}
-                  disabled={!drawn.length}
-                >
-                  Xuất đề
-                </button>
-                <button
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => exportDrawn(true)}
-                  disabled={!drawn.length}
-                >
-                  Đề + đáp án
-                </button>
-                <button
-                  className="btn btn-primary btn-xs"
-                  onClick={saveDrawnWorksheet}
-                  disabled={!drawn.length}
-                >
-                  <Save size={12} /> Lưu thành phiếu học tập
-                </button>
-                {onNavigate && (
-                  <button className="btn btn-secondary btn-xs" onClick={()=>onNavigate("worksheets")} title="Xem phiếu vừa tạo">
-                    <FileText size={12} /> Xem Phieu
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        )}
+        <QuestionDrawDialog
+          drawScope={drawScope}
+          setDrawScope={setDrawScope}
+          filtered={filtered}
+          doDrawWith={doDrawWith}
+          drawCount={drawCount}
+          setDrawCount={setDrawCount}
+          drawBal={drawBal}
+          setDrawBal={setDrawBal}
+          questions={questions}
+          drawn={drawn}
+          doDraw={doDraw}
+          exportDrawn={exportDrawn}
+          saveDrawnWorksheet={saveDrawnWorksheet}
+          onNavigate={onNavigate}
+          onClose={() => setShowDraw(false)}
+        />
+      )}
 
       {/* ── Danh sách câu hỏi dạng cards ── */}
       {filtered.length === 0 ? (
@@ -1258,56 +835,28 @@ export default function QuestionBankView({ books, onNavigate }) {
         </div>
       ) : (
         <div className="qbx-list">
-          {filtered.map((q, idx) => {
-            const sel = !!picked[q.id];
-            const ci = Number(q.correctIndex);
-            const cidx = q.type === "mc" && Number.isInteger(ci) && ci >= 0 && ci <= 3 ? ci : -1;
-            return (
-              <article key={q.id} className={`qbx-card${sel ? " sel" : ""}`}>
-                <button className={`qbx-check${sel ? " on" : ""}`} onClick={() => setPicked((p) => ({ ...p, [q.id]: !p[q.id] }))}
-                  title={sel ? "Bỏ chọn" : "Chọn vào bộ đề"} aria-label={sel ? "Bỏ chọn câu này" : "Chọn câu này"} aria-pressed={sel}>
-                  {sel && <Check size={14} strokeWidth={3} />}
-                </button>
-                <span className="qbx-num">{idx + 1}</span>
-                <div className="qbx-body">
-                  <p className="qbx-q" role="button" tabIndex={0} onClick={() => setDetail(q)}
-                    onKeyDown={(e) => { if (e.key === "Enter") setDetail(q); }}
-                    title="Bấm để xem chi tiết" style={{ cursor: "pointer" }}>{q.question}</p>
-                  {q.type === "mc" && Array.isArray(q.options) && q.options.length > 0 && (
-                    <div className="qbx-opts">
-                      {q.options.map((o, oi) => (
-                        <span key={oi} className={`qbx-opt${oi === cidx ? " ok" : ""}`}>
-                          <b>{String.fromCharCode(65 + oi)}</b>
-                          <span className="qbx-opt-tx">{o}</span>
-                          {oi === cidx && <Check size={13} className="qbx-opt-check" />}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {(q.type === "essay" || q.type === "fill") && (q.answer || q.answerGuide) && (
-                    <div className="qbx-ans">Đáp án: {q.answer || q.answerGuide}</div>
-                  )}
-                  <div className="qbx-badges">
-                    {q.subject && <span className="qbx-badge subj">{q.subject}</span>}
-                    {q.grade && <span className="qbx-badge">Lớp {q.grade}</span>}
-                    <span className="qbx-badge">{q.type === "mc" ? "Trắc nghiệm" : q.type === "fill" ? "Điền khuyết" : "Tự luận"}</span>
-                    {q.mucdo && <span className="qbx-badge lvl">{q.mucdo}</span>}
-                    {(q.origin === "sgk_original" || q.keepOriginal) && <span className="qbx-badge scan">📖 SGK</span>}
-                    {q.source?.type === "sgk_scan" && <span className="qbx-badge scan" title={`📚 ${q.source.bookName} tr.${q.source.page}`}>📚 tr.{q.source.page}</span>}
-                    {q.chapter && <span className="qbx-badge" title={q.chapter}>📖 {q.chapter.slice(0, 28)}</span>}
-                  </div>
-                  {q.thumbnail && (
-                    <div className="qbx-thumb"><img src={q.thumbnail} alt="" loading="lazy" /></div>
-                  )}
-                </div>
-                <div className="qbx-card-actions">
-                  <button className="qbx-icobtn" onClick={() => setDetail(q)} title="Xem chi tiết" aria-label="Xem chi tiết"><Eye size={14} /></button>
-                  <button className="qbx-icobtn" onClick={() => startEdit(q)} title="Sửa" aria-label="Sửa câu hỏi"><Pencil size={14} /></button>
-                  <button className="qbx-icobtn danger" onClick={() => { if (confirm("Xóa câu hỏi này?")) { deleteQuestion(q.id); refresh(); } }} title="Xóa" aria-label="Xóa câu hỏi"><Trash2 size={14} /></button>
-                </div>
-              </article>
-            );
-          })}
+          {filtered.map((question, index) => (
+            <QuestionCard
+              key={question.id}
+              question={question}
+              index={index}
+              selected={!!picked[question.id]}
+              onToggle={() =>
+                setPicked((current) => ({
+                  ...current,
+                  [question.id]: !current[question.id],
+                }))
+              }
+              onOpen={() => setDetail(question)}
+              onEdit={() => startEdit(question)}
+              onDelete={() => {
+                if (confirm("Xóa câu hỏi này?")) {
+                  deleteQuestion(question.id);
+                  refresh();
+                }
+              }}
+            />
+          ))}
         </div>
       )}
 
@@ -1351,102 +900,15 @@ export default function QuestionBankView({ books, onNavigate }) {
       </div>
 
       {detail && (
-        <div className="modal-overlay" onClick={() => setDetail(null)}>
-          <div
-            className="modal-content max-w-640"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 className="m-0 flex-row gap-sm">
-                <Eye size={16} /> Chi tiết câu hỏi
-              </h3>
-              <button
-                className="util-bubble-close dark"
-                onClick={() => setDetail(null)}
-                aria-label="Đóng chi tiết"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="tag-body">
-              <p
-                style={{
-                  margin: "0 0 0.6rem",
-                  fontSize: "0.95rem",
-                  lineHeight: 1.6,
-                  fontWeight: 600,
-                }}
-              >
-                {detail.question}
-              </p>
-              {detail.type === "mc" && detail.options?.length > 0 && (
-                <div className="qbx-opts" style={{ marginBottom: 8 }}>
-                  {detail.options.map((o, oi) => (
-                    <div key={oi} className={`qbx-opt${detail.correctIndex === oi ? " ok" : ""}`}>
-                      <b>{String.fromCharCode(65 + oi)}</b>
-                      <span className="qbx-opt-tx">{o}</span>
-                      {detail.correctIndex === oi && <span style={{ fontSize: "0.6875rem", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 3 }}><Check size={12} /> Đáp án</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {detail.type === "essay" && detail.answer && (
-                <p className="panel-hint p-sm bg-muted radius-md">
-                  <strong>Đáp án gợi ý:</strong> {detail.answer}
-                </p>
-              )}
-              <div className="flex-row gap-sm flex-wrap mb-0-6">
-                {detail.subject && (
-                  <span className="gl-chip">{detail.subject}</span>
-                )}
-                {detail.grade && (
-                  <span className="gl-chip">Lớp {detail.grade}</span>
-                )}
-                {detail.type === "mc" ? (
-                  <span className="gl-chip">Trắc nghiệm</span>
-                ) : (
-                  <span className="gl-chip">Tự luận</span>
-                )}
-                {detail.mucdo && (
-                  <span className="gl-chip">{detail.mucdo}</span>
-                )}
-                {detail.chapter && (
-                  <span className="gl-chip">{detail.chapter}</span>
-                )}
-                {detail.yccd && (
-                  <span className="gl-chip" title={detail.yccd}>
-                    YCCĐ: {detail.yccd}
-                  </span>
-                )}
-              </div>
-              {detail.source?.type === "sgk_scan" && (
-                <div style={{ marginBottom: 8 }}>
-                  <SourceBadge source={detail.source} books={books} />
-                  {detail.thumbnail && <div style={{ marginTop: 6 }}><img src={detail.thumbnail} alt="Thumbnail" style={{ maxWidth: 180, maxHeight: 100, borderRadius: 6, border: "1px solid var(--border-color)" }} /></div>}
-                </div>
-              )}
-              <div className="flex-row-end">
-                <button
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => {
-                    setDetail(null);
-                    startEdit(detail);
-                  }}
-                  aria-label="Sửa câu hỏi này"
-                >
-                  <Pencil size={12} /> Sửa
-                </button>
-                <button
-                  className="btn btn-primary btn-xs"
-                  onClick={() => setDetail(null)}
-                  aria-label="Đóng"
-                >
-                  <X size={12} /> Đóng
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <QuestionDetailModal
+          question={detail}
+          books={books}
+          onClose={() => setDetail(null)}
+          onEdit={() => {
+            setDetail(null);
+            startEdit(detail);
+          }}
+        />
       )}
     </div>
   );

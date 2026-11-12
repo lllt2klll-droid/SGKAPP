@@ -43,6 +43,60 @@ function getApiKeySafe() {
   try { return getGeminiApiKey() || ""; } catch { return ""; }
 }
 
+const AI_LAYOUT_MODES = ["tree-tb", "tree-lr", "tree-rl", "tree-bt", "radial", "grid"];
+
+export function normalizeAIWhiteboardArrangement(raw, objects) {
+  const objectIds = (Array.isArray(objects) ? objects : []).map((o) => o?.id);
+  if (!objectIds.length || objectIds.some((id) => typeof id !== "string" || !id) || new Set(objectIds).size !== objectIds.length) {
+    throw new Error("Bảng có dữ liệu khối không hợp lệ, không thể sắp xếp bằng AI.");
+  }
+  if (!raw || typeof raw !== "object" || !AI_LAYOUT_MODES.includes(raw.mode) || !Array.isArray(raw.order)) {
+    throw new Error("AI trả về bố cục không hợp lệ. Hãy thử lại.");
+  }
+  const expected = new Set(objectIds);
+  const order = raw.order;
+  if (order.length !== objectIds.length || order.some((id) => typeof id !== "string" || !expected.has(id)) || new Set(order).size !== objectIds.length) {
+    throw new Error("AI không sắp xếp đủ các khối trên bảng. Chưa có thay đổi nào được áp dụng.");
+  }
+  return { mode: raw.mode, order };
+}
+
+export async function arrangeWhiteboardWithAI(objects) {
+  const items = Array.isArray(objects) ? objects : [];
+  if (!items.length) throw new Error("Bảng chưa có khối để sắp xếp.");
+  if (items.length > 100) throw new Error("AI sắp xếp tối đa 100 khối mỗi lần. Hãy chia nội dung thành các bảng nhỏ hơn.");
+  const apiKey = getApiKeySafe();
+  if (!apiKey) throw new Error("Chưa có Gemini API Key. Vào Cài đặt → AI để thêm khóa rồi thử lại.");
+  const model = getModel();
+  const payload = items.map((o) => ({
+    id: o.id,
+    parentId: o.parentId || null,
+    kind: String(o.kind || "text").slice(0, 24),
+    label: String(o.text || o.label || o.kind || "Khối").replace(/\s+/g, " ").trim().slice(0, 180),
+  }));
+  const prompt = [
+    "Sắp xếp các khối có sẵn trên whiteboard để dễ đọc, dựa trên nội dung và quan hệ cha-con.",
+    "Chỉ quyết định kiểu bố cục và thứ tự hiển thị. Không tạo, xóa, đổi ID hay sửa nội dung.",
+    'Trả đúng một JSON object dạng {"mode":"tree-tb","order":["ID_1","ID_2"]}. mode phải là một trong: tree-tb, tree-lr, tree-rl, tree-bt, radial, grid.',
+    "order phải chứa chính xác mỗi ID một lần, theo thứ tự đọc từ trên xuống dưới và trái sang phải.",
+    "Chọn radial cho sơ đồ phân nhánh trung tâm; tree-tb/tree-lr cho nội dung phân cấp; grid cho các khối độc lập; chọn hướng phù hợp với độ dài nhãn.",
+    "Danh sách khối:",
+    JSON.stringify(payload),
+  ].join("\n");
+  const response = await aiService.callAI({
+    apiKey,
+    model,
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    systemInstruction: { parts: [{ text: "Bạn là trợ lý bố cục whiteboard. Chỉ trả JSON hợp lệ và chỉ dùng ID có trong dữ liệu." }] },
+    generationConfig: { temperature: 0.1, maxOutputTokens: 2200, responseMimeType: "application/json" },
+    timeout: 45000,
+    maxRetries: 1,
+    requestId: `wb-arrange-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  });
+  const raw = parsePlanJSON(response);
+  return normalizeAIWhiteboardArrangement(raw, items);
+}
+
 // ── Parse JSON bền (fence, chữ bao quanh, trailing comma, double-encode) ──
 function stripFences(s) {
   return String(s || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();

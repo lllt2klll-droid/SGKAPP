@@ -40,7 +40,7 @@ export function toFriendlyError(err) {
   if (err.toUI) return err.toUI();
   const msg = String(err.message || err || "Đã có lỗi xảy ra.");
   // Map technical patterns to friendly Vietnamese
-  if (msg.includes("QuotaExceeded") || msg.includes("quota")) return { type:"StorageError", message:"Bộ nhớ trình duyệt đã đầy. Vào Sao lưu & Khôi phục → Xóa cache để giải phóng.", recoverable:true, action:"clearCache" };
+  if (msg.includes("QuotaExceeded") || msg.includes("quota")) return { type:"StorageError", message:"Bộ nhớ trình duyệt đã đầy. Vào Dữ liệu & sao lưu → Giải phóng dung lượng để dọn cache.", recoverable:true, action:"clearCache" };
   if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
     let where = "máy chủ";
     try { const base = getApiBase(); if (base) where = base; } catch {}

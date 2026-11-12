@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
 const PORT = Number(process.env.E2E_TRASH_PORT || 5322);
 const BASE = `http://127.0.0.1:${PORT}`;
+const APP_BASE = `${BASE}/?app=1`;
 const BOOK_FILE = "01-e2e-sach-thu.pdf";
 
 // PDF tối thiểu — server chỉ kiểm magic "%PDF-" ở byte đầu
@@ -63,7 +64,7 @@ function card() {
 }
 
 async function gotoLibrary() {
-  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  await page.goto(APP_BASE, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".app-shell", { timeout: 20000 });
   await page.evaluate(() => {
     const btn = [...document.querySelectorAll("aside button")].find((b) =>
@@ -81,8 +82,12 @@ async function openDeleteModal() {
 }
 
 async function gotoDataTools() {
-  await page.locator('aside .sidebar-footer-nav button[aria-label^="Sao lưu"]').click();
-  await page.waitForSelector(".dt-card", { timeout: 20000 });
+  await page.locator('aside .sidebar-footer-nav button[aria-label^="Dữ liệu"]').click();
+  await page.waitForSelector("#data-restore", { timeout: 20000 });
+  const card = page.locator(".dt-trash-card");
+  if (!(await card.evaluate((element) => element.open))) {
+    await card.locator("summary").click();
+  }
 }
 
 function trashCard() {
@@ -197,10 +202,10 @@ test("D4 • Khôi phục từ card Thùng rác: sách quay lại thư viện, b
   await gotoDataTools();
   const tc = trashCard();
   assert.equal(await tc.count(), 1, "phải có card Thùng rác");
-  assert.equal(await tc.locator(".tag-pill").count(), 1, "thùng rác đang giữ 1 mục");
+  assert.equal(await tc.locator(".storage-legacy-row").count(), 1, "thùng rác đang giữ 1 mục");
 
   await tc.locator("button", { hasText: "Khôi phục" }).first().click();
-  await waitFor(async () => (await tc.locator(".tag-pill").count()) === 0, { message: "mục đã ra khỏi thùng rác" });
+  await waitFor(async () => (await tc.locator(".storage-legacy-row").count()) === 0, { message: "mục đã ra khỏi thùng rác" });
 
   await gotoLibrary();
   assert.equal(await card().count(), 1, "sách đã trở lại thư viện");
@@ -246,7 +251,7 @@ test("D6 • Xóa ngay trong thùng rác = xóa file thật (API + ổ đĩa) �
   await card().waitFor({ state: "detached", timeout: 8000 });
 
   await gotoDataTools();
-  await trashCard().locator('button[aria-label="Xóa ngay"]').click();
+  await trashCard().locator('button[aria-label^="Xóa vĩnh viễn"]').click();
   // dialog đã được accept sẵn ở before()
   await waitFor(async () => !fs.existsSync(path.join(tmpBooks, BOOK_FILE)), {
     message: "file PDF bị xóa khỏi ổ đĩa",
@@ -255,8 +260,8 @@ test("D6 • Xóa ngay trong thùng rác = xóa file thật (API + ổ đĩa) �
   const books = await listBooks();
   assert.equal(books.length, 0, "API không còn trả về sách đã xóa vĩnh viễn");
   assert.equal(fs.existsSync(path.join(tmpBooks, BOOK_FILE)), false, "file đã bị xóa khỏi ổ đĩa");
-  await waitFor(async () => (await trashCard().locator(".tag-pill").count()) === 0, { message: "thùng rác trống" });
-  assert.equal(await trashCard().locator(".tag-pill").count(), 0, "thùng rác sạch");
+  await waitFor(async () => (await trashCard().locator(".storage-legacy-row").count()) === 0, { message: "thùng rác trống" });
+  assert.equal(await trashCard().locator(".storage-legacy-row").count(), 0, "thùng rác sạch");
 });
 
 test("D7 • Cảnh báo bộ nhớ đầy 98% → banner có nút Sao lưu ngay (context mới)", async () => {
@@ -271,16 +276,16 @@ test("D7 • Cảnh báo bộ nhớ đầy 98% → banner có nút Sao lưu ngay
         });
       } catch { /* đã bị định nghĩa bởi trình duyệt — bỏ qua */ }
     });
-    await p.goto(BASE, { waitUntil: "domcontentloaded" });
+    await p.goto(APP_BASE, { waitUntil: "domcontentloaded" });
     // .dash-notice có thể có thêm card "chưa đọc gì" của app → chỉ bám banner nguy hiểm (danger)
     await p.waitForSelector(".dash-notice.error", { timeout: 20000 });
     const text = await p.locator(".dash-notice.error").textContent();
     assert.match(text, /99%/, "banner phải nêu đúng % đã dùng");
     assert.equal(await p.locator('.dash-notice.error button:has-text("Sao lưu ngay")').count(), 1, "thiếu nút Sao lưu ngay");
     assert.equal(
-      await p.locator('.dash-notice.error button:has-text("Dọn & Khôi phục")').count(),
+      await p.locator('.dash-notice.error button:has-text("Quản lý dữ liệu")').count(),
       1,
-      "thiếu nút Dọn & Khôi phục",
+      "thiếu nút Quản lý dữ liệu",
     );
   } finally {
     await ctx.close();

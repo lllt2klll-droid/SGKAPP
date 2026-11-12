@@ -2,7 +2,7 @@
 // Uses aiService.js for all AI calls (consistent error handling, retry, timeout).
 import aiService, { getFriendlyErrorMessage } from "../ai/aiService.js";
 import { loadSettings } from "../services/settingsStore.js";
-import { dataUrlToBase64 } from "./scanCapture.js";
+import { dataUrlToBase64, getImageMimeType } from "./scanCapture.js";
 import { getGeminiApiKey } from "../data/storage.js";
 import { apiUrl } from "../services/apiConfig.js";
 
@@ -188,7 +188,7 @@ export async function analyzeScan({ dataUrl, book, page }) {
   if (!dataUrl) throw new Error("Thiếu ảnh vùng quét. Hãy khoanh lại vùng SGK.");
   const base64 = dataUrlToBase64(dataUrl);
   if (!base64 || base64.length < 100) throw new Error("Ảnh vùng quét quá nhỏ hoặc rỗng.");
-  const mime = "image/jpeg";
+  const mime = getImageMimeType(dataUrl);
   const model = getModel();
   const apiKey = getApiKeySafe();
   if (!apiKey) throw new Error("Chưa có API Key Gemini. Vào Cài đặt → AI để nhập khóa.");
@@ -279,7 +279,8 @@ function keepOriginalBlock(analysis) {
 export async function generateMaterial({ scan, analysis, materialType, config }) {
   if (!scan?.dataUrl) throw new Error("Thiếu ảnh vùng quét.");
   const base64 = dataUrlToBase64(scan.dataUrl);
-  const mime = "image/jpeg";
+  const mime = getImageMimeType(scan.dataUrl);
+  if (!base64 || base64.length < 100) throw new Error("Ảnh vùng quét quá nhỏ hoặc rỗng.");
   const model = getModel();
   const apiKey = getApiKeySafe();
   if (!apiKey) throw new Error("Chưa có API Key Gemini.");
@@ -431,6 +432,8 @@ Trả về JSON thuần:
 export async function regenerateQuestion({ scan, analysis, materialType, config, existingQuestion, index }) {
   if (!scan?.dataUrl) throw new Error("Thiếu ảnh vùng quét.");
   const base64 = dataUrlToBase64(scan.dataUrl);
+  const mime = getImageMimeType(scan.dataUrl);
+  if (!base64 || base64.length < 100) throw new Error("Ảnh vùng quét quá nhỏ hoặc rỗng.");
   const model = getModel();
   const apiKey = getApiKeySafe();
   if (!apiKey) throw new Error("Chưa có API Key.");
@@ -445,7 +448,7 @@ Trả JSON thuần (không markdown): {"q":"...","question":"...","type":"mc","o
   const text = await aiService.callAI({
     apiKey,
     model,
-    contents: [{ role: "user", parts: [{ inlineData: { mimeType: "image/jpeg", data: base64 } }, { text: prompt }] }],
+    contents: [{ role: "user", parts: [{ inlineData: { mimeType: mime, data: base64 } }, { text: prompt }] }],
     systemInstruction: { parts: [{ text: "Bạn là trợ lý tạo câu hỏi bám SGK, không bịa. Luôn trả JSON hợp lệ." }] },
     generationConfig: { temperature: 0.7, maxOutputTokens: 800, responseMimeType: "application/json" },
     requestId: `scan-regen-${Date.now()}`,

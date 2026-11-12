@@ -1,16 +1,17 @@
 # TECHNICAL DEBT — SGK Teacher Workspace
 
-> Cập nhật **2026-10-01**. Gộp bảng nợ của `PHASE8_FINAL_INTEGRATION_REPORT §12/§13`,
+> Các hạng mục bên dưới được tổng hợp từ **2026-10-01**; kiểm chứng hiện trạng gần nhất **2026-11-07**.
+> Gộp bảng nợ của `PHASE8_FINAL_INTEGRATION_REPORT §12/§13`,
 > `LEGACY_DEPRECATION.md` và `AUDIO_SYSTEM_REPORT §15`.
 > Số liệu Phase 8 (2026-09-13): `docs/history/PHASE8_*`.
 
 ## 0. Cách kiểm chứng lại
 
 ```bash
-npm run lint        # oxlint  → hiện 0 warnings / 0 errors (179 files, 89 rules)
-npm test            # node:test → hiện 474 pass / 0 fail (72 suites, verify 11/10/2026)
-npm run build       # Vite + PWA precache 78 entries, 0 cảnh báo
-npm run test:e2e    # playwright-core → 37/37 (5 spec, cần dist/)
+npm run lint        # oxlint → pass (verify 2026-11-07)
+npm test            # node:test → 601 pass / 0 fail (86 suites, verify 2026-11-07)
+npm run build       # Vite + PWA → pass (verify 2026-11-07)
+npm run test:e2e    # playwright-core → 53/53 (10 spec, cần dist/, verify 2026-11-07)
 ```
 
 Đếm nợ bằng grep (ngoại trừ `*.test.*`, các module được phép `safeStorage/storage/indexedDB/storageHealth`):

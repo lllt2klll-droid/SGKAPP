@@ -3,6 +3,7 @@ import cors from "cors";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import sanitizeHtml from "sanitize-html";
@@ -180,6 +181,7 @@ const geminiRateLimit = makeRateLimiter({ windowMs: 60000, max: 40, message: "G�
 const rateLimit = geminiRateLimit;
 const imageGenerationRateLimit = makeRateLimiter({ windowMs: 60000, max: 6, message: "Đã tạo quá nhiều ảnh trong thời gian ngắn. Hãy chờ một phút rồi thử lại nhé!" });
 const uploadRateLimit = makeRateLimiter({ windowMs: 60000, max: 20, message: "Upload quá nhiều. Hãy chờ 1 phút rồi thử lại!" });
+const batchUploadRateLimit = makeRateLimiter({ windowMs: 60000, max: 10, message: "Thêm quá nhiều sách cùng lúc. Hãy chờ 1 phút rồi thử lại!" });
 const remoteFetchRateLimit = makeRateLimiter({ windowMs: 60000, max: 30, message: "Tải từ URL quá nhiều. Hãy chờ 1 phút rồi thử lại!" });
 const writeRateLimit = makeRateLimiter({ windowMs: 60000, max: 60, message: "Thao tác quá nhiều. Hãy chờ một lát rồi thử lại!" });
 // Unified JSON error handler (multer / json parse) — returns JSON instead of HTML leak
@@ -267,6 +269,30 @@ function readLinkedBooks() {
 
 function writeLinkedBooks(books) {
   fs.writeFileSync(BOOK_LINKS_FILE, `${JSON.stringify(books, null, 2)}\n`, "utf8");
+}
+
+// Sách "liên kết file gốc": chỉ lưu đường dẫn tuyệt đối, KHÔNG copy file vào
+// books/. Vì vậy chỉ cho phép tạo liên kết từ chính máy đang chạy server —
+// nếu mở app qua LAN, đường dẫn của máy khác không có ý nghĩa và có thể bị
+// lợi dụng để đọc file ngoài thư viện trên máy chủ.
+function isLocalRequest(req) {
+  const ip = String(req.ip || req.socket?.remoteAddress || "");
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+}
+
+function findLinkedBookByFilename(filename) {
+  try {
+    return readLinkedBooks().find((book) => book && book.filename === filename) || null;
+  } catch {
+    return null;
+  }
+}
+
+function findExternalBookByFilename(filename) {
+  const book = findLinkedBookByFilename(filename);
+  if (!book || !book.isExternalBook || !book.externalPath) return null;
+  if (!path.isAbsolute(book.externalPath)) return null;
+  return book;
 }
 
 if (!fs.existsSync(BOOKS_DIR)) {
@@ -384,6 +410,9 @@ const upload = multer({
     else cb(new Error(`Định dạng ${ext || file.mimetype} chưa được hỗ trợ. Hỗ trợ: ${SUPPORTED_EXTS.join(", ")}`));
   },
 });
+
+// Thêm nhiều file trong MỘT request: giới hạn 40 file/lần để tránh quá tải.
+const uploadBatch = upload.array("files", 40);
 
 // Build a human-friendly title from the raw filename
 function makeCleanTitle(name) {
@@ -514,63 +543,121 @@ function parseBookFilename(filename, statPath) {
   };
 }
 
-app.post("/api/books/upload", uploadRateLimit, requireWriteAuth, upload.single("file"), (req, res) => {
-  try {
-    if (!req.file) {
-      return res
-        .status(400)
-        .json({ error: "Vui lòng chọn file để thêm vào thư viện." });
-    }
+// Chuẩn hóa một file multer vừa ghi vào books/ thành metadata sách.
+// Dùng chung cho upload một file và upload hàng loạt để hai luồng không lệch nhau.
+function finalizeUploadedBook(file, clientTitle = "") {
+  if (!file || !file.path) {
+    return { ok: false, error: "Vui lòng chọn file để thêm vào thư viện." };
+  }
 
+  try {
     // Chặn file rỗng (0 byte): trước đây file .txt/.png/.html rỗng vẫn được lưu
     // (chỉ PDF mới có check) → route serve đọc được nhưng stream vắng, còn
     // createReadStream({end:-1}) ném ERR_OUT_OF_RANGE → trả 400 kèm message nội bộ.
-    if (req.file.size === 0) {
-      try { fs.unlinkSync(req.file.path); } catch {}
-      return res.status(400).json({ error: "File rỗng (0 byte), vui lòng chọn file có nội dung." });
+    if (file.size === 0) {
+      try { fs.unlinkSync(file.path); } catch {}
+      return { ok: false, error: "File rỗng (0 byte), vui lòng chọn file có nội dung." };
     }
 
     // Chống stored XSS: sanitize file .html/.htm NGAY lúc upload.
     // Trước đây chỉ create-text/PUT mới sanitize, upload thì để thô — trong khi
     // BookReader render nội dung bằng innerHTML (BookReader.jsx:2001/5143).
-    const uploadedExt = getExt(req.file.filename);
+    const uploadedExt = getExt(file.filename);
     if (uploadedExt === ".html" || uploadedExt === ".htm") {
       try {
-        const rawHtml = fs.readFileSync(req.file.path, "utf8");
+        const rawHtml = fs.readFileSync(file.path, "utf8");
         const cleanHtml = sanitizeStoredHtml(rawHtml);
-        if (cleanHtml !== rawHtml) fs.writeFileSync(req.file.path, cleanHtml, "utf8");
+        if (cleanHtml !== rawHtml) fs.writeFileSync(file.path, cleanHtml, "utf8");
       } catch (sanitizeErr) {
         console.warn("sanitize uploaded html failed:", sanitizeErr && sanitizeErr.message);
       }
     }
 
     // Validate PDF file header — chỉ áp dụng cho PDF
-    if (getExt(req.file.filename) === ".pdf" && !isValidPdfFile(req.file.path)) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch {}
-      return res.status(400).json({
-        error: "File PDF được chọn không hợp lệ hoặc đã bị hỏng.",
-      });
+    if (uploadedExt === ".pdf" && !isValidPdfFile(file.path)) {
+      try { fs.unlinkSync(file.path); } catch {}
+      return { ok: false, error: "File PDF được chọn không hợp lệ hoặc đã bị hỏng." };
     }
 
-    const meta = parseBookFilename(req.file.filename, req.file.path);
+    const meta = parseBookFilename(file.filename, file.path);
     // Nếu client gửi title gợi ý (đã format đẹp), ưu tiên dùng để hiển thị khớp preview
-    const clientTitle = (req.body?.title || "").trim();
-    if (clientTitle && clientTitle.length >= 3 && clientTitle.length <= 160) {
-      meta.title = clientTitle;
+    const title = String(clientTitle || "").trim();
+    if (title && title.length >= 3 && title.length <= 160) {
+      meta.title = title;
     }
-    return res.status(201).json({
-      ok: true,
-      message: `Đã thêm sách "${meta.title}" vào thư viện.`,
-      book: meta,
-    });
+    return { ok: true, book: meta };
   } catch (error) {
-    console.error("Upload book error:", error);
-    return res
-      .status(500)
-      .json({ error: "Không thể lưu file đã chọn. Hãy thử lại." });
+    console.error("Finalize uploaded book error:", error);
+    try { fs.unlinkSync(file.path); } catch {}
+    return { ok: false, error: "Không thể lưu file đã chọn. Hãy thử lại." };
   }
+}
+
+app.post("/api/books/upload", uploadRateLimit, requireWriteAuth, upload.single("file"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "Vui lòng chọn file để thêm vào thư viện." });
+  }
+  const result = finalizeUploadedBook(req.file, req.body?.title);
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  return res.status(201).json({
+    ok: true,
+    message: `Đã thêm sách "${result.book.title}" vào thư viện.`,
+    book: result.book,
+  });
+});
+
+// Upload hàng loạt: một request nhiều file, mỗi file vẫn được xử lý độc lập
+// (một file lỗi không làm hỏng các file còn lại).
+app.post("/api/books/upload-batch", batchUploadRateLimit, requireWriteAuth, (req, res) => {
+  uploadBatch(req, res, (err) => {
+    const files = Array.isArray(req.files) ? req.files : [];
+
+    if (err) {
+      for (const file of files) {
+        try { fs.unlinkSync(file.path); } catch {}
+      }
+      const message = err.code === "LIMIT_FILE_SIZE"
+        ? "Có file vượt quá 80 MB. Với PDF lớn, hãy dùng “Chỉ liên kết file gốc” hoặc giảm kích thước file."
+        : (err.message || "Không thể tải file lên.");
+      return res.status(400).json({ error: message });
+    }
+
+    if (!files.length) {
+      return res.status(400).json({ error: "Vui lòng chọn ít nhất một file để thêm vào thư viện." });
+    }
+
+    let titles = [];
+    try {
+      const parsed = JSON.parse(req.body?.titles || "[]");
+      if (Array.isArray(parsed)) titles = parsed;
+    } catch {}
+
+    const results = files.map((file, index) => {
+      const result = finalizeUploadedBook(file, typeof titles[index] === "string" ? titles[index] : "");
+      if (!result.ok) {
+        return { ok: false, originalName: file.originalname, error: result.error };
+      }
+      return {
+        ok: true,
+        originalName: file.originalname,
+        message: `Đã thêm sách "${result.book.title}" vào thư viện.`,
+        book: result.book,
+      };
+    });
+
+    const succeeded = results.filter((item) => item.ok).length;
+    const failed = results.length - succeeded;
+    return res.status(succeeded > 0 ? 201 : 400).json({
+      ok: succeeded > 0,
+      total: results.length,
+      succeeded,
+      failed,
+      message: failed === 0
+        ? `Đã thêm ${succeeded} sách vào thư viện.`
+        : `Đã thêm ${succeeded}/${results.length} sách; ${failed} file lỗi.`,
+      results,
+    });
+  });
 });
 
 // ── Thêm sách bằng URL — SECURE (SSRF-hardened) ──
@@ -890,7 +977,7 @@ app.post("/api/books/import-docx", uploadRateLimit, requireWriteAuth, docxMemory
     let warnings = [];
     let faithfulOk = false;
     try {
-      const { convertDocxToFaithfulHtml } = await import("./src/docxFaithful.js");
+      const { convertDocxToFaithfulHtml } = await import("./src/services/docxFaithful.js");
       const out = await convertDocxToFaithfulHtml(req.file.buffer);
       if (out?.html && out.html.replace(/<[^>]*>/g, " ").trim()) {
         html = sanitizeImportedHtml(out.html);
@@ -1231,7 +1318,20 @@ app.get("/api/books", (req, res) => {
         console.error(`Skipping unreadable PDF "${rel}":`, err.message);
       }
     }
-    books.push(...readLinkedBooks());
+    // Sách liên kết: cập nhật size/missing theo file gốc (không copy nên file
+    // có thể đã bị di chuyển/đổi tên sau khi liên kết).
+    const linkedBooks = readLinkedBooks().map((book) => {
+      if (!book || !book.isExternalBook || !book.externalPath || !path.isAbsolute(book.externalPath)) {
+        return book;
+      }
+      try {
+        const st = fs.statSync(book.externalPath);
+        return { ...book, size: st.size, missing: false };
+      } catch {
+        return { ...book, missing: true };
+      }
+    });
+    books.push(...linkedBooks);
 
     // Sort books by grade, then subject, then term
     books.sort((a, b) => {
@@ -1298,6 +1398,170 @@ app.post("/api/books/link", writeRateLimit, requireWriteAuth, (req, res) => {
   } catch (error) {
     console.error("Save linked books error:", error);
     return res.status(500).json({ error: "Không thể lưu sách liên kết. Vui lòng thử lại." });
+  }
+});
+
+// Liên kết file PDF có sẵn trên máy — KHÔNG sao chép vào books/.
+// Chỉ nhận đường dẫn tuyệt đối do người dùng chọn trong bản desktop; file phải
+// là PDF hợp lệ. Record được lưu cùng .sgk-book-links.json và được phục vụ qua
+// đúng filename đã đăng ký (không nhận path tùy ý từ URL).
+
+function localLinkError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+// Kiểm tra đường dẫn + tạo record liên kết. Ném lỗi có statusCode để route
+// trả đúng mã (400/404) thay vì gộp tất cả thành 500.
+function buildLocalLinkRecord(rawPath, requestedTitle) {
+  const trimmed = String(rawPath || "").trim();
+  if (!trimmed) throw localLinkError("Chưa có đường dẫn file PDF.", 400);
+  if (!path.isAbsolute(trimmed)) throw localLinkError("Đường dẫn file phải là đường dẫn tuyệt đối.", 400);
+
+  const externalPath = path.resolve(trimmed);
+  if (path.extname(externalPath).toLowerCase() !== ".pdf") {
+    throw localLinkError("Chỉ hỗ trợ liên kết file PDF.", 400);
+  }
+
+  let stat;
+  try {
+    stat = fs.statSync(externalPath);
+  } catch {
+    throw localLinkError("Không tìm thấy file PDF ở đường dẫn đã chọn.", 404);
+  }
+  if (!stat.isFile()) throw localLinkError("Đường dẫn đã chọn không phải là file.", 400);
+  if (stat.size === 0) throw localLinkError("File PDF rỗng (0 byte).", 400);
+
+  let validPdf = false;
+  try { validPdf = isValidPdfFile(externalPath); } catch {}
+  if (!validPdf) throw localLinkError("File được chọn không phải PDF hợp lệ hoặc đã bị hỏng.", 400);
+
+  const title = String(requestedTitle || "").trim();
+  if (title && (title.length < 3 || title.length > 160)) {
+    throw localLinkError("Tiêu đề cần từ 3 đến 160 ký tự.", 400);
+  }
+
+  const parsed = parseBookFilename(path.basename(externalPath), externalPath);
+  if (title) parsed.title = title;
+
+  const id = createHash("sha1").update(externalPath.toLowerCase()).digest("hex").slice(0, 16);
+  const record = {
+    ...parsed,
+    id,
+    filename: `local-${id}.pdf`,
+    title: parsed.title,
+    size: stat.size,
+    format: "pdf",
+    isExternalBook: true,
+    externalPath,
+    sourceLabel: "Máy tính",
+  };
+
+  // Tránh đè lên file thật trong books/ nếu có tên trùng (rất khó xảy ra).
+  if (fs.existsSync(path.join(BOOKS_DIR, record.filename))) {
+    record.filename = `local-${id}-${Date.now()}.pdf`;
+  }
+  return record;
+}
+
+function upsertLocalLink(linkedBooks, record) {
+  const existingIndex = linkedBooks.findIndex(
+    (book) => book && book.isExternalBook && book.externalPath
+      && path.resolve(book.externalPath).toLowerCase() === record.externalPath.toLowerCase(),
+  );
+  if (existingIndex >= 0) {
+    const previous = linkedBooks[existingIndex];
+    linkedBooks[existingIndex] = {
+      ...previous,
+      ...record,
+      id: previous.id || record.id,
+      filename: previous.filename || record.filename,
+    };
+    return { book: linkedBooks[existingIndex], updated: true };
+  }
+  linkedBooks.push(record);
+  return { book: record, updated: false };
+}
+
+app.post("/api/books/link-local", writeRateLimit, requireWriteAuth, (req, res) => {
+  if (!isLocalRequest(req)) {
+    return res.status(403).json({ error: "Chỉ có thể liên kết file trên máy đang chạy ứng dụng." });
+  }
+
+  try {
+    const record = buildLocalLinkRecord(req.body?.path, req.body?.title);
+    const linkedBooks = readLinkedBooks();
+    const { book, updated } = upsertLocalLink(linkedBooks, record);
+    writeLinkedBooks(linkedBooks);
+
+    if (updated) {
+      return res.status(200).json({
+        ok: true,
+        message: `Đã cập nhật liên kết "${book.title}" (file gốc không bị sao chép).`,
+        book,
+      });
+    }
+    return res.status(201).json({
+      ok: true,
+      message: `Đã liên kết "${book.title}" — không sao chép file vào thư viện.`,
+      book,
+    });
+  } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    console.error("Link local book error:", error);
+    return res.status(500).json({ error: "Không thể liên kết file PDF. Vui lòng thử lại." });
+  }
+});
+
+// Liên kết hàng loạt: một request nhiều PDF, ghi .sgk-book-links.json một lần.
+app.post("/api/books/link-local-batch", writeRateLimit, requireWriteAuth, (req, res) => {
+  if (!isLocalRequest(req)) {
+    return res.status(403).json({ error: "Chỉ có thể liên kết file trên máy đang chạy ứng dụng." });
+  }
+
+  try {
+    const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!rawItems.length) {
+      return res.status(400).json({ error: "Chưa có file PDF nào để liên kết." });
+    }
+    if (rawItems.length > 40) {
+      return res.status(400).json({ error: "Mỗi lần chỉ liên kết tối đa 40 file PDF." });
+    }
+
+    const linkedBooks = readLinkedBooks();
+    const results = rawItems.map((item) => {
+      try {
+        const record = buildLocalLinkRecord(item?.path, item?.title);
+        const { book, updated } = upsertLocalLink(linkedBooks, record);
+        return { ok: true, updated, book };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error?.statusCode ? error.message : "Không thể liên kết file PDF.",
+        };
+      }
+    });
+
+    const succeeded = results.filter((result) => result.ok).length;
+    const failed = results.length - succeeded;
+    if (succeeded > 0) writeLinkedBooks(linkedBooks);
+
+    return res.status(succeeded > 0 ? 201 : 400).json({
+      ok: succeeded > 0,
+      total: results.length,
+      succeeded,
+      failed,
+      message: failed === 0
+        ? `Đã liên kết ${succeeded} sách (không sao chép file).`
+        : `Đã liên kết ${succeeded}/${results.length} sách; ${failed} file lỗi.`,
+      results,
+    });
+  } catch (error) {
+    console.error("Link local books batch error:", error);
+    return res.status(500).json({ error: "Không thể liên kết file PDF. Vui lòng thử lại." });
   }
 });
 
@@ -1446,6 +1710,28 @@ app.delete("/api/books/:filename", writeRateLimit, requireWriteAuth, (req, res) 
   }
   if (filename.includes("\0")) return res.status(403).json({ error: "Yêu cầu không hợp lệ" });
 
+  // Sách liên kết (Google Drive hoặc file gốc trên máy) không có file trong
+  // books/ — xóa chỉ là bỏ record liên kết, TUYỆT ĐỐI không xóa file gốc.
+  const linkedBook = (filename.startsWith("local-") || filename.startsWith("drive-"))
+    ? findLinkedBookByFilename(filename)
+    : null;
+  if (linkedBook) {
+    try {
+      const nextBooks = readLinkedBooks().filter((book) => book && book.filename !== filename);
+      writeLinkedBooks(nextBooks);
+      return res.json({
+        ok: true,
+        unlinked: true,
+        message: linkedBook.isExternalBook
+          ? `Đã bỏ liên kết "${linkedBook.title}" — file gốc vẫn được giữ nguyên.`
+          : `Đã xóa sách liên kết "${linkedBook.title}".`,
+      });
+    } catch (error) {
+      console.error("Unlink book error:", error);
+      return res.status(500).json({ error: "Không thể bỏ liên kết sách. Vui lòng thử lại." });
+    }
+  }
+
   if (!SUPPORTED_EXTS.includes(getExt(filename))) {
     return res.status(403).json({ error: "Chỉ cho phép xóa file sách được hỗ trợ" });
   }
@@ -1498,16 +1784,30 @@ app.get("/api/books/:filename", (req, res) => {
     return res.status(403).json({ error: "Chỉ cho phép đọc file sách được hỗ trợ" });
   }
 
-  const filePath = findPdfPath(filename);
+  // Chỉ đọc file liên kết khi tên có tiền tố tương ứng — tránh đọc/parse
+  // .sgk-book-links.json trên MỌI range request của sách PDF thường.
+  const externalBook = filename.startsWith("local-") ? findExternalBookByFilename(filename) : null;
+  let filePath;
 
-  // Security check to prevent directory traversal
-  const relative = path.relative(BOOKS_DIR, filePath);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    return res.status(403).json({ error: "Yêu cầu không hợp lệ" });
+  if (externalBook) {
+    // Đường dẫn lấy từ record đã đăng ký, KHÔNG lấy từ URL.
+    filePath = externalBook.externalPath;
+  } else {
+    filePath = findPdfPath(filename);
+
+    // Security check to prevent directory traversal
+    const relative = path.relative(BOOKS_DIR, filePath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      return res.status(403).json({ error: "Yêu cầu không hợp lệ" });
+    }
   }
 
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: "Không tìm thấy sách" });
+    return res.status(404).json({
+      error: externalBook
+        ? "Không tìm thấy file gốc. File có thể đã bị di chuyển, đổi tên hoặc xóa."
+        : "Không tìm thấy sách",
+    });
   }
 
   let stat;
@@ -1640,6 +1940,7 @@ app.get("/api/health", (req, res) => {
     }
     const body = {
       status: "healthy",
+      service: "sgk-teacher-workspace",
       booksDir: BOOKS_DIR,
       pdfCount: uniqMap.size,
       pdfCountRaw: pdfFiles.length,
@@ -1652,6 +1953,98 @@ app.get("/api/health", (req, res) => {
     res.json(body);
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ── Auto-Update Check Endpoint ───────────────────────────────────────
+function compareSemver(v1, v2) {
+  const p1 = String(v1 || "0").replace(/^v/i, "").split(".").map((n) => parseInt(n, 10) || 0);
+  const p2 = String(v2 || "0").replace(/^v/i, "").split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+    const a = p1[i] || 0;
+    const b = p2[i] || 0;
+    if (a > b) return 1;
+    if (a < b) return -1;
+  }
+  return 0;
+}
+
+app.get("/api/update/check", async (req, res) => {
+  try {
+    let currentVersion = "1.0.0";
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+      if (pkg.version) currentVersion = pkg.version;
+    } catch {}
+
+    const queryUrl = typeof req.query?.url === "string" ? req.query.url.trim() : "";
+    let updateUrl = queryUrl || process.env.SGK_UPDATE_URL || "";
+
+    // If no env or query URL, check optional config file
+    if (!updateUrl) {
+      const configPaths = [
+        path.join(path.dirname(BOOKS_DIR), ".sgk-update-config.json"),
+        path.join(__dirname, ".sgk-update-config.json"),
+      ];
+      for (const cp of configPaths) {
+        if (fs.existsSync(cp)) {
+          try {
+            const cfg = JSON.parse(fs.readFileSync(cp, "utf8"));
+            if (cfg?.updateUrl) { updateUrl = cfg.updateUrl; break; }
+          } catch {}
+        }
+      }
+    }
+    if (!updateUrl) {
+      updateUrl = "https://raw.githubusercontent.com/lllt2klll-droid/book-update/main/version.json";
+    }
+
+    let remoteData = null;
+    if (updateUrl && /^https?:\/\//i.test(updateUrl)) {
+      try {
+        const resp = await fetch(updateUrl, { signal: AbortSignal.timeout(6000) });
+        if (resp.ok) remoteData = await resp.json();
+      } catch (err) {
+        console.warn("[update-check] Remote update fetch failed:", err?.message);
+      }
+    }
+
+    // Fallback: check local version.json in root or app directory
+    if (!remoteData) {
+      const localCandidates = [
+        path.join(path.dirname(BOOKS_DIR), "version.json"),
+        path.join(__dirname, "version.json"),
+      ];
+      for (const lp of localCandidates) {
+        if (fs.existsSync(lp)) {
+          try {
+            remoteData = JSON.parse(fs.readFileSync(lp, "utf8"));
+            break;
+          } catch {}
+        }
+      }
+    }
+
+    const latestVersion = remoteData?.version || currentVersion;
+    const hasUpdate = compareSemver(latestVersion, currentVersion) > 0;
+
+    return res.json({
+      ok: true,
+      currentVersion,
+      latestVersion,
+      hasUpdate,
+      name: remoteData?.name || `Bản cập nhật ${latestVersion}`,
+      releaseDate: remoteData?.releaseDate || "",
+      changelog: Array.isArray(remoteData?.changelog)
+        ? remoteData.changelog
+        : remoteData?.changelog
+        ? [remoteData.changelog]
+        : [],
+      downloadUrl: remoteData?.downloadUrl || "",
+      updateUrl: updateUrl || "(chưa cấu hình URL online)",
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "Lỗi kiểm tra cập nhật: " + error.message });
   }
 });
 

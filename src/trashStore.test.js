@@ -14,6 +14,7 @@ globalThis.indexedDB = undefined;
 const {
   moveToTrash, takeFromTrash, removeFromTrash, emptyTrash, purgeExpiredTrash,
   listTrash, listTrashByType, trashCount, isExpired, daysLeft,
+  removeBooksFromTrashByFilename,
   TRASH_TTL_DAYS, TRASH_TTL_MS, TRASH_TYPE, TRASH_TYPE_LABEL,
 } = await import('./data/trashStore.js');
 const { appEvents, AppEvents } = await import('./core/appEvents.js');
@@ -74,6 +75,19 @@ describe('A2 • Thùng rác 30 ngày — trashStore', () => {
     assert.equal(TRASH_TYPE_LABEL.book, 'Sách');
     assert.equal(TRASH_TYPE_LABEL.plan, 'Giáo án');
     assert.equal(TRASH_TYPE_LABEL.question, 'Câu hỏi');
+  });
+
+  it('removeBooksFromTrashByFilename: thêm lại sách thì bỏ entry cũ, giữ mục loại khác', () => {
+    moveToTrash({ type: TRASH_TYPE.BOOK, label: 'A', meta: { filename: 'a.pdf' }, payload: { filename: 'a.pdf' } });
+    moveToTrash({ type: TRASH_TYPE.BOOK, label: 'B', meta: { filename: 'b.pdf' }, payload: { filename: 'b.pdf' } });
+    moveToTrash({ type: TRASH_TYPE.PLAN, label: 'GA', payload: { filename: 'a.pdf' } });
+
+    assert.equal(removeBooksFromTrashByFilename(['a.pdf']), 1);
+    assert.deepEqual(listTrashByType(TRASH_TYPE.BOOK).map((i) => i.meta.filename), ['b.pdf']);
+    assert.equal(listTrashByType(TRASH_TYPE.PLAN).length, 1, 'giáo án cùng tên file không bị xóa');
+    assert.equal(removeBooksFromTrashByFilename('khong-co.pdf'), 0);
+    assert.equal(removeBooksFromTrashByFilename(''), 0);
+    assert.equal(removeBooksFromTrashByFilename(null), 0);
   });
 
   it('TTL đúng 30 ngày: mới → còn 30 ngày, quá hạn → isExpired + daysLeft 0', () => {
