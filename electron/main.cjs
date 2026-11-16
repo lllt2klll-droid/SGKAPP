@@ -16,8 +16,10 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   let mainWindow;
   let backendServer;
+  let backendPort = null;
   let isQuitting = false;
   let startupFinished = false;
+  let stopInitiated = false;
   let installingUpdate = false;
   let downloadedUpdateVersion = "";
   const supportsAutoUpdate = app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR;
@@ -133,7 +135,29 @@ if (!app.requestSingleInstanceLock()) {
   ));
 
   app.on("second-instance", () => {
-    if (!mainWindow) return;
+    // Instance cũ vẫn sống nhưng không có cửa sổ:
+    // - Đang khởi động: bỏ qua, cửa sổ sẽ tự xuất hiện sau.
+    // - Đang tắt: thoát ngay để giải phóng khoá single-instance.
+    // - Đã tắt xong mà vẫn không có cửa sổ/backend (xác sống): thoát sạch,
+    //   không thì lần mở sau "không có gì xảy ra" cho tới khi reboot.
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      if (isQuitting) {
+        app.exit(0);
+        return;
+      }
+      if (!startupFinished) return;
+      if (!backendServer) {
+        app.exit(0);
+        return;
+      }
+      try {
+        createMainWindow(backendPort || DEFAULT_PORT);
+      } catch (error) {
+        console.error("Could not recreate the window:", error);
+        app.exit(0);
+        return;
+      }
+    }
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   });
@@ -238,6 +262,7 @@ if (!app.requestSingleInstanceLock()) {
     await app.whenReady();
     const port = await getPersistentPort();
     if (isQuitting) return;
+    backendPort = port;
 
     const booksDir = resolveDesktopBooksDir();
     const lessonImgDir = resolveDesktopLessonImgDir(booksDir);
@@ -257,6 +282,11 @@ if (!app.requestSingleInstanceLock()) {
     await waitForBackend(port);
     if (isQuitting) return;
 
+    createMainWindow(port);
+  }
+
+  function createMainWindow(port) {
+    if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
     mainWindow = new BrowserWindow({
       width: 1440,
       height: 920,
@@ -275,18 +305,43 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.on("closed", () => {
       mainWindow = null;
     });
+    return mainWindow;
   }
 
   app.on("window-all-closed", () => {
     app.quit();
   });
 
+  // Renderer của cửa sổ chính sập (crash/OOM) thì thoát sạch, thay vì để
+  // main process sống không cửa sổ và giữ khoá single-instance.
+  app.on("render-process-gone", (event, contents, details) => {
+    if (!mainWindow || contents !== mainWindow.webContents) return;
+    if (details && details.reason === "clean-exit") return;
+    console.error("Renderer gone:", details && details.reason);
+    const crashedWindow = mainWindow;
+    mainWindow = null;
+    if (crashedWindow && !crashedWindow.isDestroyed()) crashedWindow.destroy();
+    app.quit();
+  });
+
   function stopBackend() {
+    if (stopInitiated) return;
+    stopInitiated = true;
+    // Không để việc tắt server treo vĩnh viễn: nếu close() không gọi callback
+    // (kết nối đang truyền dở, lỗi close...) thì buộc thoát sau 5 giây để
+    // không giữ khoá single-instance làm lần mở sau "không có gì xảy ra".
+    const forceQuit = setTimeout(() => {
+      console.error("Backend did not stop in time — forcing exit.");
+      app.exit(0);
+    }, 5000);
+    forceQuit.unref();
     if (!backendServer) {
+      clearTimeout(forceQuit);
       app.exit(0);
       return;
     }
     backendServer.close((error) => {
+      clearTimeout(forceQuit);
       if (error) {
         console.error("Could not stop the local server cleanly:", error);
         app.exit(1);
@@ -295,7 +350,11 @@ if (!app.requestSingleInstanceLock()) {
       if (installingUpdate) app.quit();
       else app.exit(0);
     });
-    backendServer.closeAllConnections();
+    try {
+      backendServer.closeAllConnections();
+    } catch (error) {
+      console.error("Could not close open connections:", error);
+    }
   }
 
   app.on("before-quit", (event) => {
