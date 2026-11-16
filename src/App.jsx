@@ -339,6 +339,9 @@ export default function App() {
   const [appUpdateNotice, setAppUpdateNotice] = useState(null);
   const [appUpdateDialogOpen, setAppUpdateDialogOpen] = useState(false);
   const [desktopUpdateStatus, setDesktopUpdateStatus] = useState({ status: "idle" });
+  const appUpdateNoticeRef = useRef(null);
+  const runInstallRef = useRef(false);
+  const startAppUpdateRef = useRef(() => {});
   useEffect(() => {
     const timer = setTimeout(async () => {
       try {
@@ -364,14 +367,24 @@ export default function App() {
     }, 3500);
     return () => clearTimeout(timer);
   }, []);
+  useEffect(() => { appUpdateNoticeRef.current = appUpdateNotice; }, [appUpdateNotice]);
   useEffect(() => {
     return window.sgkUpdater?.onStatus((status) => {
       setDesktopUpdateStatus(status);
-      if (status.status === "downloaded") setAppUpdateDialogOpen(true);
+      if (status.status !== "downloaded") return;
+      setAppUpdateDialogOpen(true);
+      // Tải xong → tự cài luôn (chậm 900ms để người dùng thấy thông báo đã tải xong).
+      setTimeout(() => { installUpdateNow(status.version); }, 900);
     });
+  }, []);
+  useEffect(() => {
+    const onStart = () => startAppUpdateRef.current();
+    window.addEventListener("sgk:start-app-update", onStart);
+    return () => window.removeEventListener("sgk:start-app-update", onStart);
   }, []);
 
   const startAppUpdate = async () => {
+    runInstallRef.current = false;
     setAppUpdateDialogOpen(true);
     setDesktopUpdateStatus({ status: "checking" });
     if (!window.sgkUpdater) {
@@ -389,6 +402,7 @@ export default function App() {
       }
       if (result.downloaded) {
         setDesktopUpdateStatus({ status: "downloaded", version: result.version });
+        setTimeout(() => { installUpdateNow(result.version); }, 400);
         return;
       }
       if (!result.available) {
@@ -401,10 +415,13 @@ export default function App() {
     }
   };
 
-  const installDownloadedUpdate = async () => {
+  const installUpdateNow = async (version) => {
+    if (runInstallRef.current) return;
+    runInstallRef.current = true;
+    const notice = appUpdateNoticeRef.current;
     const saved = safeSetJSON("sgk_pending_app_update", {
-      version: appUpdateNotice?.latestVersion || desktopUpdateStatus.version,
-      changelog: appUpdateNotice?.changelog || [],
+      version: version || notice?.latestVersion || desktopUpdateStatus.version || "",
+      changelog: notice?.changelog || [],
     });
     if (!saved.ok) {
       console.warn("[App] Could not save pending update notice:", saved.error);
@@ -412,9 +429,11 @@ export default function App() {
     try {
       await window.sgkUpdater?.installUpdate();
     } catch (error) {
-      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể khởi động trình cài đặt." });
+      runInstallRef.current = false;
+      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể cài bản cập nhật." });
     }
   };
+  startAppUpdateRef.current = startAppUpdate;
 
   const openUpdateReleases = async () => {
     try {
@@ -2874,7 +2893,7 @@ export default function App() {
                     <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
                       {appUpdateNotice.justUpdated
                         ? "Ứng dụng đã được cập nhật."
-                        : "Bấm một lần để tải bản cập nhật và chuẩn bị cài đặt."}
+                        : "Bấm một lần — ứng dụng sẽ tự tải, tự cài và khởi động lại khi xong."}
                     </div>
                   </div>
                   <button className="header-action-btn" onClick={() => setAppUpdateDialogOpen(false)} aria-label="Đóng">
@@ -2892,7 +2911,7 @@ export default function App() {
                         <progress value={desktopUpdateStatus.percent || 0} max="100" style={{ width: "100%", marginTop: 8 }} />
                       </>
                     )}
-                    {desktopUpdateStatus.status === "downloaded" && "Đã tải xong bản cập nhật. Khởi động lại để cài đặt."}
+                    {desktopUpdateStatus.status === "downloaded" && "Đã tải xong. Đang tự cài và khởi động lại…"}
                     {desktopUpdateStatus.status === "not-available" && "Không tìm thấy gói cài đặt cập nhật cho phiên bản này."}
                     {desktopUpdateStatus.status === "unsupported" && (desktopUpdateStatus.message || "Phiên bản này chưa hỗ trợ tự cập nhật.")}
                     {desktopUpdateStatus.status === "error" && (desktopUpdateStatus.message || "Tải cập nhật thất bại.")}
@@ -2913,7 +2932,7 @@ export default function App() {
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
                   {desktopUpdateStatus.status === "downloaded" && (
-                    <button className="btn btn-primary" onClick={installDownloadedUpdate}>
+                    <button className="btn btn-primary" onClick={() => installUpdateNow()}>
                       Khởi động lại và cài đặt
                     </button>
                   )}

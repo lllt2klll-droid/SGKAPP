@@ -95,6 +95,11 @@ function UpdateCard() {
   };
 
   const openDownload = (url) => {
+    // Trong app Windows: chạy luồng tự tải + tự cài ngay trong app (không mở trình duyệt).
+    if (window.sgkUpdater?.checkForUpdates) {
+      window.dispatchEvent(new CustomEvent("sgk:start-app-update"));
+      return;
+    }
     if (url) {
       window.open(url, "_blank", "noopener,noreferrer");
     }
@@ -126,7 +131,7 @@ function UpdateCard() {
               style={{ width: "100%", justifyContent: "center", gap: 6 }}
               onClick={() => openDownload(updateInfo.downloadUrl)}
             >
-              <Download size={14} /> Tải bản cập nhật mới (v{updateInfo.latestVersion})
+              <Download size={14} /> Tải &amp; cài đặt ngay (v{updateInfo.latestVersion})
             </button>
           ) : (
             <div style={{ fontSize: "0.85em", color: "var(--text-muted)" }}>
