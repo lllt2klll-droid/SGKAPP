@@ -25,11 +25,16 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import release from "../version.json";
+import bundledRelease from "../version.json";
 import "./landing.css";
 
 const APP_URL = `${import.meta.env.BASE_URL}?app=1`;
-const INSTALLER_URL = release.downloadUrl;
+// Đọc version.json từ repo book-update lúc runtime: khi phát hành bản mới,
+// cập nhật version.json trên book-update là landing page tự lấy theo
+// (phiên bản + liên kết tải) mà không cần build lại trang.
+const RELEASE_MANIFEST_URL =
+  "https://raw.githubusercontent.com/lllt2klll-droid/book-update/main/version.json";
+const RELEASES_FALLBACK_URL = "https://github.com/lllt2klll-droid/book-update/releases";
 const LIGHT_PREVIEW_URL = `${import.meta.env.BASE_URL}landing-dashboard-light.png`;
 const DARK_PREVIEW_URL = `${import.meta.env.BASE_URL}landing-dashboard-dark.png`;
 const WHITEBOARD_PREVIEW_URL = `${import.meta.env.BASE_URL}landing-whiteboard-light.png`;
@@ -130,6 +135,22 @@ export default function LandingPage() {
   const [installMessage, setInstallMessage] = useState("");
   const [installed, setInstalled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Bản build kèm version.json làm mặc định (khi offline); sau đó lấy bản
+  // mới nhất từ book-update để trang luôn khớp release mới nhất.
+  const [release, setRelease] = useState(bundledRelease);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(RELEASE_MANIFEST_URL, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data && data.version) setRelease(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handleBeforeInstall = (event) => {
@@ -342,7 +363,7 @@ export default function LandingPage() {
               <span className="site-install-tag">DÀNH CHO WINDOWS</span>
               <h3>Ứng dụng desktop</h3>
               <p>Tải trang phát hành để chọn bộ cài Windows hoặc bản portable mới nhất.</p>
-              <a className="site-button site-button-dark" href={INSTALLER_URL} target="_blank" rel="noreferrer">
+              <a className="site-button site-button-dark" href={release.downloadUrl || RELEASES_FALLBACK_URL} target="_blank" rel="noreferrer">
                 <MonitorDown size={17} /> Tải ứng dụng Windows <ArrowRight size={16} />
               </a>
               <small>Phiên bản trong gói hiện tại: {release.version}. Kiểm tra ghi chú và yêu cầu trước khi cài.</small>
@@ -383,7 +404,7 @@ export default function LandingPage() {
           <a href="#features">Tính năng</a>
           <a href="#privacy">Quyền riêng tư</a>
           <a href="#faq">Trợ giúp</a>
-          <a href={INSTALLER_URL} target="_blank" rel="noreferrer">Bản phát hành <ArrowRight size={13} /></a>
+          <a href={release.downloadUrl || RELEASES_FALLBACK_URL} target="_blank" rel="noreferrer">Bản phát hành <ArrowRight size={13} /></a>
         </div>
         <div className="site-footer-bottom">
           <span>© 2026 Nguyễn Tuấn. Bản quyền thuộc về tác giả.</span>
