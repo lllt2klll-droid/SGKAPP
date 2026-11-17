@@ -26,6 +26,7 @@
     "dev:all:legacy": "start \"SGK API\" cmd /c \"node --no-warnings server.js\" && start \"SGK Vite\" cmd /c \"vite\""
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "cors": "^2.8.5",
     "docx": "^9.7.1",
     "dompurify": "^3.4.16",
