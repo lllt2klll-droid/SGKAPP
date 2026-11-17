@@ -17,6 +17,7 @@ import TextBookModal from "./reader/TextBookModal.jsx";
 import { storageNoticeLevel, storageNoticeText } from "./data/storageNotice.js";
 import { APP_COPYRIGHT } from "./ai/appPersona.js";
 import { preventWindowDrop } from "./components/fileDropzoneUtils.js";
+import { Analytics } from "@vercel/analytics/react";
 
 // -- Chunk load retry: khắc phục 404 stale chunk sau khi build mới (PWA) --
 function lazyWithRetry(factory, retries = 1) {
@@ -3597,6 +3598,7 @@ export default function App() {
           />
         )}
       </div>
+      <Analytics />
     </AppErrorBoundary>
   );
 }
