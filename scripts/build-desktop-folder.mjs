@@ -32,10 +32,10 @@ if (!fs.existsSync(pristineElectron)) {
   process.exit(1);
 }
 
-console.log("[1/5] Build giao dien...");
+console.log("[1/4] Build giao dien...");
 run("npm", ["run", "build"]);
 
-console.log("[2/5] Dong goi thu muc ung dung...");
+console.log("[2/4] Dong goi thu muc ung dung...");
 run("npx", ["electron-builder", "--win", "dir"]);
 
 if (!fs.existsSync(winUnpacked)) {
@@ -43,21 +43,11 @@ if (!fs.existsSync(winUnpacked)) {
   process.exit(1);
 }
 
-console.log("[3/5] Thay exe da bi chinh sua bang electron.exe nguyen ban...");
+console.log("[3/4] Thay exe da bi chinh sua bang electron.exe nguyen ban...");
 const appExe = path.join(winUnpacked, "SGK Teacher Workspace.exe");
 fs.copyFileSync(pristineElectron, appExe);
 
-// Dau nhan de app biet day la ban thu muc: cap nhat chi thay resources/app.asar,
-// khong bao gio thay exe -> Smart App Control khong chan ban moi.
-console.log("[4/5] Danh dau che do cap nhat app.asar...");
-const pkg = JSON.parse(fs.readFileSync(path.join(appDir, "package.json"), "utf8"));
-fs.writeFileSync(
-  path.join(winUnpacked, "resources", "local-folder-build.json"),
-  `${JSON.stringify({ mode: "folder", appVersion: pkg.version, builtAt: new Date().toISOString() }, null, 2)}\n`,
-  "utf8",
-);
-
-console.log("[5/5] Chuyen sang thu muc goc...");
+console.log("[4/4] Chuyen sang thu muc goc...");
 fs.rmSync(targetDir, { recursive: true, force: true });
 fs.renameSync(winUnpacked, targetDir);
 

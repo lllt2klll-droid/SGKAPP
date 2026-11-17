@@ -133,7 +133,7 @@ describe("Gemini image generation API route", () => {
     assert.equal(update.currentVersion, "1.0.4");
     assert.equal(update.latestVersion, "1.0.4");
     assert.equal(update.hasUpdate, false);
-    assert.equal(update.downloadUrl, "https://github.com/lllt2klll-droid/book-update/releases");
+    assert.equal(update.downloadUrl, "https://lllt2klll-droid.github.io/SGKAPP/");
   });
 
   it("validates prompt, source image, image format and supported dimensions", async () => {

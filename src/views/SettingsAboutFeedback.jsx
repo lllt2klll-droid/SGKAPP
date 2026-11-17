@@ -10,6 +10,8 @@ const FEEDBACK_FORM_ENDPOINT = "https://docs.google.com/forms/d/e/1FAIpQLScN0QVU
 const FEEDBACK_FORM_VIEW = "https://docs.google.com/forms/d/e/1FAIpQLScN0QVURKYvvawAyOTHtDElyTzGV6MQ9DwjTjKe2A_bIT_txw/viewform";
 const FEEDBACK_ENTRY = "entry.1862600968";
 const FEEDBACK_DRAFT_KEY = "sgk_feedback_draft";
+// Trang giới thiệu: nơi người dùng tải 1 file ứng dụng duy nhất và thay thế app cũ.
+const UPDATE_PAGE_URL = "https://lllt2klll-droid.github.io/SGKAPP/";
 
 const FEEDBACK_TOPICS = [
   { id: "feature", label: "Đề xuất tính năng", icon: Lightbulb },
@@ -94,15 +96,16 @@ function UpdateCard() {
     }
   };
 
-  const openDownload = (url) => {
-    // Trong app Windows: chạy luồng tự tải + tự cài ngay trong app (không mở trình duyệt).
-    if (window.sgkUpdater?.checkForUpdates) {
-      window.dispatchEvent(new CustomEvent("sgk:start-app-update"));
-      return;
+  const openDownload = async () => {
+    try {
+      if (window.sgkUpdater?.openReleases) {
+        await window.sgkUpdater.openReleases();
+        return;
+      }
+    } catch (error) {
+      console.warn("[Settings] Could not open the update page:", error);
     }
-    if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+    window.open(UPDATE_PAGE_URL, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -125,19 +128,13 @@ function UpdateCard() {
               ))}
             </ul>
           )}
-          {updateInfo.downloadUrl ? (
-            <button
-              className="st-btn st-btn-primary"
-              style={{ width: "100%", justifyContent: "center", gap: 6 }}
-              onClick={() => openDownload(updateInfo.downloadUrl)}
-            >
-              <Download size={14} /> Tải &amp; cài đặt ngay (v{updateInfo.latestVersion})
-            </button>
-          ) : (
-            <div style={{ fontSize: "0.85em", color: "var(--text-muted)" }}>
-              Hãy liên hệ tác giả để nhận file cập nhật.
-            </div>
-          )}
+          <button
+            className="st-btn st-btn-primary"
+            style={{ width: "100%", justifyContent: "center", gap: 6 }}
+            onClick={openDownload}
+          >
+            <Download size={14} /> Xem trang tải bản mới (v{updateInfo.latestVersion})
+          </button>
         </div>
       ) : updateInfo && !updateInfo.hasUpdate ? (
         <div style={{ marginTop: 8, color: "#16a34a", fontSize: "0.9em", display: "flex", alignItems: "center", gap: 6 }}>

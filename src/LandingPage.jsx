@@ -29,7 +29,9 @@ import release from "../version.json";
 import "./landing.css";
 
 const APP_URL = `${import.meta.env.BASE_URL}?app=1`;
-const INSTALLER_URL = release.downloadUrl;
+// Chỉ một file tải về duy nhất: bản Portable (.exe). Người dùng tải về rồi
+// thay thế file app cũ — không cần thư mục phụ hay file cài đặt.
+const INSTALLER_URL = `https://github.com/lllt2klll-droid/book-update/releases/download/v${release.version}/SGK.Teacher.Workspace.Portable.${release.version}.exe`;
 const LIGHT_PREVIEW_URL = `${import.meta.env.BASE_URL}landing-dashboard-light.png`;
 const DARK_PREVIEW_URL = `${import.meta.env.BASE_URL}landing-dashboard-dark.png`;
 const WHITEBOARD_PREVIEW_URL = `${import.meta.env.BASE_URL}landing-whiteboard-light.png`;
@@ -341,11 +343,11 @@ export default function LandingPage() {
               <span className="site-install-icon"><Download size={22} /></span>
               <span className="site-install-tag">DÀNH CHO WINDOWS</span>
               <h3>Ứng dụng desktop</h3>
-              <p>Tải trang phát hành để chọn bộ cài Windows hoặc bản portable mới nhất.</p>
+              <p>Tải một file ứng dụng duy nhất (.exe), không cần cài đặt. Khi có bản mới, tải file mới và thay thế app cũ.</p>
               <a className="site-button site-button-dark" href={INSTALLER_URL} target="_blank" rel="noreferrer">
                 <MonitorDown size={17} /> Tải ứng dụng Windows <ArrowRight size={16} />
               </a>
-              <small>Phiên bản trong gói hiện tại: {release.version}. Kiểm tra ghi chú và yêu cầu trước khi cài.</small>
+              <small>Phiên bản {release.version} · Một file .exe duy nhất, chạy ngay không cần cài.</small>
             </article>
           </div>
           <div className="site-install-note"><CircleHelp size={17} /><span>Không thấy tùy chọn cài đặt web? Dùng menu cài đặt của trình duyệt để thêm trang vào màn hình chính hoặc cài như ứng dụng.</span><ChevronDown size={16} /></div>

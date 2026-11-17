@@ -18,6 +18,10 @@ import { storageNoticeLevel, storageNoticeText } from "./data/storageNotice.js";
 import { APP_COPYRIGHT } from "./ai/appPersona.js";
 import { preventWindowDrop } from "./components/fileDropzoneUtils.js";
 
+// Luồng cập nhật đơn giản: app chỉ mở trang giới thiệu trong trình duyệt;
+// người dùng tự tải 1 file ứng dụng duy nhất về và thay thế app cũ.
+const UPDATE_PAGE_URL = "https://lllt2klll-droid.github.io/SGKAPP/";
+
 // -- Chunk load retry: khắc phục 404 stale chunk sau khi build mới (PWA) --
 function lazyWithRetry(factory, retries = 1) {
   return lazy(async () => {
@@ -339,9 +343,6 @@ export default function App() {
   const [appUpdateNotice, setAppUpdateNotice] = useState(null);
   const [appUpdateDialogOpen, setAppUpdateDialogOpen] = useState(false);
   const [desktopUpdateStatus, setDesktopUpdateStatus] = useState({ status: "idle" });
-  const appUpdateNoticeRef = useRef(null);
-  const runInstallRef = useRef(false);
-  const startAppUpdateRef = useRef(() => {});
   useEffect(() => {
     const timer = setTimeout(async () => {
       try {
@@ -367,24 +368,14 @@ export default function App() {
     }, 3500);
     return () => clearTimeout(timer);
   }, []);
-  useEffect(() => { appUpdateNoticeRef.current = appUpdateNotice; }, [appUpdateNotice]);
   useEffect(() => {
     return window.sgkUpdater?.onStatus((status) => {
       setDesktopUpdateStatus(status);
-      if (status.status !== "downloaded") return;
-      setAppUpdateDialogOpen(true);
-      // Tải xong → tự cài luôn (chậm 900ms để người dùng thấy thông báo đã tải xong).
-      setTimeout(() => { installUpdateNow(status.version); }, 900);
+      if (status.status === "downloaded") setAppUpdateDialogOpen(true);
     });
-  }, []);
-  useEffect(() => {
-    const onStart = () => startAppUpdateRef.current();
-    window.addEventListener("sgk:start-app-update", onStart);
-    return () => window.removeEventListener("sgk:start-app-update", onStart);
   }, []);
 
   const startAppUpdate = async () => {
-    runInstallRef.current = false;
     setAppUpdateDialogOpen(true);
     setDesktopUpdateStatus({ status: "checking" });
     if (!window.sgkUpdater) {
@@ -402,7 +393,6 @@ export default function App() {
       }
       if (result.downloaded) {
         setDesktopUpdateStatus({ status: "downloaded", version: result.version });
-        setTimeout(() => { installUpdateNow(result.version); }, 400);
         return;
       }
       if (!result.available) {
@@ -415,13 +405,10 @@ export default function App() {
     }
   };
 
-  const installUpdateNow = async (version) => {
-    if (runInstallRef.current) return;
-    runInstallRef.current = true;
-    const notice = appUpdateNoticeRef.current;
+  const installDownloadedUpdate = async () => {
     const saved = safeSetJSON("sgk_pending_app_update", {
-      version: version || notice?.latestVersion || desktopUpdateStatus.version || "",
-      changelog: notice?.changelog || [],
+      version: appUpdateNotice?.latestVersion || desktopUpdateStatus.version,
+      changelog: appUpdateNotice?.changelog || [],
     });
     if (!saved.ok) {
       console.warn("[App] Could not save pending update notice:", saved.error);
@@ -429,22 +416,21 @@ export default function App() {
     try {
       await window.sgkUpdater?.installUpdate();
     } catch (error) {
-      runInstallRef.current = false;
-      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể cài bản cập nhật." });
+      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể khởi động trình cài đặt." });
     }
   };
-  startAppUpdateRef.current = startAppUpdate;
 
   const openUpdateReleases = async () => {
     try {
       if (window.sgkUpdater?.openReleases) {
         await window.sgkUpdater.openReleases();
-      } else if (appUpdateNotice?.downloadUrl) {
-        window.open(appUpdateNotice.downloadUrl, "_blank", "noopener,noreferrer");
+        return;
       }
     } catch (error) {
-      setDesktopUpdateStatus({ status: "error", message: error?.message || "Không thể mở trang tải bản Setup." });
+      console.warn("[App] Could not open the update page:", error);
     }
+    // Bản web (không có Electron): mở trang giới thiệu bằng trình duyệt.
+    window.open(UPDATE_PAGE_URL, "_blank", "noopener,noreferrer");
   };
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const v = safeGetString("sgk_sidebar_collapsed", null);
@@ -2860,9 +2846,9 @@ export default function App() {
               <span style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
                 <button
                   className="btn btn-primary btn-xs"
-                  onClick={appUpdateNotice.justUpdated ? () => setAppUpdateDialogOpen(true) : startAppUpdate}
+                  onClick={appUpdateNotice.justUpdated ? () => setAppUpdateDialogOpen(true) : openUpdateReleases}
                 >
-                  {appUpdateNotice.justUpdated ? "Xem thay đổi" : "Tải & cài đặt"}
+                  {appUpdateNotice.justUpdated ? "Xem thay đổi" : "Xem bản mới"}
                 </button>
                 <button
                   className="btn btn-ghost btn-xs"
@@ -2893,7 +2879,7 @@ export default function App() {
                     <div style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
                       {appUpdateNotice.justUpdated
                         ? "Ứng dụng đã được cập nhật."
-                        : "Bấm một lần — ứng dụng sẽ tự tải, tự cài và khởi động lại khi xong."}
+                        : "Mở trang giới thiệu để tải bản mới, sau đó thay thế ứng dụng cũ."}
                     </div>
                   </div>
                   <button className="header-action-btn" onClick={() => setAppUpdateDialogOpen(false)} aria-label="Đóng">
@@ -2911,7 +2897,7 @@ export default function App() {
                         <progress value={desktopUpdateStatus.percent || 0} max="100" style={{ width: "100%", marginTop: 8 }} />
                       </>
                     )}
-                    {desktopUpdateStatus.status === "downloaded" && "Đã tải xong. Đang tự cài và khởi động lại…"}
+                    {desktopUpdateStatus.status === "downloaded" && "Đã tải xong bản cập nhật. Khởi động lại để cài đặt."}
                     {desktopUpdateStatus.status === "not-available" && "Không tìm thấy gói cài đặt cập nhật cho phiên bản này."}
                     {desktopUpdateStatus.status === "unsupported" && (desktopUpdateStatus.message || "Phiên bản này chưa hỗ trợ tự cập nhật.")}
                     {desktopUpdateStatus.status === "error" && (desktopUpdateStatus.message || "Tải cập nhật thất bại.")}
@@ -2932,7 +2918,7 @@ export default function App() {
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
                   {desktopUpdateStatus.status === "downloaded" && (
-                    <button className="btn btn-primary" onClick={() => installUpdateNow()}>
+                    <button className="btn btn-primary" onClick={installDownloadedUpdate}>
                       Khởi động lại và cài đặt
                     </button>
                   )}
@@ -3078,10 +3064,9 @@ export default function App() {
                     {appUpdateNotice?.hasUpdate && (
                       <button
                         className="header-action-btn"
-                        onClick={startAppUpdate}
-                        disabled={desktopUpdateStatus.status === "checking" || desktopUpdateStatus.status === "downloading"}
-                        aria-label={`Tải bản cập nhật v${appUpdateNotice.latestVersion}`}
-                        title={`Tải bản cập nhật v${appUpdateNotice.latestVersion}`}
+                        onClick={openUpdateReleases}
+                        aria-label={`Xem trang tải bản mới v${appUpdateNotice.latestVersion}`}
+                        title={`Xem trang tải bản mới v${appUpdateNotice.latestVersion}`}
                         style={{ color: "var(--primary-color, #2563EB)", borderColor: "rgba(37, 99, 235, 0.4)" }}
                       >
                         <Download size={18} />

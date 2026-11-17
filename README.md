@@ -91,16 +91,14 @@ npm run dist:local
 
 Lệnh tạo thư mục `SGK Desktop` ở thư mục gốc dự án (ngang hàng `sgk-app`). Nhấn đúp `SGK Desktop\SGK Teacher Workspace.exe` — hoặc shortcut ngoài Desktop — để mở app đầy đủ tính năng, kể cả liên kết PDF gốc. Không được tách rời file `.exe` khỏi các file `.dll` trong cùng thư mục.
 
-Bản thư mục **tự cập nhật được trên máy bật Smart App Control**: khi bấm "Tải & cài đặt", app chỉ tải và thay `resources/app.asar` (tệp dữ liệu) — file `.exe` là `electron.exe` gốc giữ nguyên nên Windows không chặn bản mới. Script `dist:local` ghi thêm `resources/local-folder-build.json` để app nhận diện chế độ này.
-
 Dự phòng: `Chay_Desktop.bat` chạy trực tiếp `electron.exe` trong `node_modules` trỏ vào mã nguồn; cách này cần giữ `node_modules` và không có tự cập nhật.
 
 Muốn bỏ hẳn việc chặn: tắt Smart App Control trong Windows Security (đã tắt thì không bật lại được nếu không cài lại Windows) hoặc ký số ứng dụng bằng chứng chỉ tin cậy; khi đó `npm run dist:win` tạo bộ cài per-user bình thường.
 
 
-Ứng dụng đóng gói kèm `version.json` để hiển thị thông tin phát hành và kiểm tra phiên bản trực tuyến tại `https://raw.githubusercontent.com/lllt2klll-droid/book-update/main/version.json`. Bản cài đặt Windows (Setup) hỗ trợ tải cập nhật trong ứng dụng và cài đặt sau khi người dùng khởi động lại. Bản Portable (1 file `.exe`) cũng tự cập nhật: app tải file Portable mới về, tắt hẳn, một tiến trình phụ chờ file hết bị khoá rồi thay thế và mở lại app. Bản thư mục (`SGK Desktop`) tự cập nhật bằng cách thay `resources/app.asar`, phù hợp cả khi Smart App Control đang chặn `.exe` chưa ký. Mỗi bản phát hành cần đăng cả asset Portable và asset `SGK.Teacher.Workspace.<version>.asar` trên GitHub Release.
+Ứng dụng đóng gói kèm `version.json` để hiển thị thông tin phát hành và kiểm tra phiên bản trực tuyến tại `https://raw.githubusercontent.com/lllt2klll-droid/book-update/main/version.json`. Khi có bản mới, app hiển thị thông báo kèm nút “Xem bản mới”; bấm vào sẽ mở trang giới thiệu `https://lllt2klll-droid.github.io/SGKAPP/` trong trình duyệt. Tại đó người dùng tải **một file Portable `.exe` duy nhất** và thay thế app cũ. Ứng dụng không tự tải và không tự thay thế tệp nào.
 
-Khi phát hành phiên bản mới, đồng bộ phiên bản trong `package.json` và `version.json`. Đưa bộ cài Setup cùng `latest.yml` và các tệp `.blockmap` do `electron-builder` tạo ra vào cùng GitHub Release để trình cập nhật có thể tải và xác minh bản cài đặt. `version.json` tiếp tục cung cấp ngày phát hành và danh sách thay đổi hiển thị trong ứng dụng.
+Khi phát hành phiên bản mới, đồng bộ phiên bản trong `package.json` và `version.json`, chạy `npm run dist:portable`, rồi đăng đúng một asset `SGK.Teacher.Workspace.Portable.<version>.exe` lên GitHub Release tag `v<version>` và cập nhật `version.json` trên repo `book-update`. Landing page ghép link tải trực tiếp từ số phiên bản nên chỉ cần một file `.exe` duy nhất.
 
 Bản cài đặt bắt đầu với thư viện trống; sách và ảnh trên máy phát triển **không được đóng gói vào file `.exe`**. Thư viện sách và ảnh giáo án do người dùng thêm được lưu riêng tại `%APPDATA%\SGK Teacher Workspace\books` và `%APPDATA%\SGK Teacher Workspace\lesson-images`. Dữ liệu trình duyệt như tiến độ đọc, cài đặt và IndexedDB được lưu riêng trong hồ sơ Electron tại `%APPDATA%\SGK Teacher Workspace`. Dữ liệu được giữ lại khi gỡ ứng dụng để tránh mất nội dung; khi chuyển sang máy khác, hãy sao chép thư mục dữ liệu này nếu muốn giữ cả thư viện lẫn dữ liệu ứng dụng.
 
